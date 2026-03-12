@@ -456,6 +456,21 @@ export const platformService = {
     return platformRepository.appendChatMessage(params);
   },
 
+  deleteChatConversation(params: {
+    conversationId: string;
+    ownerUserId: string;
+  }) {
+    return platformRepository.deleteChatConversation(params);
+  },
+
+  updateChatConversationTitle(params: {
+    conversationId: string;
+    ownerUserId: string;
+    title: string;
+  }) {
+    return platformRepository.updateChatConversationTitle(params);
+  },
+
   recordChatSettlement: platformRepository.recordChatSettlement,
 
   buildCoreRequest(

@@ -1560,6 +1560,49 @@ export const postgresPlatformRepository: PlatformRepository = {
     }
   },
 
+  async deleteChatConversation(params) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const client = await currentPool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM chat_messages WHERE conversation_id = $1", [params.conversationId]);
+      const result = await client.query(
+        "DELETE FROM chat_conversations WHERE id = $1 AND owner_user_id = $2",
+        [params.conversationId, params.ownerUserId]
+      );
+      await client.query("COMMIT");
+      return result.rowCount ?? 0;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async updateChatConversationTitle(params) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(
+      "UPDATE chat_conversations SET title = $1, updated_at = NOW() WHERE id = $2 AND owner_user_id = $3",
+      [params.title, params.conversationId, params.ownerUserId]
+    );
+    const result = await currentPool.query(`
+      SELECT
+        id,
+        owner_user_id AS "ownerUserId",
+        logical_model AS "logicalModel",
+        title,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM chat_conversations
+      WHERE id = $1 AND owner_user_id = $2
+      LIMIT 1
+    `, [params.conversationId, params.ownerUserId]);
+    return result.rows[0] ?? null;
+  },
+
   buildCoreRequest(
     requestId: string,
     requesterUserId: string,

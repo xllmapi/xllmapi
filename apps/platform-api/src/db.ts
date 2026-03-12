@@ -2096,6 +2096,49 @@ export const append_chat_message = (params: {
   }
 };
 
+export const delete_chat_conversation = (params: {
+  conversationId: string;
+  ownerUserId: string;
+}) => {
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      DELETE FROM chat_messages WHERE conversation_id = ?
+    `).run(params.conversationId);
+    const result = db.prepare(`
+      DELETE FROM chat_conversations WHERE id = ? AND owner_user_id = ?
+    `).run(params.conversationId, params.ownerUserId);
+    db.exec("COMMIT");
+    return Number(result.changes);
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+};
+
+export const update_chat_conversation_title = (params: {
+  conversationId: string;
+  ownerUserId: string;
+  title: string;
+}) => {
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE chat_conversations SET title = ?, updated_at = ? WHERE id = ? AND owner_user_id = ?
+  `).run(params.title, now, params.conversationId, params.ownerUserId);
+  return db.prepare(`
+    SELECT
+      id,
+      owner_user_id AS ownerUserId,
+      logical_model AS logicalModel,
+      title,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM chat_conversations
+    WHERE id = ? AND owner_user_id = ?
+    LIMIT 1
+  `).get(params.conversationId, params.ownerUserId);
+};
+
 export const get_debug_state = () => ({
   apiKeys: db.prepare("SELECT id, user_id, label, status FROM platform_api_keys ORDER BY id ASC").all(),
   auditLogs: db.prepare("SELECT actor_user_id, action, target_type, target_id, created_at FROM audit_logs ORDER BY id DESC LIMIT 20").all(),

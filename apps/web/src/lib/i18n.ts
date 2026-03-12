@@ -1,6 +1,7 @@
 const messages: Record<string, Record<string, string>> = {
   zh: {
     // Header
+    "nav.models": "模型网络",
     "nav.docs": "文档",
     "nav.chat": "对话",
     "nav.dashboard": "控制台",
@@ -20,7 +21,7 @@ const messages: Record<string, Record<string, string>> = {
     "home.feature2.desc": "无缝替换 OpenAI API。兼容所有支持 OpenAI 格式的客户端工具。",
     "home.feature3.title": "多模型接入",
     "home.feature3.desc": "通过统一 API 端点访问 GPT、Claude、DeepSeek、Gemini 等模型。",
-    "home.models.title": "网络可用模型",
+    "home.models.title": "支持的模型厂商",
 
     // AuthPage
     "auth.title": "登录 xllmapi",
@@ -145,6 +146,35 @@ const messages: Record<string, Record<string, string>> = {
     "chat.placeholder": "输入消息…",
     "chat.send": "发送",
     "chat.backToDashboard": "← 控制台",
+    "chat.welcome.title": "欢迎使用 xllmapi Chat",
+    "chat.welcome.subtitle": "选择模型，开始对话。",
+    "chat.sidebar.title": "Chat",
+    "chat.sidebar.search": "搜索对话…",
+    "chat.sidebar.today": "今天",
+    "chat.sidebar.yesterday": "昨天",
+    "chat.sidebar.thisWeek": "本周",
+    "chat.sidebar.earlier": "更早",
+    "chat.input.hint": "Enter 发送, Shift+Enter 换行",
+    "chat.stop": "停止",
+    "chat.retry": "重试",
+    "chat.rename": "重命名",
+    "chat.delete": "删除",
+    "chat.deleteConfirm": "确定删除这个对话？",
+    "chat.copyMessage": "复制消息",
+    "chat.prompt1": "用简单的语言解释 Transformer 架构的工作原理",
+    "chat.prompt2": "写一个 Python 函数来解析 JSON 文件",
+    "chat.prompt3": "比较 REST 和 GraphQL 的优缺点",
+    "chat.loginHint": "登录后可保存对话记录并使用完整功能",
+
+    // Models
+    "models.title": "模型网络",
+    "models.subtitle": "实时查看网络中所有可用模型及其节点状态",
+    "models.stat.models": "模型",
+    "models.stat.nodes": "节点",
+    "models.stat.providers": "供应商",
+    "models.nodes": "节点",
+    "models.suppliers": "供应者",
+    "models.empty": "暂无可用模型",
 
     // Docs
     "docs.title": "API 文档",
@@ -195,6 +225,7 @@ const messages: Record<string, Record<string, string>> = {
   },
   en: {
     // Header
+    "nav.models": "Models",
     "nav.docs": "Docs",
     "nav.chat": "Chat",
     "nav.dashboard": "Dashboard",
@@ -214,7 +245,7 @@ const messages: Record<string, Record<string, string>> = {
     "home.feature2.desc": "Drop-in replacement for OpenAI API. Works with any client library or tool that supports the OpenAI format.",
     "home.feature3.title": "Multi-Model Access",
     "home.feature3.desc": "Access GPT, Claude, DeepSeek, Gemini, and more through a single unified API endpoint.",
-    "home.models.title": "Available on the Network",
+    "home.models.title": "Supported Providers",
 
     // AuthPage
     "auth.title": "Sign in to xllmapi",
@@ -339,6 +370,35 @@ const messages: Record<string, Record<string, string>> = {
     "chat.placeholder": "Type a message…",
     "chat.send": "Send",
     "chat.backToDashboard": "← Dashboard",
+    "chat.welcome.title": "Welcome to xllmapi Chat",
+    "chat.welcome.subtitle": "Choose a model and start a conversation.",
+    "chat.sidebar.title": "Chat",
+    "chat.sidebar.search": "Search conversations…",
+    "chat.sidebar.today": "Today",
+    "chat.sidebar.yesterday": "Yesterday",
+    "chat.sidebar.thisWeek": "This Week",
+    "chat.sidebar.earlier": "Earlier",
+    "chat.input.hint": "Enter to send, Shift+Enter for new line",
+    "chat.stop": "Stop",
+    "chat.retry": "Retry",
+    "chat.rename": "Rename",
+    "chat.delete": "Delete",
+    "chat.deleteConfirm": "Delete this conversation?",
+    "chat.copyMessage": "Copy message",
+    "chat.prompt1": "Explain how transformers work in simple terms",
+    "chat.prompt2": "Write a Python function to parse a JSON file",
+    "chat.prompt3": "Compare REST and GraphQL architectures",
+    "chat.loginHint": "Sign in to save conversations and access full features",
+
+    // Models
+    "models.title": "Model Network",
+    "models.subtitle": "Live view of all available models and their node status on the network",
+    "models.stat.models": "Models",
+    "models.stat.nodes": "Nodes",
+    "models.stat.providers": "Providers",
+    "models.nodes": "nodes",
+    "models.suppliers": "suppliers",
+    "models.empty": "No models available",
 
     // Docs
     "docs.title": "API Documentation",

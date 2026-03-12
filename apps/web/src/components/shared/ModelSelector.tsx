@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown, Cpu, Loader2 } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 
 interface Model {
@@ -24,6 +25,8 @@ function isRealModel(name: string) {
 export function ModelSelector({ value, onChange, className }: ModelSelectorProps) {
   const { data, loading } = useApi<ModelsResponse>("/v1/network/models");
   const models = (data?.data ?? []).filter((m) => isRealModel(m.logicalModel));
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-select when only one model available
   useEffect(() => {
@@ -32,19 +35,81 @@ export function ModelSelector({ value, onChange, className }: ModelSelectorProps
     }
   }, [models, value, onChange]);
 
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selectedModel = models.find((m) => m.logicalModel === value);
+  const label = loading
+    ? "Loading…"
+    : selectedModel
+      ? selectedModel.logicalModel
+      : models.length === 0
+        ? "No models"
+        : "Select model…";
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`border border-line rounded-[var(--radius-input)] px-3 py-2 text-sm focus:outline-none focus:border-accent ${className ?? ""}`}
-      style={{ backgroundColor: "rgba(16,21,34,0.8)", color: "#f3f6ff" }}
-    >
-      <option value="">{loading ? "Loading…" : models.length === 0 ? "No models" : "Select model…"}</option>
-      {models.map((m) => (
-        <option key={m.logicalModel} value={m.logicalModel}>
-          {m.logicalModel}
-        </option>
-      ))}
-    </select>
+    <div ref={containerRef} className={`relative ${className ?? ""}`}>
+      {/* Trigger */}
+      <button
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full flex items-center gap-2 border border-line rounded-[var(--radius-input)] px-3 py-2 text-sm text-left cursor-pointer bg-[rgba(16,21,34,0.6)] hover:border-accent/40 focus:outline-none focus:border-accent/60 transition-colors"
+      >
+        {loading ? (
+          <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin shrink-0" />
+        ) : (
+          <Cpu className="w-3.5 h-3.5 text-accent/60 shrink-0" />
+        )}
+        <span className={`flex-1 truncate ${value ? "text-text-primary" : "text-text-tertiary"}`}>
+          {label}
+        </span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-text-tertiary shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* Dropdown */}
+      {open && models.length > 0 && (
+        <div
+          className="absolute left-0 right-0 top-full mt-1 z-50 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden"
+          style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+        >
+          <div className="py-1 max-h-60 overflow-y-auto overscroll-contain">
+            {models.map((m) => {
+              const selected = m.logicalModel === value;
+              return (
+                <button
+                  key={m.logicalModel}
+                  onClick={() => {
+                    onChange(m.logicalModel);
+                    setOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left cursor-pointer border-none transition-colors ${
+                    selected
+                      ? "bg-accent/10 text-accent"
+                      : "text-text-primary hover:bg-accent-bg"
+                  }`}
+                >
+                  <Cpu className={`w-3.5 h-3.5 shrink-0 ${selected ? "text-accent" : "text-text-tertiary"}`} />
+                  <span className="flex-1 truncate">{m.logicalModel}</span>
+                  {m.providerCount != null && m.providerCount > 0 && (
+                    <span className="text-[10px] text-text-tertiary">{m.providerCount}x</span>
+                  )}
+                  {selected && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,16 +1,33 @@
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/hooks/useLocale";
+import { LogOut, LayoutDashboard } from "lucide-react";
 
 export function Header() {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
   const { locale, setLocale, t } = useLocale();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => {
+    setMenuOpen(false);
     logout();
     navigate("/");
   };
+
+  // Close on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-line bg-panel-strong">
@@ -23,14 +40,17 @@ export function Header() {
         </Link>
 
         <nav className="flex items-center gap-5 text-sm">
+          <Link to="/models" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+            {t("nav.models")}
+          </Link>
           <Link to="/docs" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.docs")}
           </Link>
+          <Link to="/chat" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+            {t("nav.chat")}
+          </Link>
           {isLoggedIn && (
             <>
-              <Link to="/chat" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
-                {t("nav.chat")}
-              </Link>
               <Link to="/app" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
                 {t("nav.dashboard")}
               </Link>
@@ -51,16 +71,40 @@ export function Header() {
           </button>
 
           {isLoggedIn ? (
-            <div className="flex items-center gap-3 ml-1">
-              <div className="w-7 h-7 rounded-[var(--radius-avatar)] bg-accent/15 flex items-center justify-center text-accent text-xs font-semibold">
-                {(user?.displayName ?? user?.email ?? "U").charAt(0).toUpperCase()}
-              </div>
+            <div ref={menuRef} className="relative ml-1">
+              {/* Avatar button */}
               <button
-                onClick={handleLogout}
-                className="text-text-tertiary hover:text-danger text-xs cursor-pointer bg-transparent border-none transition-colors"
+                onClick={() => setMenuOpen((prev) => !prev)}
+                className="w-7 h-7 rounded-[var(--radius-avatar)] bg-accent/15 flex items-center justify-center text-accent text-xs font-semibold cursor-pointer border-none transition-colors hover:bg-accent/25"
               >
-                {t("nav.logout")}
+                {(user?.displayName ?? user?.email ?? "U").charAt(0).toUpperCase()}
               </button>
+
+              {/* Dropdown menu */}
+              {menuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-2 w-40 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden z-50"
+                  style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+                >
+                  <div className="py-1">
+                    <button
+                      onClick={() => { setMenuOpen(false); navigate("/app"); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-text-primary hover:bg-accent-bg cursor-pointer border-none bg-transparent transition-colors"
+                    >
+                      <LayoutDashboard className="w-3.5 h-3.5 text-text-tertiary" />
+                      {t("nav.dashboard")}
+                    </button>
+                    <div className="my-1 border-t border-line/60" />
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-danger/80 hover:bg-danger/10 cursor-pointer border-none bg-transparent transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      {t("nav.logout")}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <Link

@@ -906,6 +906,58 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    const deleteConversationMatch = req.method === "DELETE"
+      ? url.pathname.match(/^\/v1\/chat\/conversations\/([^/]+)$/)
+      : null;
+    if (deleteConversationMatch) {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const conversationId = decodeURIComponent(deleteConversationMatch[1]);
+      await platformService.deleteChatConversation({
+        conversationId,
+        ownerUserId: auth.userId
+      });
+      const response = json(200, { requestId, deleted: true });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
+    const patchConversationMatch = req.method === "PATCH"
+      ? url.pathname.match(/^\/v1\/chat\/conversations\/([^/]+)$/)
+      : null;
+    if (patchConversationMatch) {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const conversationId = decodeURIComponent(patchConversationMatch[1]);
+      const body = await read_json<{ title: string }>(req);
+      if (!body.title?.trim()) {
+        const response = json(400, { error: { message: "title is required", requestId } });
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const updated = await platformService.updateChatConversationTitle({
+        conversationId,
+        ownerUserId: auth.userId,
+        title: body.title.trim()
+      });
+      const response = json(200, { requestId, data: updated });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
     const conversationMessagesMatch = req.method === "GET"
       ? url.pathname.match(/^\/v1\/chat\/conversations\/([^/]+)\/messages$/)
       : null;
@@ -991,6 +1043,24 @@ const server = createServer(async (req, res) => {
         content: body.content.trim()
       });
 
+      if (!conversation.title && history.length === 0) {
+        const userContent = body.content.trim();
+        let autoTitle = userContent;
+        if (autoTitle.length > 50) {
+          autoTitle = autoTitle.slice(0, 50);
+          const lastSpace = autoTitle.lastIndexOf(" ");
+          if (lastSpace > 0) {
+            autoTitle = autoTitle.slice(0, lastSpace);
+          }
+          autoTitle += "...";
+        }
+        await platformService.updateChatConversationTitle({
+          conversationId,
+          ownerUserId: auth.userId,
+          title: autoTitle
+        });
+      }
+
       const mappedBody: PublicChatCompletionsRequest = {
         model: logicalModel,
         temperature: body.temperature,
@@ -1033,10 +1103,14 @@ const server = createServer(async (req, res) => {
         }
         try {
           const payload = JSON.parse(event.data);
-          const delta = payload?.choices?.[0]?.delta?.content;
+          // Support both core-router format {"delta":"..."} and OpenAI format
+          const coreRouterDelta = payload?.delta;
+          const openaiDelta = payload?.choices?.[0]?.delta?.content;
           const msgContent = payload?.choices?.[0]?.message?.content;
-          if (typeof delta === "string") {
-            assistantContent += delta;
+          if (typeof coreRouterDelta === "string") {
+            assistantContent += coreRouterDelta;
+          } else if (typeof openaiDelta === "string") {
+            assistantContent += openaiDelta;
           } else if (typeof msgContent === "string") {
             assistantContent += msgContent;
           }

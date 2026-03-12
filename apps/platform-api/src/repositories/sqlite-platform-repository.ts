@@ -36,6 +36,8 @@ import {
   list_provider_credentials,
   record_chat_settlement,
   append_chat_message,
+  delete_chat_conversation,
+  update_chat_conversation_title,
   request_login_code,
   remove_offering,
   remove_provider_credential,
@@ -240,6 +242,14 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   appendChatMessage(params) {
     append_chat_message(params);
+  },
+
+  deleteChatConversation(params) {
+    return delete_chat_conversation(params);
+  },
+
+  updateChatConversationTitle(params) {
+    return update_chat_conversation_title(params);
   },
 
   buildCoreRequest(

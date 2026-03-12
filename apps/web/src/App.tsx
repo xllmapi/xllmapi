@@ -10,6 +10,7 @@ import { HomePage } from "@/pages/HomePage";
 import { AuthPage } from "@/pages/AuthPage";
 import { DocsPage } from "@/pages/DocsPage";
 import { ChatPage } from "@/pages/chat/ChatPage";
+import { ModelsPage } from "@/pages/ModelsPage";
 import { OverviewPage } from "@/pages/app/OverviewPage";
 import { NetworkPage } from "@/pages/app/NetworkPage";
 import { InvitationsPage } from "@/pages/app/InvitationsPage";
@@ -32,15 +33,9 @@ export function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/docs" element={<DocsPage />} />
+          <Route path="/models" element={<ModelsPage />} />
 
-          <Route
-            path="/chat"
-            element={
-              <ProtectedRoute>
-                <ChatPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/chat" element={<ChatPage />} />
 
           <Route
             path="/app"

@@ -199,6 +199,15 @@ export type PlatformRepository = {
     content: string;
     requestId?: string | null;
   }): MaybePromise<void>;
+  deleteChatConversation(params: {
+    conversationId: string;
+    ownerUserId: string;
+  }): MaybePromise<number>;
+  updateChatConversationTitle(params: {
+    conversationId: string;
+    ownerUserId: string;
+    title: string;
+  }): MaybePromise<any>;
   buildCoreRequest(
     requestId: string,
     requesterUserId: string,
