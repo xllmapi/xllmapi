@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X llmapi Auth</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <a class="app-logo" href="/"><span class="app-logo-mark">X</span><span class="app-logo-text">llmapi</span></a>
+      <nav class="app-topnav">
+        <a href="/" data-i18n="nav.home">首页</a>
+        <a href="/docs" data-i18n="nav.docs">文档</a>
+        <a href="/chat" data-i18n="nav.chat">聊天</a>
+        <a href="/auth" class="nav-login active" data-i18n="nav.login">登录</a>
+      </nav>
+      <div class="lang-switch"><select id="localeSelect" class="locale-select"><option value="zh">中</option><option value="en">EN</option></select></div>
+    </header>
+
+    <main class="auth-shell">
+      <section class="auth-layout">
+        <article class="auth-card">
+          <p class="eyebrow" data-i18n="kicker">Invite only</p>
+          <h1 class="auth-title" data-i18n="title">登录 xllmapi</h1>
+          <p class="auth-copy" data-i18n="copy">已注册邮箱或已被邀请邮箱可以通过验证码登录。首次登录的受邀邮箱会自动完成注册。</p>
+        </article>
+        <article class="auth-card">
+          <div class="form-stack">
+            <input id="emailInput" type="email" data-i18n-placeholder="email" placeholder="name@example.com" />
+            <input id="passwordInput" type="password" data-i18n-placeholder="password" placeholder="password" />
+            <button id="passwordLoginButton" class="primary-action" type="button" data-i18n="passwordLogin">密码登录</button>
+            <button id="requestCodeButton" class="ghost-action" type="button" data-i18n="requestCode">发送验证码</button>
+            <input id="codeInput" data-i18n-placeholder="code" placeholder="6-digit code" />
+            <button id="verifyCodeButton" class="primary-action" type="button" data-i18n="login">登录</button>
+            <pre id="authLog" class="json-view">Auth ready</pre>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="/auth.js"></script>
+  </body>
+</html>

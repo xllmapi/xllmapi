@@ -1,0 +1,19 @@
+{
+  "name": "xllmapi",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @xllmapi/shared-types && npm run build --workspace @xllmapi/platform-api",
+    "dev:platform-api": "npm run dev --workspace @xllmapi/platform-api",
+    "build:platform-api": "npm run build --workspace @xllmapi/platform-api",
+    "build:shared-types": "npm run build --workspace @xllmapi/shared-types",
+    "test:platform-api": "npm run test --workspace @xllmapi/platform-api",
+    "test:e2e:sharing": "node scripts/e2e-sharing-flow.mjs",
+    "dev:up": "bash scripts/dev-up.sh",
+    "dev:down": "bash scripts/dev-down.sh"
+  }
+}

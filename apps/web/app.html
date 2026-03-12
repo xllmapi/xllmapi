@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X llmapi App</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <a class="app-logo" href="/"><span class="app-logo-mark">X</span><span class="app-logo-text">llmapi</span></a>
+      <nav class="app-topnav">
+        <a href="/" data-i18n="nav.home">官网</a>
+        <a href="/docs" data-i18n="nav.docs">文档</a>
+        <a href="/chat" data-i18n="nav.chat">聊天</a>
+        <a href="/app" class="active" data-i18n="nav.app">用户平台</a>
+        <a href="/auth" class="nav-login" data-i18n="nav.login">登录</a>
+      </nav>
+      <div class="lang-switch">
+        <select id="localeSelect" class="locale-select">
+          <option value="zh">中</option>
+          <option value="en">EN</option>
+        </select>
+      </div>
+    </header>
+    <main class="shell-main shell-plain">
+      <aside class="sidebar sidebar-plain">
+        <nav class="sidebar-nav">
+          <button class="sidebar-link" data-view="overview" type="button" data-i18n="menu.overview">总览</button>
+          <button class="sidebar-link" data-view="account" type="button" data-i18n="menu.account">账户信息</button>
+          <button class="sidebar-link" data-view="invite" type="button" data-i18n="menu.invite">邀请注册</button>
+          <button class="sidebar-link" data-view="llmapi" type="button" data-i18n="menu.llmapi">我的llm api</button>
+          <button class="sidebar-link" data-view="consume" type="button" data-i18n="menu.consume">我的消费</button>
+          <a class="sidebar-link" href="/chat" data-i18n="menu.chat">聊天</a>
+        </nav>
+      </aside>
+
+      <section class="app-content app-content-plain">
+        <section class="content-view" data-view-panel="overview">
+          <div class="plain-head">
+            <h1 data-i18n="overview.title">总览</h1>
+          </div>
+          <div id="overviewLine" class="plain-line"></div>
+          <div class="plain-head">
+            <h1 data-i18n="overview.usage">模型用量</h1>
+          </div>
+          <div id="overviewUsageVisual" class="plain-line"></div>
+          <div id="overviewUsageDetail" class="plain-list"></div>
+        </section>
+
+        <section class="content-view" data-view-panel="account">
+          <div class="plain-head"><h1 data-i18n="account.title">账户信息</h1></div>
+          <div id="accountBasicView" class="plain-list"></div>
+          <div class="form-stack">
+            <input id="securityNewEmailInput" type="email" data-i18n-placeholder="account.newEmail" placeholder="新邮箱" />
+            <button id="updateEmailButton" class="ghost-action" type="button" data-i18n="account.updateEmail">更新邮箱</button>
+            <input id="securityPhoneInput" data-i18n-placeholder="account.phone" placeholder="手机号" />
+            <button id="updatePhoneButton" class="ghost-action" type="button" data-i18n="account.updatePhone">更新手机号</button>
+            <input id="securityCurrentPasswordInput" type="password" data-i18n-placeholder="account.currentPassword" placeholder="当前密码" />
+            <input id="securityNewPasswordInput" type="password" data-i18n-placeholder="account.newPassword" placeholder="新密码(>=8)" />
+            <button id="updatePasswordButton" class="primary-action" type="button" data-i18n="account.updatePassword">修改密码</button>
+          </div>
+        </section>
+
+        <section class="content-view" data-view-panel="invite">
+          <div class="plain-head"><h1 data-i18n="invite.title">邀请注册</h1></div>
+          <div id="invitationStatsView" class="plain-list"></div>
+          <div class="form-stack">
+            <input id="inviteEmailInput" type="email" placeholder="invitee@example.com" />
+            <textarea id="inviteNoteInput" data-i18n-placeholder="invite.note" placeholder="可选备注"></textarea>
+            <button id="createInvitationButton" class="primary-action" type="button" data-i18n="invite.send">发送邀请</button>
+          </div>
+          <div id="invitationsView" class="plain-list"></div>
+        </section>
+
+        <section class="content-view" data-view-panel="llmapi">
+          <div class="plain-head"><h1 data-i18n="llmapi.title">我的llm api</h1></div>
+          <div class="form-stack">
+            <select id="providerPresetInput"></select>
+            <textarea id="providerApiKeyInput" placeholder="Provider API key"></textarea>
+            <p id="pricingGuidanceText" class="plain-muted" data-i18n="publish.guidanceDefault">官方指导价：Input -- / 1K，Output -- / 1K</p>
+            <button id="quickPublishButton" class="primary-action" type="button" data-i18n="publish.submit">连接到模型网络</button>
+            <p id="connectStatusText" class="plain-muted">-</p>
+            <details>
+              <summary data-i18n="publish.customPrice">自定义价格（可选）</summary>
+              <div class="inline-row">
+                <input id="offeringInputPriceInput" type="number" placeholder="input / 1k" />
+                <input id="offeringOutputPriceInput" type="number" placeholder="output / 1k" />
+              </div>
+            </details>
+          </div>
+          <div id="sharedOfferingsView" class="plain-list"></div>
+        </section>
+
+        <section class="content-view" data-view-panel="consume">
+          <div class="plain-head"><h1 data-i18n="consume.title">我的消费</h1></div>
+          <div id="usageConsumptionView" class="plain-list"></div>
+        </section>
+
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

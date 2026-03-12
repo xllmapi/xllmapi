@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X llmapi Admin</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <a class="app-logo" href="/"><span class="app-logo-mark">X</span><span class="app-logo-text">llmapi</span></a>
+      <nav class="app-topnav">
+        <a href="/" data-i18n="nav.home">官网</a>
+        <a href="/admin" class="active" data-i18n="nav.admin">管理员平台</a>
+        <a href="/auth" class="nav-login" data-i18n="nav.login">登录</a>
+      </nav>
+      <div class="lang-switch"><select id="localeSelect" class="locale-select"><option value="zh">中</option><option value="en">EN</option></select></div>
+    </header>
+    <main class="shell-main">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <p class="sidebar-kicker" data-i18n="sidebar.admin">运营</p>
+          <nav class="sidebar-nav">
+            <button class="sidebar-link" data-view="overview" type="button" data-i18n="sidebar.overview">总览</button>
+            <button class="sidebar-link" data-view="users" type="button" data-i18n="sidebar.users">用户管理</button>
+            <button class="sidebar-link" data-view="invitations" type="button" data-i18n="sidebar.invitations">邀请管理</button>
+            <button class="sidebar-link" data-view="reviews" type="button" data-i18n="sidebar.reviews">模型审核</button>
+            <button class="sidebar-link" data-view="usage" type="button" data-i18n="sidebar.usage">平台用量</button>
+          </nav>
+        </div>
+      </aside>
+      <section class="app-content">
+        <section class="content-view" data-view-panel="overview">
+          <div class="content-header"><div><h1 data-i18n="overview.title">管理员总览</h1><p data-i18n="overview.subtitle">查看用户、邀请、待审核模型与平台用量概览。</p></div><button id="refreshAdminButton" class="ghost-action" type="button" data-i18n="common.refresh">刷新</button></div>
+          <section class="metric-row">
+            <article class="metric-box"><span data-i18n="metrics.users">用户数</span><strong id="metricUsers">--</strong></article>
+            <article class="metric-box"><span data-i18n="metrics.invites">邀请数</span><strong id="metricInvites">--</strong></article>
+            <article class="metric-box"><span data-i18n="metrics.pending">待审核</span><strong id="metricPending">--</strong></article>
+            <article class="metric-box"><span data-i18n="metrics.tokens">总 tokens</span><strong id="metricTokens">--</strong></article>
+          </section>
+        </section>
+        <section class="content-view" data-view-panel="users"><div class="content-header"><div><h1 data-i18n="users.title">用户管理</h1></div></div><article class="card"><div id="usersView" class="data-stack"></div></article></section>
+        <section class="content-view" data-view-panel="invitations"><div class="content-header"><div><h1 data-i18n="invitations.title">邀请管理</h1></div></div><section class="two-column-grid"><article class="card"><div class="form-stack"><input id="adminInviteEmailInput" type="email" placeholder="invitee@example.com" /><textarea id="adminInviteNoteInput" placeholder="optional note"></textarea><button id="adminInviteButton" class="primary-action" type="button" data-i18n="invitations.send">发送邀请</button></div></article><article class="card"><div id="adminInvitationsView" class="data-stack"></div></article></section></section>
+        <section class="content-view" data-view-panel="reviews"><div class="content-header"><div><h1 data-i18n="reviews.title">模型审核</h1></div></div><section class="two-column-grid"><article class="card"><div class="form-stack"><input id="reviewOfferingIdInput" placeholder="offering id" /><select id="reviewStatusInput"><option value="approved">approved</option><option value="rejected">rejected</option></select><button id="submitReviewButton" class="primary-action" type="button" data-i18n="reviews.submit">提交审核</button></div></article><article class="card"><div id="reviewsView" class="data-stack"></div></article></section></section>
+        <section class="content-view" data-view-panel="usage"><div class="content-header"><div><h1 data-i18n="usage.title">平台用量</h1></div></div><section class="two-column-grid"><article class="card"><div id="usageSummaryView" class="data-stack"></div></article><article class="card"><div id="usageTopModelsView" class="data-stack"></div></article></section></section>
+      </section>
+    </main>
+    <script type="module" src="/admin.js"></script>
+  </body>
+</html>

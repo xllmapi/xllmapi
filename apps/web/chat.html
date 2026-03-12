@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X llmapi Chat</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <a class="app-logo" href="/"><span class="app-logo-mark">X</span><span class="app-logo-text">llmapi</span></a>
+      <nav class="app-topnav">
+        <a href="/" data-i18n="nav.home">官网</a>
+        <a href="/docs" data-i18n="nav.docs">文档</a>
+        <a href="/app" data-i18n="nav.app">用户平台</a>
+        <a href="/chat" class="active" data-i18n="nav.chat">聊天</a>
+        <a href="/auth" class="nav-login" data-i18n="nav.login">登录</a>
+      </nav>
+      <div class="lang-switch">
+        <select id="localeSelect" class="locale-select">
+          <option value="zh">中</option>
+          <option value="en">EN</option>
+        </select>
+      </div>
+    </header>
+    <main class="shell-main shell-plain">
+      <aside class="sidebar sidebar-plain">
+        <div class="form-stack">
+          <select id="chatModelSelect"></select>
+          <button id="newConversationButton" class="ghost-action" type="button" data-i18n="newConversation">新建会话</button>
+        </div>
+        <div id="conversationList" class="plain-list"></div>
+      </aside>
+      <section class="app-content app-content-plain chat-main">
+        <div id="chatNotLogin" class="plain-row"></div>
+        <div id="chatMessages" class="chat-messages"></div>
+        <div class="chat-input-row">
+          <textarea id="chatInput" data-i18n-placeholder="inputPlaceholder" placeholder="输入消息"></textarea>
+          <button id="sendChatButton" class="primary-action" type="button" data-i18n="send">发送</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/chat.js"></script>
+  </body>
+</html>

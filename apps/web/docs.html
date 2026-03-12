@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X llmapi Docs</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <a class="app-logo" href="/"><span class="app-logo-mark">X</span><span class="app-logo-text">llmapi</span></a>
+      <nav class="app-topnav">
+        <a href="/" data-i18n="nav.home">首页</a>
+        <a href="/docs" class="active" data-i18n="nav.docs">文档</a>
+        <a href="/chat" data-i18n="nav.chat">聊天</a>
+        <a href="/auth" class="nav-login" data-i18n="nav.login">登录</a>
+      </nav>
+      <div class="lang-switch"><select id="localeSelect" class="locale-select"><option value="zh">中</option><option value="en">EN</option></select></div>
+    </header>
+    <main class="page-main">
+      <section class="page-card">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title" data-i18n="title">API 文档</h1>
+            <p class="page-subtitle" data-i18n="subtitle">xllmapi 默认提供 OpenAI-compatible 与 Anthropic-compatible 接口。</p>
+          </div>
+        </div>
+        <div class="data-stack">
+          <article class="card">
+            <h3>OpenAI-compatible</h3>
+            <pre class="code-block">curl https://your-host/v1/chat/completions \
+  -H "Authorization: Bearer &lt;platform_api_key&gt;" \
+  -H "content-type: application/json" \
+  -d '{
+    "model":"deepseek-chat",
+    "messages":[{"role":"user","content":"reply with ok"}]
+  }'</pre>
+          </article>
+          <article class="card">
+            <h3>Anthropic-compatible</h3>
+            <pre class="code-block">curl https://your-host/v1/messages \
+  -H "Authorization: Bearer &lt;platform_api_key&gt;" \
+  -H "content-type: application/json" \
+  -d '{
+    "model":"deepseek-chat",
+    "max_tokens":128,
+    "messages":[{"role":"user","content":"reply with ok"}]
+  }'</pre>
+          </article>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/docs.js"></script>
+  </body>
+</html>

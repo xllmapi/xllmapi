@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X llmapi Supplier</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <a class="app-logo" href="/"><span class="app-logo-mark">X</span><span class="app-logo-text">llmapi</span></a>
+      <nav class="app-topnav">
+        <a href="/" data-i18n="nav.home">首页</a>
+      </nav>
+      <div class="lang-switch"><select id="localeSelect" class="locale-select"><option value="zh">中</option><option value="en">EN</option></select></div>
+    </header>
+    <main class="page-main">
+      <section class="page-card">
+        <div class="page-header">
+          <div>
+            <h1 id="supplierTitle" class="page-title">Supplier</h1>
+            <p id="supplierSubtitle" class="page-subtitle"></p>
+          </div>
+        </div>
+        <section class="metric-row">
+          <article class="metric-box"><span data-i18n="metrics.models">活跃模型</span><strong id="supplierModels">--</strong></article>
+          <article class="metric-box"><span data-i18n="metrics.users">服务用户</span><strong id="supplierUsers">--</strong></article>
+          <article class="metric-box"><span data-i18n="metrics.tokens">总 tokens</span><strong id="supplierTokens">--</strong></article>
+          <article class="metric-box"><span data-i18n="metrics.runtime">稳定运行</span><strong id="supplierRuntime">--</strong></article>
+        </section>
+      </section>
+      <section class="page-card">
+        <div class="page-header"><div><h2 class="page-title" data-i18n="offerings.title">公开模型</h2></div></div>
+        <div id="supplierOfferings" class="data-stack"></div>
+      </section>
+    </main>
+    <script type="module" src="/supplier.js"></script>
+  </body>
+</html>

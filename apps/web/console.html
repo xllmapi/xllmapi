@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X llmapi User Console</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <a class="app-logo" href="/">
+        <span class="app-logo-mark">X</span>
+        <span class="app-logo-text">llmapi</span>
+      </a>
+      <nav class="app-topnav">
+        <a href="/" data-i18n="nav.home">官网</a>
+        <a href="/console" class="active" data-i18n="nav.console">用户看板</a>
+      </nav>
+      <div class="lang-switch" role="group" aria-label="Language switcher">
+        <button id="langZhButton" class="lang-button" type="button">中</button>
+        <button id="langEnButton" class="lang-button" type="button">EN</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <aside class="app-sidebar">
+        <div class="sidebar-section">
+          <p class="sidebar-section-title" data-i18n="sidebar.group">User Console</p>
+          <nav class="sidebar-nav">
+            <button class="sidebar-link" data-view="overview" type="button" data-i18n="sidebar.overview">概览</button>
+            <button class="sidebar-link" data-view="api-key" type="button" data-i18n="sidebar.apiKey">API Key</button>
+            <button class="sidebar-link" data-view="wallet" type="button" data-i18n="sidebar.wallet">钱包</button>
+            <button class="sidebar-link" data-view="models" type="button" data-i18n="sidebar.models">模型</button>
+            <button class="sidebar-link" data-view="credentials" type="button" data-i18n="sidebar.credentials">Provider Credentials</button>
+            <button class="sidebar-link" data-view="offerings" type="button" data-i18n="sidebar.offerings">Offerings</button>
+            <button class="sidebar-link" data-view="playground" type="button" data-i18n="sidebar.playground">Playground</button>
+          </nav>
+        </div>
+        <div class="sidebar-section sidebar-help">
+          <p data-i18n="sidebar.help">当前用户页只展示平台真实可用能力，不再展示无后端支撑的占位页面。</p>
+        </div>
+      </aside>
+
+      <section class="app-content">
+        <section class="content-view" data-view-panel="overview">
+          <div class="content-header">
+            <div>
+              <h1 data-i18n="overview.title">概览</h1>
+              <p data-i18n="overview.subtitle">查看当前钱包、模型和供给的运行状态。</p>
+            </div>
+            <button id="refreshOverviewButton" class="ghost-action" type="button" data-i18n="common.refresh">刷新</button>
+          </div>
+
+          <section class="summary-grid">
+            <article class="metric-box">
+              <span data-i18n="metrics.wallet">钱包余额</span>
+              <strong id="walletMetric">--</strong>
+            </article>
+            <article class="metric-box">
+              <span data-i18n="metrics.models">模型数</span>
+              <strong id="modelsMetric">--</strong>
+            </article>
+            <article class="metric-box">
+              <span data-i18n="metrics.offerings">已启用供给</span>
+              <strong id="offeringsMetric">--</strong>
+            </article>
+            <article class="metric-box">
+              <span data-i18n="metrics.credentials">凭证数</span>
+              <strong id="credentialsMetric">--</strong>
+            </article>
+          </section>
+
+          <section class="two-column-grid">
+            <article class="card">
+              <div class="section-head">
+                <h2 data-i18n="overview.modelsTitle">市场模型</h2>
+                <button id="refreshModelsButton" class="ghost-action" type="button" data-i18n="common.refresh">刷新</button>
+              </div>
+              <div id="modelsOverviewView" class="data-stack"></div>
+            </article>
+            <article class="card">
+              <div class="section-head">
+                <h2 data-i18n="overview.offeringsTitle">我的供给</h2>
+                <button id="refreshOfferingsButton" class="ghost-action" type="button" data-i18n="common.refresh">刷新</button>
+              </div>
+              <div id="offeringsOverviewView" class="data-stack"></div>
+            </article>
+          </section>
+        </section>
+
+        <section class="content-view" data-view-panel="api-key">
+          <div class="content-header">
+            <div>
+              <h1 data-i18n="apiKey.title">API Key</h1>
+              <p data-i18n="apiKey.subtitle">管理当前用户页使用的平台 API key。</p>
+            </div>
+          </div>
+          <article class="card key-box">
+            <label for="apiKeyInput" data-i18n="apiKey.label">当前 API Key</label>
+            <input id="apiKeyInput" data-i18n-placeholder="apiKey.placeholder" placeholder="xllm_demo_user_key_local" />
+            <div class="form-actions">
+              <button id="saveApiKeyButton" class="primary-action" type="button" data-i18n="common.save">保存</button>
+            </div>
+            <p id="authHint" class="helper-text" data-i18n="apiKey.hint">当前为本地开发 key。</p>
+            <pre class="api-example">curl -X POST /v1/chat/completions \
+  -H "x-api-key: &lt;your-key&gt;" \
+  -H "content-type: application/json" \
+  -d '{"model":"xllm/deepseek-chat","messages":[{"role":"user","content":"reply with ok"}]}'</pre>
+          </article>
+        </section>
+
+        <section class="content-view" data-view-panel="wallet">
+          <div class="content-header">
+            <div>
+              <h1 data-i18n="wallet.title">钱包</h1>
+              <p data-i18n="wallet.subtitle">查看当前 token credit 余额。</p>
+            </div>
+            <button id="refreshWalletButton" class="ghost-action" type="button" data-i18n="common.refresh">刷新</button>
+          </div>
+          <article class="card">
+            <p class="card-label" data-i18n="wallet.label">当前余额</p>
+            <h2 id="walletValue">--</h2>
+            <p data-i18n="wallet.unit">token credit</p>
+          </article>
+        </section>
+
+        <section class="content-view" data-view-panel="models">
+          <div class="content-header">
+            <div>
+              <h1 data-i18n="models.title">模型</h1>
+              <p data-i18n="models.subtitle">查看当前可用逻辑模型与价格摘要。</p>
+            </div>
+            <button id="refreshModelsPageButton" class="ghost-action" type="button" data-i18n="common.refresh">刷新</button>
+          </div>
+          <article class="card">
+            <div id="modelsPageView" class="data-stack"></div>
+          </article>
+        </section>
+
+        <section class="content-view" data-view-panel="credentials">
+          <div class="content-header">
+            <div>
+              <h1 data-i18n="credentials.title">Provider Credentials</h1>
+              <p data-i18n="credentials.subtitle">录入和管理你的 provider 凭证。</p>
+            </div>
+            <button id="refreshCredentialsButton" class="ghost-action" type="button" data-i18n="common.refresh">刷新</button>
+          </div>
+          <section class="two-column-grid">
+            <article class="card">
+              <div class="form-stack">
+                <select id="providerTypeInput">
+                  <option value="openai_compatible">openai_compatible</option>
+                  <option value="openai">openai</option>
+                  <option value="anthropic">anthropic</option>
+                </select>
+                <input id="providerBaseUrlInput" data-i18n-placeholder="credentials.baseUrl" placeholder="https://api.deepseek.com" />
+                <textarea id="providerApiKeyInput" data-i18n-placeholder="credentials.apiKey" placeholder="Provider API key"></textarea>
+                <button id="createCredentialButton" class="primary-action" type="button" data-i18n="credentials.create">创建凭证</button>
+              </div>
+            </article>
+            <article class="card">
+              <div id="credentialsView" class="data-stack"></div>
+            </article>
+          </section>
+          <article class="card">
+            <div class="toolbar-row">
+              <input id="toggleCredentialIdInput" data-i18n-placeholder="credentials.credentialId" placeholder="credential id" />
+              <select id="toggleCredentialStatusInput">
+                <option value="active" data-i18n="status.active">active</option>
+                <option value="disabled" data-i18n="status.disabled">disabled</option>
+              </select>
+              <button id="toggleCredentialButton" class="toolbar-button" type="button" data-i18n="credentials.update">更新状态</button>
+              <button id="deleteCredentialButton" class="toolbar-button-danger" type="button" data-i18n="credentials.delete">删除凭证</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="content-view" data-view-panel="offerings">
+          <div class="content-header">
+            <div>
+              <h1 data-i18n="offerings.title">Offerings</h1>
+              <p data-i18n="offerings.subtitle">创建、启停和查看你的供给。</p>
+            </div>
+            <button id="refreshOfferingsPageButton" class="ghost-action" type="button" data-i18n="common.refresh">刷新</button>
+          </div>
+          <section class="two-column-grid">
+            <article class="card">
+              <div class="form-stack">
+                <input id="offeringLogicalModelInput" data-i18n-placeholder="offerings.logicalModel" placeholder="xllm/user-deepseek-chat" />
+                <input id="offeringCredentialIdInput" data-i18n-placeholder="offerings.credentialId" placeholder="credential id" />
+                <input id="offeringRealModelInput" data-i18n-placeholder="offerings.realModel" placeholder="deepseek-chat" />
+                <div class="inline-row">
+                  <input id="offeringInputPriceInput" type="number" data-i18n-placeholder="offerings.inputPrice" placeholder="input price" />
+                  <input id="offeringOutputPriceInput" type="number" data-i18n-placeholder="offerings.outputPrice" placeholder="output price" />
+                </div>
+                <button id="createOfferingButton" class="primary-action" type="button" data-i18n="offerings.create">创建供给</button>
+              </div>
+            </article>
+            <article class="card">
+              <div id="offeringsView" class="data-stack"></div>
+            </article>
+          </section>
+          <article class="card">
+            <div class="toolbar-row">
+              <input id="toggleOfferingIdInput" data-i18n-placeholder="offerings.offeringId" placeholder="offering id" />
+              <select id="toggleOfferingEnabledInput">
+                <option value="true" data-i18n="status.enabled">enabled</option>
+                <option value="false" data-i18n="status.disabled">disabled</option>
+              </select>
+              <button id="toggleOfferingButton" class="toolbar-button" type="button" data-i18n="offerings.update">更新 offering</button>
+              <button id="deleteOfferingButton" class="toolbar-button-danger" type="button" data-i18n="offerings.delete">删除 offering</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="content-view" data-view-panel="playground">
+          <div class="content-header">
+            <div>
+              <h1 data-i18n="playground.title">Playground</h1>
+              <p data-i18n="playground.subtitle">使用统一接口测试模型调用与流式输出。</p>
+            </div>
+            <button id="runChatButton" class="primary-action" type="button" data-i18n="playground.run">运行</button>
+          </div>
+          <article class="card">
+            <div class="form-stack">
+              <input id="chatModelInput" data-i18n-placeholder="playground.model" placeholder="xllm/deepseek-chat" />
+              <textarea id="chatPromptInput" data-i18n-placeholder="playground.prompt" placeholder="reply with ok"></textarea>
+              <div class="inline-row">
+                <label class="helper-inline">
+                  <input id="chatStreamInput" type="checkbox" />
+                  <span data-i18n="playground.stream">流式</span>
+                </label>
+                <input id="chatMaxTokensInput" type="number" data-i18n-placeholder="playground.maxTokens" placeholder="max tokens" />
+              </div>
+              <pre id="chatView" class="json-view">No chat run yet</pre>
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/console.js"></script>
+  </body>
+</html>

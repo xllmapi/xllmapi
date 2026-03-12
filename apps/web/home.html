@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X llmapi</title>
+    <meta
+      name="description"
+      content="A shared LLM API network and platform that connects you to all models."
+    />
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body class="app-body">
+    <header class="app-header">
+      <a class="app-logo" href="/">
+        <span class="app-logo-mark">X</span>
+        <span class="app-logo-text">llmapi</span>
+      </a>
+      <nav class="app-topnav">
+        <a href="#features" class="active" data-i18n="nav.features">特性</a>
+        <a href="/docs" data-i18n="nav.docs">文档</a>
+        <a href="/chat" data-i18n="nav.chat">聊天</a>
+        <a href="/auth" class="nav-login" data-i18n="nav.login">登录</a>
+      </nav>
+      <div class="lang-switch" role="group" aria-label="Language switcher">
+        <select id="localeSelect" class="locale-select">
+          <option value="zh">中</option>
+          <option value="en">EN</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="landing-main">
+      <section class="landing-hero">
+        <p class="eyebrow" data-i18n="hero.eyebrow">LLM API Shared Network</p>
+        <h1 class="landing-title">
+          <span id="heroProviderWord" class="landing-title-accent">OpenAI</span>
+          <span>llmapi</span>
+        </h1>
+        <p class="landing-subtitle" data-i18n="hero.subtitle">
+          一个连接所有模型的 LLM API 共享网络与平台。
+        </p>
+        <p class="landing-note" data-i18n="hero.note">
+          拥有一个 LLM API，即可连接所有模型。
+        </p>
+        <div class="compat-row">
+          <span class="mini-tag">OpenAI-compatible</span>
+          <span class="mini-tag">Anthropic-compatible</span>
+        </div>
+        <div class="landing-actions">
+          <a class="primary-action" href="/chat" data-i18n="hero.chat">开始聊天</a>
+          <a class="ghost-action" href="/docs" data-i18n="hero.docs">查看 API 文档</a>
+        </div>
+      </section>
+
+      <section id="features" class="feature-grid">
+        <article class="card">
+          <p class="eyebrow" data-i18n="features.one.kicker">Network</p>
+          <h3 data-i18n="features.one.title">共享网络</h3>
+          <p class="data-card-copy" data-i18n="features.one.text">把分散的模型供给连接到一个可调用网络中。</p>
+        </article>
+        <article class="card">
+          <p class="eyebrow" data-i18n="features.two.kicker">Compatible APIs</p>
+          <h3 data-i18n="features.two.title">兼容接口</h3>
+          <p class="data-card-copy" data-i18n="features.two.text">默认提供 OpenAI-compatible 与 Anthropic-compatible 接入。</p>
+        </article>
+        <article class="card">
+          <p class="eyebrow" data-i18n="features.three.kicker">Access</p>
+          <h3 data-i18n="features.three.title">跨模型连接</h3>
+          <p class="data-card-copy" data-i18n="features.three.text">接入一个模型 API，换取更多模型 API 的使用能力。</p>
+        </article>
+      </section>
+
+      <section class="page-card">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title" data-i18n="network.title">网络支持模型</h2>
+            <p class="page-subtitle" data-i18n="network.subtitle">当前共享网络中可用的模型能力汇总。</p>
+          </div>
+          <a class="ghost-action" href="/chat" data-i18n="network.action">去聊天页</a>
+        </div>
+        <div id="networkModelMarquee" class="network-marquee"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/home.js"></script>
+  </body>
+</html>
