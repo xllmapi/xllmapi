@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve } from "node:path";
 
 import {
@@ -19,7 +19,9 @@ import { platformService } from "./services/platform-service.js";
 const host = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 3000);
 const coreBaseUrl = process.env.CORE_BASE_URL ?? "http://127.0.0.1:4001";
-const webRoot = resolve(process.cwd(), "apps/web");
+const webDistRoot = resolve(process.cwd(), "apps/web/dist");
+const webLegacyRoot = resolve(process.cwd(), "apps/web/_legacy");
+const webRoot = existsSync(webDistRoot) ? webDistRoot : webLegacyRoot;
 
 type SseEvent = {
   event: string;
@@ -213,30 +215,29 @@ const match_id_route_ = (pathname: string, prefix: string) => {
 const has_legacy_model_prefix_ = (model: string) => model.trim().startsWith("xllm/");
 
 const read_static_file_ = (pathname: string) => {
-  let target = resolve(webRoot, pathname.replace(/^\//, ""));
-
-  if (pathname === "/" || pathname === "") {
-    target = resolve(webRoot, "home.html");
-  } else if (pathname === "/market" || pathname === "/market/") {
-    target = resolve(webRoot, "home.html");
-  } else if (pathname === "/docs" || pathname === "/docs/") {
-    target = resolve(webRoot, "docs.html");
-  } else if (pathname === "/auth" || pathname === "/auth/") {
-    target = resolve(webRoot, "auth.html");
-  } else if (pathname === "/chat" || pathname === "/chat/") {
-    target = resolve(webRoot, "chat.html");
-  } else if (pathname === "/app" || pathname === "/app/" || pathname.startsWith("/app/")) {
-    target = resolve(webRoot, "app.html");
-  } else if (pathname === "/console" || pathname === "/console/") {
-    target = resolve(webRoot, "app.html");
-  } else if (pathname === "/admin" || pathname === "/admin/" || pathname.startsWith("/admin/")) {
-    target = resolve(webRoot, "admin.html");
-  } else if (pathname.startsWith("/u/")) {
-    target = resolve(webRoot, "supplier.html");
+  // Never intercept API routes or internal paths
+  if (pathname.startsWith("/v1/") || pathname.startsWith("/internal/") ||
+      pathname === "/healthz" || pathname === "/metrics") {
+    return null;
   }
 
-  if (!target.startsWith(webRoot) || !existsSync(target)) {
+  // Try to serve the exact file first (for assets like .js, .css, .svg, etc.)
+  let target = resolve(webRoot, pathname.replace(/^\//, ""));
+
+  // Security: ensure target is within webRoot
+  if (!target.startsWith(webRoot)) {
     return null;
+  }
+
+  // If the exact file exists and is a file (not directory), serve it
+  if (existsSync(target) && statSync(target).isFile()) {
+    // Serve the file directly
+  } else {
+    // SPA fallback: serve index.html for all page routes
+    target = resolve(webRoot, "index.html");
+    if (!existsSync(target)) {
+      return null;
+    }
   }
 
   const contentType = (() => {
@@ -247,6 +248,16 @@ const read_static_file_ = (pathname: string) => {
         return "text/css; charset=utf-8";
       case ".js":
         return "text/javascript; charset=utf-8";
+      case ".svg":
+        return "image/svg+xml";
+      case ".png":
+        return "image/png";
+      case ".ico":
+        return "image/x-icon";
+      case ".woff":
+        return "font/woff";
+      case ".woff2":
+        return "font/woff2";
       default:
         return "application/octet-stream";
     }

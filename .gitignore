@@ -13,3 +13,4 @@ build/
 *.ilk
 *.exe
 .data/
+*.tsbuildinfo

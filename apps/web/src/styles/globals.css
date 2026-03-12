@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-0: #0a0d14;
+  --color-bg-1: #101522;
+  --color-panel: rgba(16, 21, 34, 0.82);
+  --color-panel-strong: rgba(16, 21, 34, 0.92);
+  --color-line: rgba(136, 154, 196, 0.15);
+  --color-line-strong: rgba(139, 227, 218, 0.22);
+  --color-text-primary: #f3f6ff;
+  --color-text-secondary: #98a4c2;
+  --color-text-tertiary: #6b7a99;
+  --color-accent: #8be3da;
+  --color-accent-bg: rgba(139, 227, 218, 0.10);
+  --color-danger: #d34f4f;
+  --color-success: #1f9d74;
+
+  --font-heading: "Space Grotesk", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --font-body: "Inter", sans-serif;
+
+  --radius-card: 12px;
+  --radius-btn: 10px;
+  --radius-input: 8px;
+  --radius-badge: 20px;
+  --radius-avatar: 8px;
+
+  --shadow-cta: 0 2px 12px rgba(139, 227, 218, 0.2);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --spacing-content: 1180px;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background: var(--color-bg-0);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse, rgba(139, 227, 218, 0.05) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+  }
+
+  code, pre, .mono {
+    font-family: var(--font-mono);
+  }
+
+  a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-bg-0);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(136, 154, 196, 0.16);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* Typewriter animation for homepage */
+@keyframes typewriter-slide {
+  0%, 18% { transform: translateY(0); }
+  20%, 38% { transform: translateY(-100%); }
+  40%, 58% { transform: translateY(-200%); }
+  60%, 78% { transform: translateY(-300%); }
+  80%, 98% { transform: translateY(-400%); }
+  100% { transform: translateY(-500%); }
+}

@@ -1853,10 +1853,11 @@ export const list_offerings = (ownerUserId: string) =>
       fixed_price_per_1k_input AS fixedPricePer1kInput,
       fixed_price_per_1k_output AS fixedPricePer1kOutput,
       enabled,
-      review_status AS reviewStatus
+      review_status AS reviewStatus,
+      created_at AS createdAt
     FROM offerings
     WHERE owner_user_id = ?
-    ORDER BY id ASC
+    ORDER BY created_at DESC
   `).all(ownerUserId);
 
 export const get_offering_by_id = (ownerUserId: string, offeringId: string) =>
