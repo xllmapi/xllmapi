@@ -1,4 +1,4 @@
-import { createCipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 import { config } from "./config.js";
 
@@ -25,4 +25,18 @@ export const encryptSecret = (secret: string) => {
     tag: tag.toString("hex"),
     ciphertext: encrypted.toString("hex")
   });
+};
+
+export const decryptSecret = (encryptedJson: string): string => {
+  const { iv, tag, ciphertext } = JSON.parse(encryptedJson);
+  const key = createHash("sha256")
+    .update(config.secretKey ?? "xllmapi-dev-secret-key")
+    .digest();
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "hex"));
+  decipher.setAuthTag(Buffer.from(tag, "hex"));
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(ciphertext, "hex")),
+    decipher.final()
+  ]);
+  return decrypted.toString("utf8");
 };

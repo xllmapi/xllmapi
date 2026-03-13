@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <csignal>
 #include <mbedtls/gcm.h>
 #include <mbedtls/sha256.h>
 #include <netinet/in.h>
@@ -157,7 +158,7 @@ void send_all_(int clientFd, std::string_view text) {
     auto cursor = text.data();
 
     while (bytesLeft > 0) {
-        auto sent = ::send(clientFd, cursor, bytesLeft, 0);
+        auto sent = ::send(clientFd, cursor, bytesLeft, MSG_NOSIGNAL);
         if (sent <= 0) {
             break;
         }
@@ -312,15 +313,23 @@ std::string read_http_request_(int clientFd) {
             continue;
         }
 
-        auto contentLengthPos = request.find("Content-Length:");
+        // Case-insensitive search for Content-Length header
+        auto contentLengthPos = std::string::npos;
+        for (std::size_t i = 0; i + 15 <= headerEnd; ++i) {
+            if ((request[i] == 'C' || request[i] == 'c') &&
+                lowercase_(request.substr(i, 15)) == "content-length:") {
+                contentLengthPos = i;
+                break;
+            }
+        }
         if (contentLengthPos == std::string::npos) {
             break;
         }
 
         auto lineEnd = request.find("\r\n", contentLengthPos);
         auto lengthText = trim_(request.substr(
-            contentLengthPos + std::string("Content-Length:").size(),
-            lineEnd - contentLengthPos - std::string("Content-Length:").size()
+            contentLengthPos + 15,
+            lineEnd - contentLengthPos - 15
         ));
         auto contentLength = static_cast<std::size_t>(std::stoul(lengthText));
         auto bodySize = request.size() - (headerEnd + 4);
@@ -744,16 +753,27 @@ bool try_handle_special_request_(int clientFd, const HttpRequest& request) {
         try {
             handle_stream_request_(clientFd, request.body);
         } catch (const std::exception& error) {
-            send_all_(
-                clientFd,
-                "HTTP/1.1 200 OK\r\n"
-                "Content-Type: text/event-stream; charset=utf-8\r\n"
-                "Cache-Control: no-cache\r\n"
-                "Connection: close\r\n"
-                "\r\n"
-            );
-            Json payload { {"message", error.what()} };
-            send_sse_event_(clientFd, "error", payload);
+            try {
+                send_all_(
+                    clientFd,
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/event-stream; charset=utf-8\r\n"
+                    "Cache-Control: no-cache\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                );
+                auto message = std::string(error.what());
+                // sanitize non-ASCII bytes to avoid JSON UTF-8 errors
+                for (auto& ch : message) {
+                    if (static_cast<unsigned char>(ch) > 127) {
+                        ch = '?';
+                    }
+                }
+                Json payload { {"message", message} };
+                send_sse_event_(clientFd, "error", payload);
+            } catch (...) {
+                // prevent double-fault from crashing the process
+            }
         }
         return true;
     }
@@ -808,7 +828,7 @@ void serve_forever_(int serverFd) {
   }
 })"
             );
-            ::send(clientFd, response.data(), response.size(), 0);
+            ::send(clientFd, response.data(), response.size(), MSG_NOSIGNAL);
             ::close(clientFd);
             continue;
         }
@@ -817,26 +837,30 @@ void serve_forever_(int serverFd) {
         activeRequests_.fetch_add(1);
 
         std::thread([clientFd]() {
-            auto rawRequest = read_http_request_(clientFd);
-            auto request = parse_http_request_(rawRequest);
-            if (request.has_value() && try_handle_special_request_(clientFd, *request)) {
-                ::close(clientFd);
-                activeRequests_.fetch_sub(1);
-                return;
-            }
-            auto response = request.has_value()
-                ? route_request_(*request)
-                : make_http_response_(
-                    400,
-                    "Bad Request",
-                    R"({
+            try {
+                auto rawRequest = read_http_request_(clientFd);
+                auto request = parse_http_request_(rawRequest);
+                if (request.has_value() && try_handle_special_request_(clientFd, *request)) {
+                    ::close(clientFd);
+                    activeRequests_.fetch_sub(1);
+                    return;
+                }
+                auto response = request.has_value()
+                    ? route_request_(*request)
+                    : make_http_response_(
+                        400,
+                        "Bad Request",
+                        R"({
   "error": {
     "message": "bad request"
   }
 })"
-                );
+                    );
 
-            ::send(clientFd, response.data(), response.size(), 0);
+                ::send(clientFd, response.data(), response.size(), MSG_NOSIGNAL);
+            } catch (...) {
+                // prevent uncaught exceptions from calling std::terminate
+            }
             ::close(clientFd);
             activeRequests_.fetch_sub(1);
         }).detach();
@@ -846,6 +870,7 @@ void serve_forever_(int serverFd) {
 } // namespace
 
 int main() {
+    std::signal(SIGPIPE, SIG_IGN);
     constexpr int port { 4001 };
     auto serverFd = create_server_socket_(port);
     std::println("core-router-executor listening on http://0.0.0.0:{}", port);

@@ -1073,14 +1073,19 @@ const server = createServer(async (req, res) => {
       };
       const coreRequest = await platformService.buildCoreRequest(requestId, auth.userId, mappedBody, candidateOfferings);
       coreRequest.stream = true;
+      console.log(`[chat-stream] requestId=${requestId} candidateCount=${candidateOfferings.length} candidateIds=${candidateOfferings.map(c => c.offeringId).join(",")}`);
+      console.log(`[chat-stream] candidates:`, candidateOfferings.map(c => ({ id: c.offeringId, owner: c.ownerUserId, provider: c.providerType, realModel: c.realModel, hasSecret: !!(c.encryptedSecret), hasEnvName: !!(c.apiKeyEnvName), baseUrl: c.baseUrl })));
 
       const coreResponse = await fetch(`${coreBaseUrl}/internal/core/route-execute/chat-stream`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(coreRequest)
       });
+      console.log(`[chat-stream] coreRequest candidateOfferings:`, JSON.stringify(coreRequest.candidateOfferings?.map((c: any) => ({ id: c.offeringId, provider: c.providerType, baseUrl: c.baseUrl, hasSecret: !!c.encryptedSecret, envName: c.apiKeyEnvName })) ?? []));
+      console.log(`[chat-stream] coreResponse status=${coreResponse.status} hasBody=${!!coreResponse.body}`);
       if (!coreResponse.ok || !coreResponse.body) {
         const errorBody = (await coreResponse.text()) || "";
+        console.log(`[chat-stream] core ERROR: ${errorBody}`);
         const response = json(502, { error: { message: `core returned ${coreResponse.status}`, details: errorBody, requestId } });
         res.writeHead(response.statusCode, response.headers);
         res.end(response.payload);
@@ -1119,35 +1124,49 @@ const server = createServer(async (req, res) => {
         }
       });
 
+      let rawSseDebug = "";
       for await (const chunk of coreResponse.body as AsyncIterable<Uint8Array>) {
         const textChunk = decoder.decode(chunk, { stream: true });
+        rawSseDebug += textChunk;
         parseSse(textChunk);
         res.write(textChunk);
       }
       const finalChunk = decoder.decode();
       if (finalChunk) {
+        rawSseDebug += finalChunk;
         parseSse(finalChunk);
         res.write(finalChunk);
       }
+      if (!completedEvent) {
+        console.log(`[chat-stream] RAW SSE (first 2000 chars):`, rawSseDebug.slice(0, 2000));
+      }
 
       const settlementEvent = completedEvent as StreamCompletedEvent | null;
+      console.log(`[chat-stream] requestId=${requestId} completedEvent=${settlementEvent ? "YES" : "NO"} assistantContentLen=${assistantContent.length}`);
       if (settlementEvent) {
+        console.log(`[chat-stream] settlement: offering=${settlementEvent.chosenOfferingId} provider=${settlementEvent.provider} usage=${JSON.stringify(settlementEvent.usage)}`);
         const settledOffering = candidateOfferings.find((item) => item.offeringId === settlementEvent.chosenOfferingId);
+        console.log(`[chat-stream] settledOffering=${settledOffering ? `found(owner=${settledOffering.ownerUserId}, inputPrice=${settledOffering.fixedPricePer1kInput}, outputPrice=${settledOffering.fixedPricePer1kOutput})` : "NOT FOUND"} candidateCount=${candidateOfferings.length} candidateIds=${candidateOfferings.map(c => c.offeringId).join(",")}`);
         if (settledOffering) {
-          await platformService.recordChatSettlement({
-            requestId,
-            requesterUserId: auth.userId,
-            supplierUserId: settledOffering.ownerUserId,
-            logicalModel,
-            offeringId: settlementEvent.chosenOfferingId,
-            provider: settlementEvent.provider,
-            realModel: settlementEvent.realModel,
-            inputTokens: settlementEvent.usage.inputTokens,
-            outputTokens: settlementEvent.usage.outputTokens,
-            totalTokens: settlementEvent.usage.totalTokens,
-            fixedPricePer1kInput: settledOffering.fixedPricePer1kInput ?? 0,
-            fixedPricePer1kOutput: settledOffering.fixedPricePer1kOutput ?? 0
-          });
+          try {
+            await platformService.recordChatSettlement({
+              requestId,
+              requesterUserId: auth.userId,
+              supplierUserId: settledOffering.ownerUserId,
+              logicalModel,
+              offeringId: settlementEvent.chosenOfferingId,
+              provider: settlementEvent.provider,
+              realModel: settlementEvent.realModel,
+              inputTokens: settlementEvent.usage.inputTokens,
+              outputTokens: settlementEvent.usage.outputTokens,
+              totalTokens: settlementEvent.usage.totalTokens,
+              fixedPricePer1kInput: settledOffering.fixedPricePer1kInput ?? 0,
+              fixedPricePer1kOutput: settledOffering.fixedPricePer1kOutput ?? 0
+            });
+            console.log(`[chat-stream] settlement RECORDED for user=${auth.userId}`);
+          } catch (err) {
+            console.error(`[chat-stream] settlement FAILED:`, err);
+          }
           await platformService.appendChatMessage({
             id: `msg_${randomUUID().replaceAll("-", "")}`,
             conversationId,
@@ -1156,6 +1175,15 @@ const server = createServer(async (req, res) => {
             requestId
           });
         }
+      } else {
+        // No completed event - still save assistant message
+        console.log(`[chat-stream] NO completed event, saving assistant message anyway`);
+        await platformService.appendChatMessage({
+          id: `msg_${randomUUID().replaceAll("-", "")}`,
+          conversationId,
+          role: "assistant",
+          content: assistantContent || ""
+        });
       }
 
       res.end();

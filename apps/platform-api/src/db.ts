@@ -1233,6 +1233,7 @@ export const get_offering_for_model = (logicalModel: string): OfferingRow | null
       FROM offerings o
       JOIN provider_credentials c ON c.id = o.credential_id
       WHERE o.logical_model = ? AND o.enabled = 1 AND o.review_status = 'approved' AND c.status = 'active'
+        AND o.owner_user_id NOT LIKE '%_demo'
       ORDER BY o.id ASC
       LIMIT 1
     `)
@@ -1296,6 +1297,7 @@ export const list_offerings_for_model = (logicalModel: string): OfferingRow[] =>
     FROM offerings o
     JOIN provider_credentials c ON c.id = o.credential_id
     WHERE o.logical_model = ? AND o.enabled = 1 AND o.review_status = 'approved' AND c.status = 'active'
+      AND o.owner_user_id NOT LIKE '%_demo'
     ORDER BY o.id ASC
   `).all(logicalModel).map((row) => {
     const typedRow = row as OfferingDbRow;
