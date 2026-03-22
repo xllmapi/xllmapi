@@ -1,0 +1,23 @@
+# xllmapi Production Reverse Proxy
+# Usage: caddy run --config infra/Caddyfile
+
+{$XLLMAPI_DOMAIN:localhost} {
+    # Auto HTTPS (Let's Encrypt)
+    reverse_proxy localhost:3000 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # SSE streaming support
+        flush_interval -1
+    }
+
+    # Compress
+    encode gzip zstd
+
+    # Logging
+    log {
+        output file /var/log/caddy/xllmapi-access.log
+        format json
+    }
+}
