@@ -40,6 +40,7 @@ function parseThinking(content: string): { thinking: string; answer: string; isT
 }
 
 function ThinkingBlock({ thinking, isThinking }: { thinking: string; isThinking: boolean }) {
+  const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const showExpanded = expanded || isThinking;
 
@@ -61,10 +62,10 @@ function ThinkingBlock({ thinking, isThinking }: { thinking: string; isThinking:
         {isThinking ? (
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-3 h-3 border-2 border-text-tertiary/40 border-t-text-tertiary rounded-full animate-spin" />
-            思考中…
+            {t("chat.thinking")}
           </span>
         ) : (
-          <span>思考过程</span>
+          <span>{t("chat.thinkingProcess")}</span>
         )}
       </button>
       {showExpanded && (

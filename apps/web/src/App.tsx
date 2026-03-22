@@ -33,23 +33,32 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
+import { lazy, Suspense } from "react";
+import { ChatProvider } from "@/hooks/useChatContext";
+
+// Eager: landing + auth (first paint)
 import { HomePage } from "@/pages/HomePage";
 import { AuthPage } from "@/pages/AuthPage";
-import { DocsPage } from "@/pages/DocsPage";
-import { ChatPage } from "@/pages/chat/ChatPage";
-import { ChatProvider } from "@/hooks/useChatContext";
-import { ModelsPage } from "@/pages/ModelsPage";
-import { ModelDetailPage } from "@/pages/ModelDetailPage";
-import { OverviewPage } from "@/pages/app/OverviewPage";
-import { NetworkPage } from "@/pages/app/NetworkPage";
-import { InvitationsPage } from "@/pages/app/InvitationsPage";
-import { ProfilePage } from "@/pages/app/ProfilePage";
-import { SecurityPage } from "@/pages/app/SecurityPage";
-import { AdminOverviewPage } from "@/pages/admin/AdminOverviewPage";
-import { UsersPage } from "@/pages/admin/UsersPage";
-import { AdminInvitationsPage } from "@/pages/admin/AdminInvitationsPage";
-import { ReviewsPage } from "@/pages/admin/ReviewsPage";
-import { UsagePage } from "@/pages/admin/UsagePage";
+
+// Lazy: everything else
+const DocsPage = lazy(() => import("@/pages/DocsPage").then((m) => ({ default: m.DocsPage })));
+const ChatPage = lazy(() => import("@/pages/chat/ChatPage").then((m) => ({ default: m.ChatPage })));
+const ModelsPage = lazy(() => import("@/pages/ModelsPage").then((m) => ({ default: m.ModelsPage })));
+const ModelDetailPage = lazy(() => import("@/pages/ModelDetailPage").then((m) => ({ default: m.ModelDetailPage })));
+const OverviewPage = lazy(() => import("@/pages/app/OverviewPage").then((m) => ({ default: m.OverviewPage })));
+const NetworkPage = lazy(() => import("@/pages/app/NetworkPage").then((m) => ({ default: m.NetworkPage })));
+const InvitationsPage = lazy(() => import("@/pages/app/InvitationsPage").then((m) => ({ default: m.InvitationsPage })));
+const ProfilePage = lazy(() => import("@/pages/app/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const SecurityPage = lazy(() => import("@/pages/app/SecurityPage").then((m) => ({ default: m.SecurityPage })));
+const AdminOverviewPage = lazy(() => import("@/pages/admin/AdminOverviewPage").then((m) => ({ default: m.AdminOverviewPage })));
+const UsersPage = lazy(() => import("@/pages/admin/UsersPage").then((m) => ({ default: m.UsersPage })));
+const AdminInvitationsPage = lazy(() => import("@/pages/admin/AdminInvitationsPage").then((m) => ({ default: m.AdminInvitationsPage })));
+const ReviewsPage = lazy(() => import("@/pages/admin/ReviewsPage").then((m) => ({ default: m.ReviewsPage })));
+const UsagePage = lazy(() => import("@/pages/admin/UsagePage").then((m) => ({ default: m.UsagePage })));
+
+function PageLoader() {
+  return <div className="flex items-center justify-center min-h-[200px] text-text-tertiary text-sm">Loading…</div>;
+}
 
 export function App() {
   const auth = useAuthProvider();
@@ -60,6 +69,7 @@ export function App() {
       <ChatProvider>
       <BrowserRouter>
         <Header />
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<AuthPage />} />
@@ -99,6 +109,7 @@ export function App() {
             <Route path="usage" element={<UsagePage />} />
           </Route>
         </Routes>
+        </Suspense>
       </BrowserRouter>
       </ChatProvider>
     </AuthContext.Provider>

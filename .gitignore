@@ -14,3 +14,7 @@ build/
 *.exe
 .data/
 *.tsbuildinfo
+*.db
+*.log
+*.pid
+.superpowers/

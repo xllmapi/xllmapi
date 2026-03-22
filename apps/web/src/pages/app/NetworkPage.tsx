@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiJson, getApiKey } from "@/lib/api";
+import { formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
@@ -61,13 +62,6 @@ function formatRuntime(createdAt: string): string {
   if (hours > 0) return `${hours}h`;
   const mins = Math.floor(diffMs / (1000 * 60));
   return `${mins}m`;
-}
-
-function formatTokens(v: number | string): string {
-  const n = Number(v) || 0;
-  if (n >= 999_950) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(Math.round(n));
 }
 
 export function NetworkPage() {
