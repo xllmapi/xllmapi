@@ -660,5 +660,32 @@ export const platformService = {
 
   getUnreadCount(userId: string) {
     return platformRepository.getUnreadCount(userId);
+  },
+
+  // Node tokens
+  async createNodeToken(userId: string, label: string) {
+    return platformRepository.createNodeToken({ userId, label });
+  },
+  async listNodeTokens(userId: string) {
+    return platformRepository.listNodeTokens(userId);
+  },
+  async revokeNodeToken(userId: string, tokenId: string) {
+    return platformRepository.revokeNodeToken({ userId, tokenId });
+  },
+
+  // Nodes
+  async listUserNodes(userId: string) {
+    return platformRepository.listUserNodes(userId);
+  },
+  async getNodeStats(nodeId: string) {
+    return platformRepository.getNode(nodeId);
+  },
+
+  // Preferences
+  async getNodePreferences(userId: string) {
+    return platformRepository.getNodePreferences(userId);
+  },
+  async updateNodePreferences(userId: string, prefs: { allowDistributedNodes: boolean; trustMode: string; trustedSupplierIds: string[]; trustedOfferingIds: string[] }) {
+    return platformRepository.upsertNodePreferences({ userId, ...prefs });
   }
 };
