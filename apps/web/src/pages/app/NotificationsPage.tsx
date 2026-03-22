@@ -34,7 +34,20 @@ export function NotificationsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 tracking-tight">{t("notifications.title")}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">{t("notifications.title")}</h1>
+        {notifications.some((n) => !n.isRead) && (
+          <button
+            onClick={async () => {
+              await Promise.all(notifications.filter((n) => !n.isRead).map((n) => apiJson(`/v1/notifications/${encodeURIComponent(n.id)}/read`, { method: "POST" }).catch(() => {})));
+              setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+            }}
+            className="text-xs text-text-tertiary hover:text-accent cursor-pointer bg-transparent border border-line rounded-[var(--radius-btn)] px-3 py-1.5 transition-colors"
+          >
+            {t("notifications.markAllRead")}
+          </button>
+        )}
+      </div>
 
       {notifications.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-12 text-center text-text-tertiary text-sm">
