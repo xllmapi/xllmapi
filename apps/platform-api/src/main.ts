@@ -4,6 +4,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve } from "node:path";
 
 import {
+  type CandidateOffering,
   type PublicChatCompletionsRequest,
   type PublicChatCompletionsResponse
 } from "@xllmapi/shared-types";
@@ -690,6 +691,52 @@ const server = createServer(async (req, res) => {
       const response = json(200, {
         object: "list",
         data: platformService.listProviderCatalog()
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/v1/provider-models") {
+      const auth = await authenticate_request_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+
+      const body = await read_json<{
+        providerType?: string;
+        baseUrl?: string;
+        apiKey?: string;
+        providerId?: string;
+      }>(req);
+
+      const providerPreset = body.providerId ? platformService.getProviderPresetById(body.providerId) : null;
+      const providerType = (providerPreset?.providerType ?? body.providerType) as CandidateOffering["providerType"] | undefined;
+      const baseUrl = (body.baseUrl?.trim() || providerPreset?.baseUrl || "").trim();
+
+      if (!providerType || !body.apiKey || !baseUrl) {
+        const response = json(400, {
+          error: { message: "providerType (or providerId), baseUrl, and apiKey are required", requestId }
+        });
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+
+      const result = await platformService.discoverProviderModels({
+        providerType,
+        baseUrl,
+        apiKey: body.apiKey
+      });
+
+      const response = json(result.ok ? 200 : 502, {
+        requestId,
+        ok: result.ok,
+        data: result.models ?? [],
+        message: result.message
       });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);

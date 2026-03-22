@@ -16,6 +16,11 @@ interface ProviderPreset {
   realModel: string;
 }
 
+interface DiscoveredModel {
+  id: string;
+  name?: string;
+}
+
 interface Offering {
   id: string;
   logicalModel: string;
@@ -79,6 +84,12 @@ export function NetworkPage() {
   const [success, setSuccess] = useState("");
   const [togglingId, setTogglingId] = useState("");
 
+  // Model discovery state
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveryDone, setDiscoveryDone] = useState(false);
+  const [customModelInput, setCustomModelInput] = useState("");
+
   const myKey = getApiKey() ?? "";
 
   const loadData = useCallback(async () => {
@@ -105,15 +116,83 @@ export function NetworkPage() {
   // Group catalog by providerType
   const providers = Array.from(new Set(catalog.map((p) => p.providerType)));
   const providerModels = catalog.filter((p) => p.providerType === selectedProvider);
-  const providerName = providerModels[0]?.name?.split(" ")[0] ?? selectedProvider;
+  const providerName = providerModels[0]?.name?.split(" ")[0] ?? providerModels[0]?.label?.split(" ")[0] ?? selectedProvider;
 
-  const toggleModel = (presetId: string) => {
+  // Merge preset models + discovered models into a unified selectable list
+  const selectableModels: { id: string; label: string; realModel: string; source: "preset" | "discovered" | "custom" }[] = [];
+
+  // Preset models first
+  for (const pm of providerModels) {
+    selectableModels.push({ id: `preset:${pm.id}`, label: pm.logicalModel, realModel: pm.realModel, source: "preset" });
+  }
+
+  // Then discovered models (exclude ones already in presets)
+  if (discoveryDone) {
+    const presetRealModels = new Set(providerModels.map((p) => p.realModel));
+    for (const dm of discoveredModels) {
+      if (!presetRealModels.has(dm.id)) {
+        selectableModels.push({ id: `discovered:${dm.id}`, label: dm.id, realModel: dm.id, source: "discovered" });
+      }
+    }
+  }
+
+  const toggleModel = (id: string) => {
     setSelectedModels((prev) => {
       const next = new Set(prev);
-      if (next.has(presetId)) next.delete(presetId);
-      else next.add(presetId);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
+  };
+
+  const resetForm = () => {
+    setSelectedProvider("");
+    setSelectedModels(new Set());
+    setApiKey("");
+    setDiscoveredModels([]);
+    setDiscoveryDone(false);
+    setCustomModelInput("");
+  };
+
+  const handleDiscover = async () => {
+    if (!selectedProvider || !apiKey.trim()) return;
+    setDiscovering(true);
+    setError("");
+
+    const firstPreset = providerModels[0];
+    try {
+      const result = await apiJson<{ ok: boolean; data: DiscoveredModel[]; message?: string }>(
+        "/v1/provider-models",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            providerType: firstPreset?.providerType ?? selectedProvider,
+            baseUrl: firstPreset?.baseUrl ?? "",
+            apiKey: apiKey.trim(),
+          }),
+        },
+      );
+      setDiscoveredModels(result.data ?? []);
+      setDiscoveryDone(true);
+    } catch (err: unknown) {
+      setError(extractError(err));
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  const addCustomModel = () => {
+    const name = customModelInput.trim();
+    if (!name) return;
+    // Add as discovered model
+    setDiscoveredModels((prev) => {
+      if (prev.some((m) => m.id === name)) return prev;
+      return [...prev, { id: name }];
+    });
+    setDiscoveryDone(true);
+    // Auto-select it
+    setSelectedModels((prev) => new Set([...prev, `discovered:${name}`]));
+    setCustomModelInput("");
   };
 
   const handlePublish = async (e: React.FormEvent) => {
@@ -122,40 +201,45 @@ export function NetworkPage() {
     setSuccess("");
     if (!selectedProvider || selectedModels.size === 0 || !apiKey.trim()) return;
 
-    const presetsToSubmit = catalog.filter((p) => selectedModels.has(p.id));
-    if (presetsToSubmit.length === 0) return;
+    // Resolve selected models to {logicalModel, realModel, baseUrl, providerType}
+    const modelsToSubmit: { logicalModel: string; realModel: string }[] = [];
+    for (const id of selectedModels) {
+      const item = selectableModels.find((m) => m.id === id);
+      if (item) {
+        modelsToSubmit.push({ logicalModel: item.label, realModel: item.realModel });
+      }
+    }
+    if (modelsToSubmit.length === 0) return;
 
+    const firstPreset = providerModels[0];
     setPublishing(true);
     try {
-      const first = presetsToSubmit[0]!;
       const credResult = await apiJson<{ data: { id: string } }>(
         "/v1/provider-credentials",
         {
           method: "POST",
           body: JSON.stringify({
-            providerId: first.id,
-            providerType: first.providerType,
-            baseUrl: first.baseUrl,
+            providerId: firstPreset?.id,
+            providerType: firstPreset?.providerType ?? selectedProvider,
+            baseUrl: firstPreset?.baseUrl ?? "",
             apiKey: apiKey.trim(),
           }),
         },
       );
 
-      for (const preset of presetsToSubmit) {
+      for (const model of modelsToSubmit) {
         await apiJson("/v1/offerings", {
           method: "POST",
           body: JSON.stringify({
-            logicalModel: preset.logicalModel,
+            logicalModel: model.logicalModel,
             credentialId: credResult.data.id,
-            realModel: preset.realModel,
+            realModel: model.realModel,
           }),
         });
       }
 
       setSuccess(t("network.submitted"));
-      setApiKey("");
-      setSelectedProvider("");
-      setSelectedModels(new Set());
+      resetForm();
       await loadData();
     } catch (err: unknown) {
       setError(extractError(err));
@@ -224,7 +308,12 @@ export function NetworkPage() {
             <label className="text-text-secondary text-xs block mb-1.5">{t("network.selectProvider")}</label>
             <select
               value={selectedProvider}
-              onChange={(e) => { setSelectedProvider(e.target.value); setSelectedModels(new Set()); }}
+              onChange={(e) => {
+                setSelectedProvider(e.target.value);
+                setSelectedModels(new Set());
+                setDiscoveredModels([]);
+                setDiscoveryDone(false);
+              }}
               className="w-full rounded-[var(--radius-input)] border border-line px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
               style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
             >
@@ -233,38 +322,73 @@ export function NetworkPage() {
                 const sample = catalog.find((p) => p.providerType === pt);
                 return (
                   <option key={pt} value={pt}>
-                    {sample?.name?.split(" ")[0] ?? pt}
+                    {sample?.name?.split(" ")[0] ?? sample?.label?.split(" ")[0] ?? pt}
                   </option>
                 );
               })}
             </select>
           </div>
 
-          {/* Row 2: Model checkboxes */}
-          {selectedProvider && providerModels.length > 0 && (
+          {/* Row 2: API Key */}
+          {selectedProvider && (
+            <FormInput
+              label={t("network.providerKey")}
+              type="password"
+              placeholder={t("network.providerKeyPlaceholder")}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+          )}
+
+          {/* Row 3: Discover models button */}
+          {selectedProvider && apiKey.trim() && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleDiscover()}
+                disabled={discovering}
+                className="rounded-[var(--radius-btn)] border border-accent/30 text-accent px-4 py-2 text-xs font-medium hover:bg-accent/10 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {discovering ? t("network.discovering") : t("network.discoverModels")}
+              </button>
+              {discoveryDone && (
+                <span className="text-text-tertiary text-xs">
+                  {discoveredModels.length} {t("network.discoveredModels").toLowerCase()}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Row 4: Model selection */}
+          {selectedProvider && selectableModels.length > 0 && (
             <div>
               <label className="text-text-secondary text-xs block mb-2">
                 {t("network.selectModels")} ({providerName})
               </label>
-              <div className="flex flex-col gap-2">
-                {providerModels.map((pm) => (
+              <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto">
+                {selectableModels.map((sm) => (
                   <label
-                    key={pm.id}
+                    key={sm.id}
                     className={`flex items-center gap-3 rounded-[var(--radius-input)] border px-4 py-2.5 cursor-pointer transition-colors ${
-                      selectedModels.has(pm.id)
+                      selectedModels.has(sm.id)
                         ? "border-accent/40 bg-accent-bg"
                         : "border-line bg-[rgba(16,21,34,0.4)] hover:border-line-strong"
                     }`}
                   >
                     <input
                       type="checkbox"
-                      checked={selectedModels.has(pm.id)}
-                      onChange={() => toggleModel(pm.id)}
+                      checked={selectedModels.has(sm.id)}
+                      onChange={() => toggleModel(sm.id)}
                       className="accent-[var(--color-accent)] w-4 h-4"
                     />
-                    <div className="flex-1 min-w-0">
-                      <span className="font-mono text-sm text-text-primary">{pm.logicalModel}</span>
-                      <span className="text-text-tertiary text-xs ml-2">({pm.realModel})</span>
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      <span className="font-mono text-sm text-text-primary truncate">{sm.label}</span>
+                      {sm.source === "discovered" && (
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">API</span>
+                      )}
+                      {sm.source === "preset" && (
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-panel-strong text-text-tertiary font-medium">preset</span>
+                      )}
                     </div>
                   </label>
                 ))}
@@ -272,14 +396,28 @@ export function NetworkPage() {
             </div>
           )}
 
-          {/* Row 3: API Key */}
-          <FormInput
-            label={t("network.providerKey")}
-            type="password"
-            placeholder={t("network.providerKeyPlaceholder")}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-          />
+          {/* Row 5: Custom model input */}
+          {selectedProvider && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={customModelInput}
+                onChange={(e) => setCustomModelInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomModel(); } }}
+                placeholder={t("network.customModel")}
+                className="flex-1 rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors font-mono"
+                style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+              />
+              <button
+                type="button"
+                onClick={addCustomModel}
+                disabled={!customModelInput.trim()}
+                className="rounded-[var(--radius-btn)] border border-line text-text-secondary px-3 py-2 text-xs font-medium hover:border-accent/30 hover:text-accent transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                {t("network.addCustomModel")}
+              </button>
+            </div>
+          )}
 
           <FormButton
             type="submit"

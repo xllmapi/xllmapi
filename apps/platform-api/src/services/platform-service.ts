@@ -37,6 +37,14 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     baseUrl: "https://api.anthropic.com/v1",
     logicalModel: "claude-sonnet-4-20250514",
     realModel: "claude-sonnet-4-20250514"
+  },
+  {
+    id: "minimax",
+    label: "MiniMax (OpenAI-compatible)",
+    providerType: "openai_compatible",
+    baseUrl: "https://api.minimax.io/v1",
+    logicalModel: "MiniMax-Text-01",
+    realModel: "MiniMax-Text-01"
   }
 ];
 
@@ -134,6 +142,51 @@ export const platformService = {
 
   getProviderPresetById(id: string) {
     return PROVIDER_PRESETS.find((item) => item.id === id) ?? null;
+  },
+
+  async discoverProviderModels(params: {
+    providerType: CandidateOffering["providerType"];
+    baseUrl: string;
+    apiKey: string;
+  }): Promise<{ ok: boolean; models?: { id: string; name?: string }[]; message?: string }> {
+    const baseUrl = params.baseUrl.replace(/\/+$/, "");
+    const timeoutMs = 10000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      if (params.providerType === "anthropic") {
+        const response = await fetch(`${baseUrl}/models?limit=100`, {
+          headers: {
+            "x-api-key": params.apiKey,
+            "anthropic-version": "2023-06-01"
+          },
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          return { ok: false, message: `Failed to list models (${response.status})` };
+        }
+        const body = await response.json() as { data?: { id: string; display_name?: string }[] };
+        const models = (body.data ?? []).map((m) => ({ id: m.id, name: m.display_name }));
+        return { ok: true, models };
+      }
+
+      // OpenAI / OpenAI-compatible
+      const response = await fetch(`${baseUrl}/models`, {
+        headers: { Authorization: `Bearer ${params.apiKey}` },
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        return { ok: false, message: `Failed to list models (${response.status})` };
+      }
+      const body = await response.json() as { data?: { id: string; name?: string }[] };
+      const models = (body.data ?? []).map((m) => ({ id: m.id, name: m.name }));
+      return { ok: true, models };
+    } catch (error) {
+      return { ok: false, message: `Model discovery failed: ${String(error)}` };
+    } finally {
+      clearTimeout(timer);
+    }
   },
 
   validateProviderCredential(params: {

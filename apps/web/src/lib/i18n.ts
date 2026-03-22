@@ -103,6 +103,13 @@ const messages: Record<string, Record<string, string>> = {
     "network.start": "启动",
     "network.stop": "停止",
     "network.noOfferings": "暂无模型节点，提交 Provider Key 开始接入",
+    "network.discoverModels": "发现模型",
+    "network.discovering": "查询中…",
+    "network.discoveredModels": "可用模型",
+    "network.noModelsFound": "未发现可用模型",
+    "network.useDiscovered": "使用发现的模型",
+    "network.customModel": "自定义模型名称",
+    "network.addCustomModel": "添加",
 
     // Invitations
     "invitations.title": "邀请注册",
@@ -330,6 +337,13 @@ const messages: Record<string, Record<string, string>> = {
     "network.start": "Start",
     "network.stop": "Stop",
     "network.noOfferings": "No model nodes yet. Submit a Provider Key to get started.",
+    "network.discoverModels": "Discover Models",
+    "network.discovering": "Discovering…",
+    "network.discoveredModels": "Available Models",
+    "network.noModelsFound": "No models found",
+    "network.useDiscovered": "Use discovered models",
+    "network.customModel": "Custom model name",
+    "network.addCustomModel": "Add",
 
     // Invitations
     "invitations.title": "Invitations",
