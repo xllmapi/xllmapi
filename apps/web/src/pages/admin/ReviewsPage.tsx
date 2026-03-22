@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiJson } from "@/lib/api";
+import { formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { FormButton } from "@/components/ui/FormButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Badge } from "@/components/ui/Badge";
 
 interface PendingOffering {
   id: string;
   logicalModel: string;
   realModel: string;
-  userId: string;
-  userEmail?: string;
+  ownerUserId: string;
+  userEmail: string;
+  userDisplayName: string;
+  providerType: string;
+  fixedPricePer1kInput: number;
+  fixedPricePer1kOutput: number;
   createdAt: string;
 }
 
@@ -36,12 +42,12 @@ export function ReviewsPage() {
     void loadData();
   }, [loadData]);
 
-  const handleReview = async (id: string, status: "approved" | "rejected") => {
+  const handleReview = async (id: string, status: "approved" | "rejected", reason?: string) => {
     setActing(id);
     try {
       await apiJson(`/v1/admin/offerings/${id}/review`, {
         method: "POST",
-        body: JSON.stringify({ reviewStatus: status }),
+        body: JSON.stringify({ reviewStatus: status, reason }),
       });
       await loadData();
     } catch {
@@ -49,6 +55,12 @@ export function ReviewsPage() {
     } finally {
       setActing(null);
     }
+  };
+
+  const handleReject = (id: string) => {
+    const reason = window.prompt(t("admin.reviews.rejectReason"));
+    if (reason === null) return;
+    void handleReview(id, "rejected", reason);
   };
 
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
@@ -63,37 +75,52 @@ export function ReviewsPage() {
           {offerings.map((o) => (
             <div
               key={o.id}
-              className="rounded-[var(--radius-card)] border border-line bg-panel p-5 flex items-center justify-between"
+              className="rounded-[var(--radius-card)] border border-line bg-panel p-5"
             >
-              <div>
-                <p className="font-medium">
-                  <span className="font-mono text-sm">{o.logicalModel}</span>
-                  <span className="text-text-tertiary mx-2">&rarr;</span>
-                  <span className="font-mono text-sm text-text-secondary">
-                    {o.realModel}
-                  </span>
-                </p>
-                <p className="text-text-tertiary text-xs mt-1">
-                  {o.userEmail || o.userId} &middot;{" "}
-                  {new Date(o.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <FormButton
-                  variant="ghost"
-                  onClick={() => void handleReview(o.id, "approved")}
-                  disabled={acting === o.id}
-                  className="!text-success !border-success/20 !bg-success/10 hover:!bg-success/20"
-                >
-                  {t("admin.reviews.approve")}
-                </FormButton>
-                <FormButton
-                  variant="danger"
-                  onClick={() => void handleReview(o.id, "rejected")}
-                  disabled={acting === o.id}
-                >
-                  {t("admin.reviews.reject")}
-                </FormButton>
+              <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">
+                    <span className="font-mono text-sm">{o.logicalModel}</span>
+                    <span className="text-text-tertiary mx-2">&rarr;</span>
+                    <span className="font-mono text-sm text-text-secondary">
+                      {o.realModel}
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-text-tertiary">
+                    <span>{o.userDisplayName || o.userEmail || o.ownerUserId}</span>
+                    {o.userEmail && o.userDisplayName && (
+                      <span className="text-text-tertiary">{o.userEmail}</span>
+                    )}
+                    <span>&middot;</span>
+                    <Badge>{o.providerType || "unknown"}</Badge>
+                    <span>&middot;</span>
+                    <span>
+                      {t("admin.reviews.priceIn")}: {formatTokens(o.fixedPricePer1kInput ?? 0)}/1K
+                    </span>
+                    <span>
+                      {t("admin.reviews.priceOut")}: {formatTokens(o.fixedPricePer1kOutput ?? 0)}/1K
+                    </span>
+                    <span>&middot;</span>
+                    <span>{new Date(o.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2 ml-4 shrink-0">
+                  <FormButton
+                    variant="ghost"
+                    onClick={() => void handleReview(o.id, "approved")}
+                    disabled={acting === o.id}
+                    className="!text-success !border-success/20 !bg-success/10 hover:!bg-success/20"
+                  >
+                    {t("admin.reviews.approve")}
+                  </FormButton>
+                  <FormButton
+                    variant="danger"
+                    onClick={() => handleReject(o.id)}
+                    disabled={acting === o.id}
+                  >
+                    {t("admin.reviews.reject")}
+                  </FormButton>
+                </div>
               </div>
             </div>
           ))}

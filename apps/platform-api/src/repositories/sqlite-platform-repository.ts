@@ -282,6 +282,54 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return [];
   },
 
+  getAdminUsageRecent() {
+    return [];
+  },
+
+  getAdminStats() {
+    return { activeUsers: 0 };
+  },
+
+  updateAdminUser() {
+    return { ok: true };
+  },
+
+  getAdminProviders() {
+    return [];
+  },
+
+  getAdminConfig() {
+    return [];
+  },
+
+  updateAdminConfig() {
+    return { ok: true };
+  },
+
+  getAdminAuditLogs() {
+    return [];
+  },
+
+  createNotification() {
+    return { id: "" };
+  },
+
+  listAdminNotifications() {
+    return [];
+  },
+
+  listUserNotifications() {
+    return [];
+  },
+
+  markNotificationRead() {
+    return { ok: true };
+  },
+
+  getUnreadCount() {
+    return 0;
+  },
+
   devUserApiKey: DEV_USER_API_KEY,
   devAdminApiKey: DEV_ADMIN_API_KEY
 };

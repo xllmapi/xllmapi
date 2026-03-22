@@ -55,6 +55,9 @@ const UsersPage = lazy(() => import("@/pages/admin/UsersPage").then((m) => ({ de
 const AdminInvitationsPage = lazy(() => import("@/pages/admin/AdminInvitationsPage").then((m) => ({ default: m.AdminInvitationsPage })));
 const ReviewsPage = lazy(() => import("@/pages/admin/ReviewsPage").then((m) => ({ default: m.ReviewsPage })));
 const UsagePage = lazy(() => import("@/pages/admin/UsagePage").then((m) => ({ default: m.UsagePage })));
+const SettingsPage = lazy(() => import("@/pages/admin/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const ProvidersPage = lazy(() => import("@/pages/admin/ProvidersPage").then((m) => ({ default: m.ProvidersPage })));
+const AdminNotificationsPage = lazy(() => import("@/pages/admin/AdminNotificationsPage").then((m) => ({ default: m.AdminNotificationsPage })));
 
 function PageLoader() {
   return <div className="flex items-center justify-center min-h-[200px] text-text-tertiary text-sm">Loading…</div>;
@@ -107,6 +110,9 @@ export function App() {
             <Route path="invitations" element={<AdminInvitationsPage />} />
             <Route path="reviews" element={<ReviewsPage />} />
             <Route path="usage" element={<UsagePage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="providers" element={<ProvidersPage />} />
+            <Route path="notifications" element={<AdminNotificationsPage />} />
           </Route>
         </Routes>
         </Suspense>

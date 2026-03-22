@@ -17,6 +17,7 @@ import {
   handleProviderRoutes,
   handleUsageRoutes,
   handleNetworkRoutes,
+  handleNotificationRoutes,
   handleAdminRoutes,
   handlePublicRoutes
 } from "./routes/index.js";
@@ -155,6 +156,7 @@ const server = createServer(async (req, res) => {
     if (await handlePublicRoutes(req, res, url, requestId)) return;
     if (await handleProviderRoutes(req, res, url, requestId)) return;
     if (await handleUsageRoutes(req, res, url, requestId)) return;
+    if (await handleNotificationRoutes(req, res, url, requestId)) return;
     if (await handleAdminRoutes(req, res, url, requestId)) return;
 
     // --- Internal debug ---

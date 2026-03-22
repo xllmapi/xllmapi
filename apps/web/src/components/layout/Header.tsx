@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/hooks/useLocale";
-import { LogOut, LayoutDashboard } from "lucide-react";
+import { apiJson } from "@/lib/api";
+import { LogOut, LayoutDashboard, Bell } from "lucide-react";
 
 export function Header() {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
@@ -10,12 +11,21 @@ export function Header() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const handleLogout = () => {
     setMenuOpen(false);
     logout();
     navigate("/");
   };
+
+  // Fetch unread notification count
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    apiJson<{ data: { count: number } }>("/v1/notifications/unread-count")
+      .then((r) => setUnreadCount(r.data?.count ?? 0))
+      .catch(() => {});
+  }, [isLoggedIn]);
 
   // Close on outside click
   useEffect(() => {
@@ -67,45 +77,60 @@ export function Header() {
             onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
             className="text-text-tertiary hover:text-text-primary text-xs font-medium cursor-pointer bg-transparent border border-line rounded-[var(--radius-input)] px-2 py-1 transition-colors"
           >
-            {locale === "zh" ? "EN" : "中"}
+            {locale === "zh" ? "EN" : "\u4e2d"}
           </button>
 
           {isLoggedIn ? (
-            <div ref={menuRef} className="relative ml-1">
-              {/* Avatar button */}
+            <>
+              {/* Notification bell */}
               <button
-                onClick={() => setMenuOpen((prev) => !prev)}
-                className="w-7 h-7 rounded-[var(--radius-avatar)] bg-accent/15 flex items-center justify-center text-accent text-xs font-semibold cursor-pointer border-none transition-colors hover:bg-accent/25"
+                onClick={() => navigate("/app")}
+                className="relative text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors"
               >
-                {(user?.displayName ?? user?.email ?? "U").charAt(0).toUpperCase()}
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-danger text-[10px] font-bold text-white flex items-center justify-center px-1">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </button>
 
-              {/* Dropdown menu */}
-              {menuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-2 w-40 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden z-50"
-                  style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+              <div ref={menuRef} className="relative ml-1">
+                {/* Avatar button */}
+                <button
+                  onClick={() => setMenuOpen((prev) => !prev)}
+                  className="w-7 h-7 rounded-[var(--radius-avatar)] bg-accent/15 flex items-center justify-center text-accent text-xs font-semibold cursor-pointer border-none transition-colors hover:bg-accent/25"
                 >
-                  <div className="py-1">
-                    <button
-                      onClick={() => { setMenuOpen(false); navigate("/app"); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-text-primary hover:bg-accent-bg cursor-pointer border-none bg-transparent transition-colors"
-                    >
-                      <LayoutDashboard className="w-3.5 h-3.5 text-text-tertiary" />
-                      {t("nav.dashboard")}
-                    </button>
-                    <div className="my-1 border-t border-line/60" />
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-danger/80 hover:bg-danger/10 cursor-pointer border-none bg-transparent transition-colors"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      {t("nav.logout")}
-                    </button>
+                  {(user?.displayName ?? user?.email ?? "U").charAt(0).toUpperCase()}
+                </button>
+
+                {/* Dropdown menu */}
+                {menuOpen && (
+                  <div
+                    className="absolute right-0 top-full mt-2 w-40 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden z-50"
+                    style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+                  >
+                    <div className="py-1">
+                      <button
+                        onClick={() => { setMenuOpen(false); navigate("/app"); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-text-primary hover:bg-accent-bg cursor-pointer border-none bg-transparent transition-colors"
+                      >
+                        <LayoutDashboard className="w-3.5 h-3.5 text-text-tertiary" />
+                        {t("nav.dashboard")}
+                      </button>
+                      <div className="my-1 border-t border-line/60" />
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-danger/80 hover:bg-danger/10 cursor-pointer border-none bg-transparent transition-colors"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        {t("nav.logout")}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </>
           ) : (
             <Link
               to="/auth"

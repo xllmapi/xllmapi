@@ -95,7 +95,7 @@ export type PlatformRepository = {
   getConsumptionDaily(userId: string, year: number): MaybePromise<any[]>;
   getConsumptionByDate(userId: string, date: string): MaybePromise<any[]>;
   getConsumptionRecent(userId: string, days?: number, limit?: number): MaybePromise<any[]>;
-  getAdminUsageSummary(): MaybePromise<any>;
+  getAdminUsageSummary(days?: number): MaybePromise<any>;
   getWallet(userId: string): MaybePromise<number>;
   listModels(): MaybePromise<PublicMarketModel[]>;
   getDebugState(): MaybePromise<any>;
@@ -215,6 +215,18 @@ export type PlatformRepository = {
   getNetworkModelStats(): MaybePromise<any[]>;
   getNetworkTrends(days: number): MaybePromise<any[]>;
   getAvgSettlementPrice7d?(): MaybePromise<{ avgInput: number; avgOutput: number } | null>;
+  getAdminUsageRecent(limit: number): MaybePromise<any[]>;
+  getAdminStats(): MaybePromise<any>;
+  updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number }): MaybePromise<any>;
+  getAdminProviders(): MaybePromise<any[]>;
+  getAdminConfig(): MaybePromise<any[]>;
+  updateAdminConfig(key: string, value: string, updatedBy: string): MaybePromise<any>;
+  getAdminAuditLogs(limit: number): MaybePromise<any[]>;
+  createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }): MaybePromise<any>;
+  listAdminNotifications(): MaybePromise<any[]>;
+  listUserNotifications(userId: string): MaybePromise<any[]>;
+  markNotificationRead(notificationId: string, userId: string): MaybePromise<any>;
+  getUnreadCount(userId: string): MaybePromise<number>;
   devUserApiKey: string;
   devAdminApiKey: string;
 };

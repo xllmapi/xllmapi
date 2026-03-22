@@ -723,10 +723,12 @@ export const postgresPlatformRepository: PlatformRepository = {
         u.role,
         u.status,
         i.email,
+        COALESCE(w.available_token_credit, 0) AS "balance",
         u.created_at AS "createdAt",
         u.last_login_at AS "lastLoginAt"
       FROM users u
       LEFT JOIN user_identities i ON i.user_id = u.id
+      LEFT JOIN wallets w ON w.user_id = u.id
       ORDER BY u.created_at DESC
     `);
     return result.rows;
@@ -1078,10 +1080,11 @@ export const postgresPlatformRepository: PlatformRepository = {
     return result.rows;
   },
 
-  async getAdminUsageSummary() {
+  async getAdminUsageSummary(days?: number) {
     await ensureDevSeed();
     const currentPool = getPool();
-    const [summary, topModels] = await Promise.all([
+    const whereClause = days ? `WHERE created_at > NOW() - INTERVAL '${Number(days)} days'` : "";
+    const [summary, topModels, topConsumers] = await Promise.all([
       currentPool.query(`
         SELECT
           COUNT(id)::text AS "totalRequests",
@@ -1089,6 +1092,7 @@ export const postgresPlatformRepository: PlatformRepository = {
           COUNT(DISTINCT requester_user_id)::text AS "consumerCount",
           COUNT(DISTINCT chosen_offering_id)::text AS "offeringCount"
         FROM api_requests
+        ${whereClause}
       `),
       currentPool.query(`
         SELECT
@@ -1096,12 +1100,28 @@ export const postgresPlatformRepository: PlatformRepository = {
           COUNT(id)::text AS "requestCount",
           COALESCE(SUM(total_tokens), 0)::text AS "totalTokens"
         FROM api_requests
+        ${whereClause}
         GROUP BY logical_model
         ORDER BY COALESCE(SUM(total_tokens), 0) DESC
         LIMIT 10
+      `),
+      currentPool.query(`
+        SELECT
+          ar.requester_user_id AS "requesterUserId",
+          u.display_name AS "displayName",
+          i.email,
+          COUNT(ar.id)::text AS "requestCount",
+          SUM(ar.total_tokens)::text AS "totalTokens"
+        FROM api_requests ar
+        LEFT JOIN users u ON u.id = ar.requester_user_id
+        LEFT JOIN user_identities i ON i.user_id = ar.requester_user_id
+        ${whereClause ? whereClause.replace("created_at", "ar.created_at") : ""}
+        GROUP BY ar.requester_user_id, u.display_name, i.email
+        ORDER BY SUM(ar.total_tokens) DESC
+        LIMIT 10
       `)
     ]);
-    return { summary: summary.rows[0], topModels: topModels.rows };
+    return { summary: summary.rows[0], topModels: topModels.rows, topConsumers: topConsumers.rows };
   },
 
   async getDebugState() {
@@ -1361,9 +1381,13 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.review_status AS "reviewStatus",
         c.provider_type AS "providerType",
         c.base_url AS "baseUrl",
-        c.status AS "credentialStatus"
+        c.status AS "credentialStatus",
+        i.email AS "userEmail",
+        u.display_name AS "userDisplayName"
       FROM offerings o
       JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN users u ON u.id = o.owner_user_id
+      LEFT JOIN user_identities i ON i.user_id = o.owner_user_id
       WHERE o.review_status = 'pending'
       ORDER BY o.id ASC
     `);
@@ -1828,6 +1852,172 @@ export const postgresPlatformRepository: PlatformRepository = {
       uniqueUsers: Number(row.uniqueUsers),
       last7dTrend: trendMap[row.logicalModel] ?? new Array(7).fill(0)
     }));
+  },
+
+  async getAdminUsageRecent(limit: number) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        ar.id AS "requestId",
+        ar.logical_model AS "logicalModel",
+        ar.provider,
+        ar.total_tokens AS "totalTokens",
+        ar.created_at AS "createdAt",
+        u.display_name AS "userName",
+        i.email AS "userEmail"
+      FROM api_requests ar
+      LEFT JOIN users u ON u.id = ar.requester_user_id
+      LEFT JOIN user_identities i ON i.user_id = ar.requester_user_id
+      ORDER BY ar.created_at DESC
+      LIMIT $1
+    `, [limit]);
+    return result.rows;
+  },
+
+  async getAdminStats() {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT COUNT(DISTINCT requester_user_id) AS "activeUsers"
+      FROM api_requests
+      WHERE created_at > NOW() - INTERVAL '7 days'
+    `);
+    return { activeUsers: Number(result.rows[0]?.activeUsers ?? 0) };
+  },
+
+  async updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    if (updates.role) {
+      await currentPool.query("UPDATE users SET role = $2 WHERE id = $1", [userId, updates.role]);
+    }
+    if (updates.status) {
+      await currentPool.query("UPDATE users SET status = $2 WHERE id = $1", [userId, updates.status]);
+    }
+    if (updates.walletAdjust != null) {
+      await currentPool.query(
+        "UPDATE wallets SET available_token_credit = available_token_credit + $2 WHERE user_id = $1",
+        [userId, updates.walletAdjust]
+      );
+    }
+    return { ok: true };
+  },
+
+  async getAdminProviders() {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        c.provider_type AS "providerType",
+        COUNT(DISTINCT o.id)::text AS "offeringCount",
+        COUNT(DISTINCT ar.id)::text AS "requestCount"
+      FROM provider_credentials c
+      LEFT JOIN offerings o ON o.credential_id = c.id AND o.enabled = TRUE
+      LEFT JOIN api_requests ar ON ar.chosen_offering_id = o.id
+      GROUP BY c.provider_type
+    `);
+    return result.rows;
+  },
+
+  async getAdminConfig() {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(
+      "SELECT key, value, updated_at AS \"updatedAt\" FROM platform_config ORDER BY key"
+    );
+    return result.rows;
+  },
+
+  async updateAdminConfig(key: string, value: string, updatedBy: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(
+      "UPDATE platform_config SET value = $2, updated_at = NOW(), updated_by = $3 WHERE key = $1",
+      [key, value, updatedBy]
+    );
+    return { ok: true };
+  },
+
+  async getAdminAuditLogs(limit: number) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        al.*,
+        u.display_name AS "actorName"
+      FROM audit_logs al
+      LEFT JOIN users u ON u.id = al.actor_user_id
+      ORDER BY al.created_at DESC
+      LIMIT $1
+    `, [limit]);
+    return result.rows;
+  },
+
+  async createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO notifications (id, title, body, type, target_user_id, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [params.id, params.title, params.body, params.type, params.targetUserId ?? null, params.createdBy]);
+    return { id: params.id };
+  },
+
+  async listAdminNotifications() {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        n.*,
+        COUNT(nr.id)::text AS "readCount"
+      FROM notifications n
+      LEFT JOIN notification_reads nr ON nr.notification_id = n.id
+      GROUP BY n.id
+      ORDER BY n.created_at DESC
+    `);
+    return result.rows;
+  },
+
+  async listUserNotifications(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        n.*,
+        CASE WHEN nr.id IS NOT NULL THEN TRUE ELSE FALSE END AS "isRead"
+      FROM notifications n
+      LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = $1
+      WHERE n.target_user_id IS NULL OR n.target_user_id = $1
+      ORDER BY n.created_at DESC
+    `, [userId]);
+    return result.rows;
+  },
+
+  async markNotificationRead(notificationId: string, userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO notification_reads (id, notification_id, user_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT DO NOTHING
+    `, [randomUUID(), notificationId, userId]);
+    return { ok: true };
+  },
+
+  async getUnreadCount(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT COUNT(n.id)::text AS "count"
+      FROM notifications n
+      WHERE (n.target_user_id IS NULL OR n.target_user_id = $1)
+        AND NOT EXISTS (
+          SELECT 1 FROM notification_reads nr
+          WHERE nr.notification_id = n.id AND nr.user_id = $1
+        )
+    `, [userId]);
+    return Number(result.rows[0]?.count ?? 0);
   },
 
   devUserApiKey: DEV_USER_API_KEY,

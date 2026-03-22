@@ -8,10 +8,11 @@ import { Badge } from "@/components/ui/Badge";
 
 interface Invitation {
   id: string;
-  email: string;
+  invitedEmail: string;
   status: string;
-  invitedBy: string;
+  inviterDisplayName: string;
   note: string;
+  expiresAt: string;
   createdAt: string;
 }
 
@@ -22,6 +23,7 @@ export function AdminInvitationsPage() {
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -66,33 +68,83 @@ export function AdminInvitationsPage() {
     }
   };
 
+  const handleRevoke = async (id: string) => {
+    setRevoking(id);
+    try {
+      await apiJson(`/v1/invitations/${id}/revoke`, { method: "POST" });
+      await loadData();
+    } catch {
+      // ignore
+    } finally {
+      setRevoking(null);
+    }
+  };
+
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
+  const statusVariant = (s: string) => {
+    switch (s.toLowerCase()) {
+      case "pending": return "warning" as const;
+      case "accepted": return "success" as const;
+      default: return "default" as const;
+    }
+  };
+
   const columns: Column<Invitation>[] = [
-    { key: "email", header: t("admin.users.email") },
     {
-      key: "invitedBy",
+      key: "invitedEmail",
+      header: t("admin.users.email"),
+      render: (inv) => <span>{inv.invitedEmail}</span>,
+    },
+    {
+      key: "inviterDisplayName",
       header: t("admin.invitations.invitedBy"),
-      render: (inv) => <span className="text-text-secondary">{inv.invitedBy || "admin"}</span>,
+      render: (inv) => <span className="text-text-secondary">{inv.inviterDisplayName || "admin"}</span>,
     },
     {
       key: "status",
       header: t("invitations.status"),
-      render: (inv) => <Badge>{inv.status}</Badge>,
+      render: (inv) => <Badge variant={statusVariant(inv.status)}>{inv.status}</Badge>,
     },
     {
       key: "note",
       header: t("invitations.note"),
-      render: (inv) => <span className="text-text-secondary">{inv.note || "—"}</span>,
+      render: (inv) => <span className="text-text-secondary">{inv.note || "\u2014"}</span>,
+    },
+    {
+      key: "expiresAt",
+      header: t("admin.invitations.expires"),
+      render: (inv) => (
+        <span className="text-text-tertiary text-xs">
+          {inv.status === "pending" && inv.expiresAt
+            ? new Date(inv.expiresAt).toLocaleDateString()
+            : "\u2014"}
+        </span>
+      ),
     },
     {
       key: "createdAt",
       header: t("invitations.date"),
       render: (inv) => (
-        <span className="text-text-secondary">
+        <span className="text-text-secondary text-xs">
           {new Date(inv.createdAt).toLocaleDateString()}
         </span>
       ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (inv) =>
+        inv.status === "pending" ? (
+          <FormButton
+            variant="danger"
+            onClick={() => void handleRevoke(inv.id)}
+            disabled={revoking === inv.id}
+            className="!px-3 !py-1 !text-xs"
+          >
+            {t("invitations.revoke")}
+          </FormButton>
+        ) : null,
     },
   ];
 

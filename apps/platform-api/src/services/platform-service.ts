@@ -419,8 +419,8 @@ export const platformService = {
     return platformRepository.getConsumptionRecent(userId, days, limit);
   },
 
-  getAdminUsageSummary() {
-    return platformRepository.getAdminUsageSummary();
+  getAdminUsageSummary(days?: number) {
+    return platformRepository.getAdminUsageSummary(days);
   },
 
   getWallet(userId: string) {
@@ -612,5 +612,53 @@ export const platformService = {
 
   async getNetworkTrends(days: number): Promise<any[]> {
     return platformRepository.getNetworkTrends(days);
+  },
+
+  getAdminUsageRecent(limit: number) {
+    return platformRepository.getAdminUsageRecent(limit);
+  },
+
+  getAdminStats() {
+    return platformRepository.getAdminStats();
+  },
+
+  updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number }) {
+    return platformRepository.updateAdminUser(userId, updates);
+  },
+
+  getAdminProviders() {
+    return platformRepository.getAdminProviders();
+  },
+
+  getAdminConfig() {
+    return platformRepository.getAdminConfig();
+  },
+
+  updateAdminConfig(key: string, value: string, updatedBy: string) {
+    return platformRepository.updateAdminConfig(key, value, updatedBy);
+  },
+
+  getAdminAuditLogs(limit: number) {
+    return platformRepository.getAdminAuditLogs(limit);
+  },
+
+  createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }) {
+    return platformRepository.createNotification(params);
+  },
+
+  listAdminNotifications() {
+    return platformRepository.listAdminNotifications();
+  },
+
+  listUserNotifications(userId: string) {
+    return platformRepository.listUserNotifications(userId);
+  },
+
+  markNotificationRead(notificationId: string, userId: string) {
+    return platformRepository.markNotificationRead(notificationId, userId);
+  },
+
+  getUnreadCount(userId: string) {
+    return platformRepository.getUnreadCount(userId);
   }
 };
