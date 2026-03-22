@@ -13,7 +13,8 @@
     "@xllmapi/shared-types": "0.1.0",
     "pg": "^8.20.0",
     "redis": "^5.11.0",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
