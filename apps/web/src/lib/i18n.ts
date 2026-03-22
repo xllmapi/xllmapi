@@ -315,6 +315,13 @@ const messages: Record<string, Record<string, string>> = {
     "admin.notifications.readCount": "已读数",
 
     // Common
+    "notifications.title": "消息通知",
+    "notifications.empty": "暂无通知",
+    "notifications.markRead": "标为已读",
+    "notifications.announcement": "公告",
+    "notifications.system": "系统",
+    "notifications.personal": "个人",
+
     "common.loading": "加载中…",
     "common.error": "出错了",
     "common.empty": "暂无数据",
@@ -637,6 +644,13 @@ const messages: Record<string, Record<string, string>> = {
     "admin.notifications.readCount": "Read Count",
 
     // Common
+    "notifications.title": "Notifications",
+    "notifications.empty": "No notifications",
+    "notifications.markRead": "Mark read",
+    "notifications.announcement": "Announcement",
+    "notifications.system": "System",
+    "notifications.personal": "Personal",
+
     "common.loading": "Loading…",
     "common.error": "Something went wrong",
     "common.empty": "No data",

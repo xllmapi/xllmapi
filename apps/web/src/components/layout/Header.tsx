@@ -84,7 +84,7 @@ export function Header() {
             <>
               {/* Notification bell */}
               <button
-                onClick={() => navigate("/app")}
+                onClick={() => navigate("/app/notifications")}
                 className="relative text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors"
               >
                 <Bell className="w-4 h-4" />

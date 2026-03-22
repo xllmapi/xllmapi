@@ -1,0 +1,89 @@
+import { useCallback, useEffect, useState } from "react";
+import { apiJson } from "@/lib/api";
+import { useLocale } from "@/hooks/useLocale";
+
+interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  content: string;
+  created_at: string;
+  isRead: boolean;
+}
+
+export function NotificationsPage() {
+  const { t } = useLocale();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    apiJson<{ data: Notification[] }>("/v1/notifications")
+      .then((r) => setNotifications(r.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const markRead = async (id: string) => {
+    await apiJson(`/v1/notifications/${encodeURIComponent(id)}/read`, { method: "POST" }).catch(() => {});
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
+  };
+
+  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold mb-6 tracking-tight">{t("notifications.title")}</h1>
+
+      {notifications.length === 0 ? (
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-12 text-center text-text-tertiary text-sm">
+          {t("notifications.empty")}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {notifications.map((n) => (
+            <div
+              key={n.id}
+              className={`rounded-[var(--radius-card)] border bg-panel p-4 transition-colors ${
+                n.isRead ? "border-line opacity-60" : "border-accent/20"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {!n.isRead && <span className="w-2 h-2 rounded-full bg-accent shrink-0" />}
+                    <span className="text-sm font-medium text-text-primary">{n.title}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      n.type === "announcement" ? "bg-accent/10 text-accent" :
+                      n.type === "system" ? "bg-amber-400/10 text-amber-400" :
+                      "bg-panel-strong text-text-tertiary"
+                    }`}>
+                      {n.type === "announcement" ? t("notifications.announcement") :
+                       n.type === "system" ? t("notifications.system") :
+                       t("notifications.personal")}
+                    </span>
+                  </div>
+                  {n.content && (
+                    <p className="text-xs text-text-secondary leading-relaxed">{n.content}</p>
+                  )}
+                  <span className="text-[10px] text-text-tertiary mt-1 block">
+                    {n.created_at?.slice(0, 16).replace("T", " ")}
+                  </span>
+                </div>
+                {!n.isRead && (
+                  <button
+                    onClick={() => void markRead(n.id)}
+                    className="text-[10px] text-text-tertiary hover:text-accent cursor-pointer bg-transparent border border-line rounded px-2 py-1 shrink-0 transition-colors"
+                  >
+                    {t("notifications.markRead")}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
