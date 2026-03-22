@@ -5,8 +5,7 @@ import { extname, resolve } from "node:path";
 
 import {
   type PublicChatCompletionsRequest,
-  type PublicChatCompletionsResponse,
-  exampleRouteExecuteRequest
+  type PublicChatCompletionsResponse
 } from "@xllmapi/shared-types";
 import { DEV_ADMIN_API_KEY, DEV_USER_API_KEY } from "./constants.js";
 import { cacheService } from "./cache.js";
@@ -2125,23 +2124,12 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "POST" && url.pathname === "/internal/debug/core-request") {
-      const response = json(200, {
-        requestId,
-        coreRequest: exampleRouteExecuteRequest()
-      });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
-      return;
-    }
-
     if (req.method === "GET" && url.pathname === "/internal/debug/state") {
       const response = json(200, {
         requestId,
         state: await platformService.getDebugState(),
         devApiKey: DEV_USER_API_KEY,
-        devAdminApiKey: DEV_ADMIN_API_KEY,
-        sampleCoreRequest: exampleRouteExecuteRequest()
+        devAdminApiKey: DEV_ADMIN_API_KEY
       });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);

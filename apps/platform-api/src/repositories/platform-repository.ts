@@ -2,7 +2,6 @@ import type {
   CandidateOffering,
   InvitationStats,
   MeProfile,
-  PublicChatCompletionsRequest,
   PublicMarketModel,
   PublicSupplierOffering,
   PublicSupplierProfile
@@ -211,12 +210,6 @@ export type PlatformRepository = {
     ownerUserId: string;
     title: string;
   }): MaybePromise<any>;
-  buildCoreRequest(
-    requestId: string,
-    requesterUserId: string,
-    body: PublicChatCompletionsRequest,
-    offerings: CandidateOffering[]
-  ): MaybePromise<any>;
   devUserApiKey: string;
   devAdminApiKey: string;
 };

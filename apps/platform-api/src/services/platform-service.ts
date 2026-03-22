@@ -1,6 +1,5 @@
 import type {
-  CandidateOffering,
-  PublicChatCompletionsRequest
+  CandidateOffering
 } from "@xllmapi/shared-types";
 
 import { platformRepository } from "../repositories/index.js";
@@ -483,14 +482,5 @@ export const platformService = {
     return platformRepository.updateChatConversationTitle(params);
   },
 
-  recordChatSettlement: platformRepository.recordChatSettlement,
-
-  buildCoreRequest(
-    requestId: string,
-    requesterUserId: string,
-    body: PublicChatCompletionsRequest,
-    offerings: CandidateOffering[]
-  ) {
-    return platformRepository.buildCoreRequest(requestId, requesterUserId, body, offerings);
-  }
+  recordChatSettlement: platformRepository.recordChatSettlement
 };

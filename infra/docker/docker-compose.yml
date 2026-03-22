@@ -29,22 +29,6 @@ services:
       timeout: 3s
       retries: 10
 
-  core-router-executor:
-    build:
-      context: ../..
-      dockerfile: infra/docker/core-router-executor.Dockerfile
-      network: host
-    environment:
-      XLLMAPI_ENV: development
-      XLLMAPI_SECRET_KEY: local-dev-secret
-    ports:
-      - "4001:4001"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4001/healthz"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   platform-api:
     build:
       context: ../..
@@ -56,13 +40,10 @@ services:
       XLLMAPI_DB_DRIVER: postgres
       DATABASE_URL: postgresql://xllmapi:xllmapi@postgres:5432/xllmapi
       REDIS_URL: redis://redis:6379
-      CORE_BASE_URL: http://core-router-executor:4001
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      core-router-executor:
         condition: service_healthy
     ports:
       - "3000:3000"

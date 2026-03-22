@@ -1,9 +1,3 @@
-export type RoutingMode =
-  | "balanced"
-  | "low_cost"
-  | "low_latency"
-  | "high_reliability";
-
 export type PricingMode = "free" | "fixed_price" | "market_auto";
 
 export interface ChatMessage {
@@ -29,42 +23,6 @@ export interface CandidateOffering {
   p95LatencyMs1h: number;
   recentErrorRate10m: number;
   enabled: boolean;
-}
-
-export interface CoreChatExecuteRequest {
-  requestId: string;
-  traceId: string;
-  requesterUserId: string;
-  logicalModel: string;
-  routingMode: RoutingMode;
-  stream: boolean;
-  requestPayload: {
-    messages?: ChatMessage[];
-    input?: string | object;
-    temperature?: number;
-    maxTokens?: number;
-  };
-  candidateOfferings: CandidateOffering[];
-}
-
-export interface CoreChatExecuteResponse {
-  requestId: string;
-  executionId: string;
-  chosenOfferingId: string;
-  fallbackUsed: boolean;
-  provider: string;
-  realModel: string;
-  outputText: string;
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  };
-  timing: {
-    routeMs: number;
-    providerLatencyMs: number;
-    totalMs: number;
-  };
 }
 
 export interface StreamCompletedEvent {
@@ -219,60 +177,3 @@ export const listLogicalModels = (): LogicalModel[] => [
     status: "active"
   }
 ];
-
-export const exampleRouteExecuteRequest = (): CoreChatExecuteRequest => ({
-  requestId: "req_example",
-  traceId: "trace_example",
-  requesterUserId: "user_example",
-  logicalModel: "gpt-4o-mini",
-  routingMode: "balanced",
-  stream: false,
-  requestPayload: {
-    messages: [
-      {
-        role: "user",
-        content: "Say hello from xllmapi."
-      }
-    ],
-    temperature: 0.2,
-    maxTokens: 128
-  },
-  candidateOfferings: [
-    {
-      offeringId: "offering_openai_demo",
-      ownerUserId: "supplier_openai_demo",
-      providerType: "openai",
-      credentialId: "cred_openai_demo",
-      apiKeyEnvName: "OPENAI_API_KEY",
-      baseUrl: "https://api.openai.com/v1",
-      realModel: "gpt-4o-mini",
-      pricingMode: "fixed_price",
-      fixedPricePer1kInput: 1000,
-      fixedPricePer1kOutput: 2000,
-      successRate1h: 0.99,
-      p95LatencyMs1h: 1200,
-      recentErrorRate10m: 0.01,
-      enabled: true
-    }
-  ]
-});
-
-export const exampleRouteExecuteResponse = (): CoreChatExecuteResponse => ({
-  requestId: "req_example",
-  executionId: "exec_example",
-  chosenOfferingId: "offering_openai_demo",
-  fallbackUsed: false,
-  provider: "openai",
-  realModel: "gpt-4o-mini",
-  outputText: "Hello from the core router executor.",
-  usage: {
-    inputTokens: 12,
-    outputTokens: 8,
-    totalTokens: 20
-  },
-  timing: {
-    routeMs: 1,
-    providerLatencyMs: 120,
-    totalMs: 121
-  }
-});

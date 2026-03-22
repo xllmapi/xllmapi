@@ -1,6 +1,5 @@
 import type {
-  CandidateOffering,
-  PublicChatCompletionsRequest
+  CandidateOffering
 } from "@xllmapi/shared-types";
 
 import {
@@ -265,35 +264,6 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   updateChatConversationTitle(params) {
     return update_chat_conversation_title(params);
-  },
-
-  buildCoreRequest(
-    requestId: string,
-    requesterUserId: string,
-    body: PublicChatCompletionsRequest,
-    offerings: CandidateOffering[]
-  ) {
-    const candidateOfferings = offerings.map((item) => ({
-      ...item,
-      baseUrl: item.baseUrl ?? "",
-      encryptedSecret: item.encryptedSecret ?? "",
-      apiKeyEnvName: item.apiKeyEnvName ?? ""
-    }));
-
-    return {
-      requestId,
-      traceId: requestId,
-      requesterUserId,
-      logicalModel: body.model,
-      routingMode: "balanced" as const,
-      stream: false,
-      requestPayload: {
-        messages: body.messages,
-        temperature: body.temperature,
-        maxTokens: body.max_tokens
-      },
-      candidateOfferings
-    };
   },
 
   devUserApiKey: DEV_USER_API_KEY,

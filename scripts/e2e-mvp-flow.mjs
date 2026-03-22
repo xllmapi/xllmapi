@@ -23,7 +23,7 @@
  *
  * Requires:
  *   XLLMAPI_DEEPSEEK_API_KEY  — real provider key
- *   Running: postgres, redis, core-router-executor
+ *   Running: postgres, redis
  */
 
 import { spawn } from "node:child_process";
@@ -38,7 +38,6 @@ if (!DEEPSEEK_API_KEY) {
 
 const PORT = Number(process.env.XLLMAPI_E2E_PORT || "3311");
 const BASE_URL = `http://127.0.0.1:${PORT}`;
-const CORE_BASE_URL = process.env.CORE_BASE_URL || "http://127.0.0.1:4001";
 
 // --------------- helpers ---------------
 const randomId = () => `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -577,11 +576,7 @@ const main = async () => {
   console.log("║     xllmapi MVP E2E Test Suite         ║");
   console.log("╚════════════════════════════════════════╝");
 
-  console.log(`\nConfig: PORT=${PORT}, CORE=${CORE_BASE_URL}`);
-
-  // Check core health
-  console.log("Waiting for core-router-executor...");
-  await waitForHealth(`${CORE_BASE_URL}/healthz`);
+  console.log(`\nConfig: PORT=${PORT}`);
 
   // Spawn platform-api
   const apiProc = spawn("node", ["apps/platform-api/dist/main.js"], {
@@ -594,7 +589,6 @@ const main = async () => {
       XLLMAPI_DB_DRIVER: "postgres",
       DATABASE_URL: process.env.DATABASE_URL || "postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi",
       REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
-      CORE_BASE_URL,
       XLLMAPI_DEEPSEEK_API_KEY: DEEPSEEK_API_KEY,
     },
     stdio: ["ignore", "pipe", "pipe"],
