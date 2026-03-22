@@ -458,6 +458,10 @@ export const platformService = {
     return platformRepository.findOfferingsForModel(logicalModel);
   },
 
+  findOfferingsForModelWithNodes(params: { logicalModel: string; userId?: string }) {
+    return platformRepository.findOfferingsForModelWithNodes(params);
+  },
+
   listProviderCredentials(userId: string) {
     return platformRepository.listProviderCredentials(userId);
   },

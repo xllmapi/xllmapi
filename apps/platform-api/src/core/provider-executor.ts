@@ -64,6 +64,55 @@ export async function executeStreamingRequest(params: {
     const release = await limiter.acquire();
     const startTime = Date.now();
     try {
+      // Check if this is a node-backed offering
+      if (offering.executionMode === 'node' && offering.nodeId) {
+        const { nodeConnectionManager } = await import('./node-connection-manager.js');
+        if (!nodeConnectionManager.isNodeOnline(offering.nodeId)) {
+          throw new Error('Node is offline');
+        }
+
+        const nodeResult = await nodeConnectionManager.dispatch(
+          offering.nodeId,
+          params.requestId,
+          {
+            model: offering.realModel,
+            messages: params.messages,
+            temperature: params.temperature,
+            maxTokens: params.maxTokens,
+            stream: true,
+          },
+          params.onSseWrite
+        );
+
+        circuitBreaker.recordSuccess(offering.offeringId);
+
+        // Send completed event
+        const completedEvent = {
+          requestId: params.requestId,
+          executionId: `exec_${params.requestId}`,
+          chosenOfferingId: offering.offeringId,
+          fallbackUsed: offering !== shuffled[0],
+          provider: 'node',
+          realModel: offering.realModel,
+          usage: nodeResult.usage,
+          timing: {
+            routeMs: 0,
+            providerLatencyMs: Date.now() - startTime,
+            totalMs: Date.now() - startTime
+          }
+        };
+        params.onSseWrite(`event: completed\ndata: ${JSON.stringify(completedEvent)}\n\n`);
+        params.onSseWrite("data: [DONE]\n\n");
+
+        return {
+          chosenOffering: offering,
+          content: nodeResult.content,
+          usage: nodeResult.usage,
+          timing: { totalMs: Date.now() - startTime },
+          finishReason: nodeResult.finishReason,
+        };
+      }
+
       const apiKey = resolveApiKey(offering);
       const baseUrl = resolveBaseUrl(offering);
       const isAnthropic = offering.providerType === "anthropic";
@@ -167,6 +216,36 @@ export async function executeRequest(params: {
     const release = await limiter.acquire();
     const startTime = Date.now();
     try {
+      // Check if this is a node-backed offering
+      if (offering.executionMode === 'node' && offering.nodeId) {
+        const { nodeConnectionManager } = await import('./node-connection-manager.js');
+        if (!nodeConnectionManager.isNodeOnline(offering.nodeId)) {
+          throw new Error('Node is offline');
+        }
+
+        const nodeResult = await nodeConnectionManager.dispatch(
+          offering.nodeId,
+          params.requestId,
+          {
+            model: offering.realModel,
+            messages: params.messages,
+            temperature: params.temperature,
+            maxTokens: params.maxTokens,
+            stream: false,
+          },
+        );
+
+        circuitBreaker.recordSuccess(offering.offeringId);
+
+        return {
+          chosenOffering: offering,
+          content: nodeResult.content,
+          usage: nodeResult.usage,
+          timing: { totalMs: Date.now() - startTime },
+          finishReason: nodeResult.finishReason,
+        };
+      }
+
       const apiKey = resolveApiKey(offering);
       const baseUrl = resolveBaseUrl(offering);
       const isAnthropic = offering.providerType === "anthropic";

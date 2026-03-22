@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 
 import type {
   PublicChatCompletionsRequest,
-  PublicChatCompletionsResponse
+  PublicChatCompletionsResponse,
+  CandidateOffering
 } from "@xllmapi/shared-types";
 import { cacheService } from "../cache.js";
 import { config } from "../config.js";
@@ -20,6 +21,49 @@ import {
 } from "../lib/http.js";
 import { metricsService } from "../metrics.js";
 import { platformService } from "../services/platform-service.js";
+
+/**
+ * Fetch offerings for a model, including node-backed offerings.
+ * Node offerings are mapped to CandidateOffering shape with executionMode/nodeId.
+ * If includeNodes is false, only platform offerings are returned.
+ */
+async function findOfferingsIncludingNodes(
+  logicalModel: string,
+  includeNodes: boolean
+): Promise<CandidateOffering[]> {
+  const platformOfferings = await platformService.findOfferingsForModel(logicalModel);
+
+  if (!includeNodes) {
+    // Filter out any node offerings that might have been returned
+    return platformOfferings.filter(
+      (o: CandidateOffering) => o.executionMode !== 'node'
+    );
+  }
+
+  // Fetch node offerings and map to CandidateOffering shape
+  const nodeOfferings = await platformService.findOfferingsForModelWithNodes({
+    logicalModel,
+  });
+
+  const mappedNodeOfferings: CandidateOffering[] = nodeOfferings.map((no: any) => ({
+    offeringId: no.id ?? no.offeringId,
+    ownerUserId: no.ownerUserId,
+    providerType: 'openai_compatible' as const,
+    credentialId: '',
+    realModel: no.realModel,
+    pricingMode: no.pricingMode ?? 'fixed',
+    fixedPricePer1kInput: no.fixedPricePer1kInput,
+    fixedPricePer1kOutput: no.fixedPricePer1kOutput,
+    successRate1h: 0.99,
+    p95LatencyMs1h: 2000,
+    recentErrorRate10m: 0,
+    enabled: true,
+    executionMode: 'node' as const,
+    nodeId: no.nodeId,
+  }));
+
+  return [...platformOfferings, ...mappedNodeOfferings];
+}
 
 // Context window limits per model family (tokens)
 const MODEL_CONTEXT_LIMITS: Record<string, number> = {
@@ -274,7 +318,7 @@ export async function handleChatRoutes(
       return true;
     }
 
-    const candidateOfferings = await platformService.findOfferingsForModel(logicalModel);
+    const candidateOfferings = await findOfferingsIncludingNodes(logicalModel, true);
     if (candidateOfferings.length === 0) {
       const response = json(404, { error: { message: `no offering available for ${logicalModel}`, requestId } });
       res.writeHead(response.statusCode, response.headers);
@@ -503,7 +547,7 @@ export async function handleChatRoutes(
       return true;
     }
 
-    const candidateOfferings = await platformService.findOfferingsForModel(body.model);
+    const candidateOfferings = await findOfferingsIncludingNodes(body.model, true);
     if (candidateOfferings.length === 0) {
       const response = json(404, {
         error: {
@@ -663,7 +707,7 @@ export async function handleChatRoutes(
       return true;
     }
 
-    const candidateOfferings = await platformService.findOfferingsForModel(mappedBody.model);
+    const candidateOfferings = await findOfferingsIncludingNodes(mappedBody.model, true);
     if (candidateOfferings.length === 0) {
       const response = json(404, {
         error: { message: `no offering available for ${mappedBody.model}`, requestId }
