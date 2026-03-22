@@ -37,7 +37,9 @@ import { HomePage } from "@/pages/HomePage";
 import { AuthPage } from "@/pages/AuthPage";
 import { DocsPage } from "@/pages/DocsPage";
 import { ChatPage } from "@/pages/chat/ChatPage";
+import { ChatProvider } from "@/hooks/useChatContext";
 import { ModelsPage } from "@/pages/ModelsPage";
+import { ModelDetailPage } from "@/pages/ModelDetailPage";
 import { OverviewPage } from "@/pages/app/OverviewPage";
 import { NetworkPage } from "@/pages/app/NetworkPage";
 import { InvitationsPage } from "@/pages/app/InvitationsPage";
@@ -55,13 +57,15 @@ export function App() {
   return (
     <ErrorBoundary>
     <AuthContext.Provider value={auth}>
+      <ChatProvider>
       <BrowserRouter>
         <Header />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/docs" element={<DocsPage />} />
-          <Route path="/models" element={<ModelsPage />} />
+          <Route path="/mnetwork" element={<ModelsPage />} />
+          <Route path="/mnetwork/:logicalModel" element={<ModelDetailPage />} />
 
           <Route path="/chat" element={<ChatPage />} />
 
@@ -96,6 +100,7 @@ export function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      </ChatProvider>
     </AuthContext.Provider>
     </ErrorBoundary>
   );

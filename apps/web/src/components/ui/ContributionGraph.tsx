@@ -15,7 +15,8 @@ interface ContributionGraphProps {
 
 const DAYS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const LEVELS = [0, 0.2, 0.4, 0.6, 0.9];
+const AMBER = [0, 0.2, 0.4, 0.6, 0.9];  // consume (positive)
+const GREEN = [0, 0.2, 0.4, 0.6, 0.9];  // supply income (negative)
 
 const MODEL_ICONS: Record<string, { label: string; color: string }> = {
   "deepseek-chat": { label: "DS", color: "#4d9de0" },
@@ -25,13 +26,22 @@ const MODEL_ICONS: Record<string, { label: string; color: string }> = {
   "claude-haiku-3-20240307": { label: "CH", color: "#d4a574" },
 };
 
-function getLevel(value: number, max: number): number {
-  if (value === 0 || max === 0) return 0;
-  const ratio = value / max;
+function getLevel(value: number, maxPos: number, maxNeg: number): number {
+  if (value === 0) return 0;
+  const absVal = Math.abs(value);
+  const max = value > 0 ? maxPos : maxNeg;
+  if (max === 0) return 0;
+  const ratio = absVal / max;
   if (ratio <= 0.25) return 1;
   if (ratio <= 0.5) return 2;
   if (ratio <= 0.75) return 3;
   return 4;
+}
+
+function getCellColor(value: number, level: number): string {
+  if (level === 0) return "rgba(136,154,196,0.06)";
+  if (value > 0) return `rgba(251,191,36,${AMBER[level]})`;   // amber/yellow for consumption
+  return `rgba(52,211,153,${GREEN[level]})`;                    // green for supply income
 }
 
 function formatTokens(n: number): string {
@@ -52,7 +62,7 @@ export function ContributionGraph({
   onModelClick,
   selectedModel,
 }: ContributionGraphProps) {
-  const { grid, maxVal, monthLabels } = useMemo(() => {
+  const { grid, maxPos, maxNeg, monthLabels } = useMemo(() => {
     const today = new Date();
     const currentYear = today.getFullYear();
     let endDate: Date;
@@ -81,9 +91,10 @@ export function ContributionGraph({
       });
     }
 
-    let mx = 0;
+    let mxPos = 0, mxNeg = 0;
     for (const c of cells) {
-      if (c.value > mx) mx = c.value;
+      if (c.value > mxPos) mxPos = c.value;
+      if (c.value < 0 && Math.abs(c.value) > mxNeg) mxNeg = Math.abs(c.value);
     }
 
     const grid: { date: string; value: number }[][] = Array.from(
@@ -118,7 +129,7 @@ export function ContributionGraph({
       }
     }
 
-    return { grid, maxVal: mx, monthLabels };
+    return { grid, maxPos: mxPos, maxNeg: mxNeg, monthLabels };
   }, [data, weeks, selectedYear]);
 
   const weekCount = Math.max(...grid.map((r) => r.length));
@@ -181,21 +192,21 @@ export function ContributionGraph({
                   {grid.map((dayRow, dayIdx) => {
                     const cell = dayRow[weekIdx];
                     if (!cell || cell.value === -1) return <div key={dayIdx} className="w-3 h-3" />;
-                    const level = getLevel(cell.value, maxVal);
+                    const level = getLevel(cell.value, maxPos, maxNeg);
                     const isSelected = selectedDate === cell.date;
+                    const tipLabel = cell.value > 0
+                      ? `${cell.date}: 消费 ${formatTokens(cell.value)}`
+                      : cell.value < 0
+                      ? `${cell.date}: 收入 ${formatTokens(Math.abs(cell.value))}`
+                      : `${cell.date}: 0`;
                     return (
                       <div
                         key={dayIdx}
                         className={`w-3 h-3 rounded-sm cursor-pointer transition-all ${
                           isSelected ? "ring-1 ring-accent ring-offset-1 ring-offset-bg-0" : ""
                         }`}
-                        style={{
-                          backgroundColor:
-                            level === 0
-                              ? "rgba(136,154,196,0.06)"
-                              : `rgba(139,227,218,${LEVELS[level]})`,
-                        }}
-                        title={`${cell.date}: ${formatTokens(cell.value)} xtokens`}
+                        style={{ backgroundColor: getCellColor(cell.value, level) }}
+                        title={tipLabel}
                         onClick={() => cell.date && onDateClick?.(cell.date)}
                       />
                     );
@@ -207,53 +218,42 @@ export function ContributionGraph({
         </div>
       </div>
 
-      {/* Legend + Model icons */}
-      <div className="flex items-center justify-between mt-3">
-        {/* Model icons */}
-        <div className="flex items-center gap-2">
-          {activeModels.map((model) => {
-            const icon = MODEL_ICONS[model] ?? { label: model.slice(0, 2).toUpperCase(), color: "#8be3da" };
-            const isActive = selectedModel === model;
-            return (
-              <button
-                key={model}
-                onClick={() => onModelClick?.(model)}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] transition-colors ${
-                  isActive
-                    ? "bg-accent/15 text-accent font-semibold"
-                    : "text-text-tertiary hover:text-text-secondary hover:bg-panel-strong"
-                }`}
-                title={model}
+      {/* Model icons (max 3) + color legend — single row below heatmap */}
+      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-3">
+        {activeModels.slice(0, 3).map((model) => {
+          const icon = MODEL_ICONS[model] ?? { label: model.slice(0, 2).toUpperCase(), color: "#8be3da" };
+          const isActive = selectedModel === model;
+          return (
+            <button
+              key={model}
+              onClick={() => onModelClick?.(model)}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors ${
+                isActive
+                  ? "bg-accent/15 text-accent font-semibold"
+                  : "text-text-tertiary hover:text-text-secondary"
+              }`}
+              title={model}
+            >
+              <span
+                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[8px] font-bold"
+                style={{ backgroundColor: icon.color + "30", color: icon.color }}
               >
-                <span
-                  className="inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold"
-                  style={{ backgroundColor: icon.color + "30", color: icon.color }}
-                >
-                  {icon.label}
-                </span>
-                <span className="hidden sm:inline">{model}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Legend */}
-        <div className="flex items-center gap-1 text-[10px] text-text-tertiary">
-          <span>Less</span>
-          {[0, 1, 2, 3, 4].map((level) => (
-            <div
-              key={level}
-              className="w-3 h-3 rounded-sm"
-              style={{
-                backgroundColor:
-                  level === 0
-                    ? "rgba(136,154,196,0.06)"
-                    : `rgba(139,227,218,${LEVELS[level]})`,
-              }}
-            />
-          ))}
-          <span>More</span>
-        </div>
+                {icon.label}
+              </span>
+              {model}
+            </button>
+          );
+        })}
+        {activeModels.length > 3 && (
+          <span className="text-[10px] text-text-tertiary">+{activeModels.length - 3}</span>
+        )}
+        <span className="text-text-tertiary/20 mx-1">|</span>
+        <span className="flex items-center gap-1 text-[10px] text-text-tertiary">
+          <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "rgba(251,191,36,0.6)" }} />消费
+        </span>
+        <span className="flex items-center gap-1 text-[10px] text-text-tertiary">
+          <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "rgba(52,211,153,0.6)" }} />收入
+        </span>
       </div>
     </div>
   );

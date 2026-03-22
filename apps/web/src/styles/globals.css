@@ -121,6 +121,9 @@
   .chat-prose strong { font-weight: 600; }
   .chat-prose em { font-style: italic; }
   .chat-prose hr { border: none; border-top: 1px solid rgba(136, 154, 196, 0.15); margin: 1rem 0; }
+  .chat-prose pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+  .chat-prose img { max-width: 100%; border-radius: var(--radius-card); }
+  .mermaid-svg svg { max-width: 100%; height: auto; }
 }
 
 /* Typewriter animation for homepage */

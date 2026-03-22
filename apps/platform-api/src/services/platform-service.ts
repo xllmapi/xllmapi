@@ -237,13 +237,16 @@ export const platformService = {
   async getPricingGuidance(logicalModel: string) {
     const normalizedModel = logicalModel.trim();
     const defaults = (() => {
-      if (normalizedModel.includes("deepseek")) {
+      if (normalizedModel.toLowerCase().includes("deepseek")) {
         return { inputPricePer1k: 300, outputPricePer1k: 500, source: "default_profile" as const };
       }
-      if (normalizedModel.includes("claude")) {
+      if (normalizedModel.toLowerCase().includes("minimax")) {
+        return { inputPricePer1k: 500, outputPricePer1k: 800, source: "default_profile" as const };
+      }
+      if (normalizedModel.toLowerCase().includes("claude")) {
         return { inputPricePer1k: 1500, outputPricePer1k: 3000, source: "default_profile" as const };
       }
-      if (normalizedModel.includes("openai")) {
+      if (normalizedModel.toLowerCase().includes("gpt") || normalizedModel.toLowerCase().includes("openai")) {
         return { inputPricePer1k: 1000, outputPricePer1k: 2000, source: "default_profile" as const };
       }
       return { inputPricePer1k: 1000, outputPricePer1k: 2000, source: "default_profile" as const };
@@ -258,13 +261,35 @@ export const platformService = {
     const inputPricePer1k = hasMarketInput ? Number(marketModel?.minInputPrice) : defaults.inputPricePer1k;
     const outputPricePer1k = hasMarketOutput ? Number(marketModel?.minOutputPrice) : defaults.outputPricePer1k;
 
+    // Compute platform-wide min/max/avg from all active offerings
+    const allModels = marketModels.filter((m) => !m.logicalModel.startsWith("community-") && !m.logicalModel.startsWith("e2e-"));
+    let platformMinInput = Infinity, platformMaxInput = 0;
+    let platformMinOutput = Infinity, platformMaxOutput = 0;
+    for (const m of allModels) {
+      const inp = Number(m.minInputPrice);
+      const out = Number(m.minOutputPrice);
+      if (inp > 0) { platformMinInput = Math.min(platformMinInput, inp); platformMaxInput = Math.max(platformMaxInput, inp); }
+      if (out > 0) { platformMinOutput = Math.min(platformMinOutput, out); platformMaxOutput = Math.max(platformMaxOutput, out); }
+    }
+    if (!Number.isFinite(platformMinInput)) platformMinInput = 0;
+    if (!Number.isFinite(platformMinOutput)) platformMinOutput = 0;
+
+    // 7-day average effective price from actual settlements
+    const avgPrice = await platformRepository.getAvgSettlementPrice7d?.() ?? null;
+
     return {
       logicalModel: normalizedModel,
       inputPricePer1k,
       outputPricePer1k,
       source: hasMarketInput || hasMarketOutput ? "market_reference" : defaults.source,
       marketMinInputPricePer1k: hasMarketInput ? Number(marketModel?.minInputPrice) : null,
-      marketMinOutputPricePer1k: hasMarketOutput ? Number(marketModel?.minOutputPrice) : null
+      marketMinOutputPricePer1k: hasMarketOutput ? Number(marketModel?.minOutputPrice) : null,
+      platformMinInput,
+      platformMaxInput,
+      platformMinOutput,
+      platformMaxOutput,
+      avg7dInputPricePer1k: avgPrice?.avgInput ?? null,
+      avg7dOutputPricePer1k: avgPrice?.avgOutput ?? null
     };
   },
 
@@ -571,5 +596,21 @@ export const platformService = {
     return platformRepository.updateChatConversationTitle(params);
   },
 
-  recordChatSettlement: platformRepository.recordChatSettlement
+  recordChatSettlement: platformRepository.recordChatSettlement,
+
+  async getSupplyRecent(userId: string, days?: number, limit?: number): Promise<any[]> {
+    return platformRepository.getSupplyRecent(userId, days, limit);
+  },
+
+  async getSupplyDaily(userId: string, year: number): Promise<any[]> {
+    return platformRepository.getSupplyDaily(userId, year);
+  },
+
+  async getNetworkModelStats(): Promise<any[]> {
+    return platformRepository.getNetworkModelStats();
+  },
+
+  async getNetworkTrends(days: number): Promise<any[]> {
+    return platformRepository.getNetworkTrends(days);
+  }
 };

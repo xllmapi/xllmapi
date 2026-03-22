@@ -13,9 +13,10 @@ interface DataTableProps<T> {
   data: T[];
   rowKey: (row: T) => string;
   emptyText?: string;
+  rowClassName?: (row: T) => string;
 }
 
-export function DataTable<T>({ columns, data, rowKey, emptyText }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, rowKey, emptyText, rowClassName }: DataTableProps<T>) {
   if (data.length === 0) {
     return (
       <div className="rounded-[var(--radius-card)] border border-line bg-panel px-6 py-12 text-center">
@@ -43,7 +44,7 @@ export function DataTable<T>({ columns, data, rowKey, emptyText }: DataTableProp
         </thead>
         <tbody>
           {data.map((row) => (
-            <tr key={rowKey(row)} className="border-b border-line/50 last:border-b-0 hover:bg-accent-bg/30 transition-colors">
+            <tr key={rowKey(row)} className={`border-b border-line/50 last:border-b-0 hover:bg-accent-bg/30 transition-colors ${rowClassName?.(row) ?? ""}`}>
               {columns.map((col) => (
                 <td
                   key={col.key}

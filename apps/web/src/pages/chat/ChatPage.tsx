@@ -4,21 +4,20 @@ import { PanelLeftOpen } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { ChatSidebar } from "./components/ChatSidebar";
 import { ChatMain } from "./components/ChatMain";
-import { useChatStore } from "./hooks/useChatStore";
+import { useChat } from "@/hooks/useChatContext";
 
 export function ChatPage() {
-  const store = useChatStore();
+  const store = useChat();
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Load conversations when model changes (only if logged in)
+  // Load all conversations on mount (model selector only affects new chat creation)
   useEffect(() => {
-    if (store.model && isLoggedIn) {
-      store.setActiveId("");
-      void store.loadConversations(store.model);
+    if (isLoggedIn) {
+      void store.loadConversations();
     }
-  }, [store.model, isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load messages when active conversation changes
   useEffect(() => {

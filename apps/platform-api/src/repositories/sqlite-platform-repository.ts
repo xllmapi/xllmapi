@@ -266,6 +266,22 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return update_chat_conversation_title(params);
   },
 
+  getSupplyRecent() {
+    return [];
+  },
+
+  getSupplyDaily() {
+    return [];
+  },
+
+  getNetworkModelStats() {
+    return [];
+  },
+
+  getNetworkTrends() {
+    return [];
+  },
+
   devUserApiKey: DEV_USER_API_KEY,
   devAdminApiKey: DEV_ADMIN_API_KEY
 };

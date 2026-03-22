@@ -80,7 +80,8 @@ const getOfferingById = async (ownerUserId: string, offeringId: string): Promise
       fixed_price_per_1k_input AS "fixedPricePer1kInput",
       fixed_price_per_1k_output AS "fixedPricePer1kOutput",
       enabled,
-      review_status AS "reviewStatus"
+      review_status AS "reviewStatus",
+      created_at AS "createdAt"
     FROM offerings
     WHERE owner_user_id = $1 AND id = $2
     LIMIT 1
@@ -1052,6 +1053,31 @@ export const postgresPlatformRepository: PlatformRepository = {
     return result.rows;
   },
 
+  async getSupplyRecent(userId: string, days = 30, limit = 500) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        ar.id AS "requestId",
+        ar.logical_model AS "logicalModel",
+        ar.provider,
+        ar.real_model AS "realModel",
+        LEAST(ar.input_tokens, 2147483647)::text AS "inputTokens",
+        LEAST(ar.output_tokens, 2147483647)::text AS "outputTokens",
+        LEAST(ar.total_tokens, 2147483647)::text AS "totalTokens",
+        ar.created_at::text AS "createdAt",
+        COALESCE(sr.supplier_reward, 0)::text AS "supplierReward"
+      FROM api_requests ar
+      JOIN offerings o ON o.id = ar.chosen_offering_id
+      LEFT JOIN settlement_records sr ON sr.request_id = ar.id
+      WHERE o.owner_user_id = $1
+        AND ar.created_at >= (NOW() - ($2 || ' days')::interval)
+      ORDER BY ar.created_at DESC
+      LIMIT $3
+    `, [userId, days, limit]);
+    return result.rows;
+  },
+
   async getAdminUsageSummary() {
     await ensureDevSeed();
     const currentPool = getPool();
@@ -1309,10 +1335,11 @@ export const postgresPlatformRepository: PlatformRepository = {
         fixed_price_per_1k_input AS "fixedPricePer1kInput",
         fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         enabled,
-        review_status AS "reviewStatus"
+        review_status AS "reviewStatus",
+        created_at AS "createdAt"
       FROM offerings
       WHERE owner_user_id = $1
-      ORDER BY id ASC
+      ORDER BY created_at DESC
     `, [userId]);
     return result.rows;
   },
@@ -1560,6 +1587,7 @@ export const postgresPlatformRepository: PlatformRepository = {
   async listChatConversations(params) {
     await ensureDevSeed();
     const currentPool = getPool();
+    const hasModel = params.logicalModel && params.logicalModel.length > 0;
     const result = await currentPool.query(`
       SELECT
         c.id,
@@ -1575,10 +1603,14 @@ export const postgresPlatformRepository: PlatformRepository = {
           LIMIT 1
         ) AS "lastMessage"
       FROM chat_conversations c
-      WHERE c.owner_user_id = $1 AND c.logical_model = $2
+      WHERE c.owner_user_id = $1
+        ${hasModel ? "AND c.logical_model = $3" : ""}
       ORDER BY c.updated_at DESC
-      LIMIT $3
-    `, [params.ownerUserId, params.logicalModel, params.limit ?? 100]);
+      LIMIT $2
+    `, hasModel
+      ? [params.ownerUserId, params.limit ?? 100, params.logicalModel]
+      : [params.ownerUserId, params.limit ?? 100]
+    );
     return result.rows;
   },
 
@@ -1663,6 +1695,139 @@ export const postgresPlatformRepository: PlatformRepository = {
       LIMIT 1
     `, [params.conversationId, params.ownerUserId]);
     return result.rows[0] ?? null;
+  },
+
+  async getNetworkTrends(days: number) {
+    await ensureDevSeed();
+    const pool = getPool();
+    const result = await pool.query(`
+      SELECT
+        SUBSTRING(ar.created_at::text FROM 1 FOR 10) AS day,
+        ar.logical_model AS "logicalModel",
+        COUNT(*)::int AS requests,
+        COALESCE(SUM(ar.total_tokens), 0)::bigint AS tokens,
+        COUNT(DISTINCT ar.requester_user_id)::int AS users,
+        COALESCE(AVG(o.fixed_price_per_1k_input + o.fixed_price_per_1k_output), 0)::int AS "avgPrice"
+      FROM api_requests ar
+      LEFT JOIN offerings o ON o.id = ar.chosen_offering_id
+      WHERE ar.created_at > NOW() - INTERVAL '${Math.min(Math.max(days, 1), 90)} days'
+        AND ar.logical_model NOT LIKE 'community-%'
+        AND ar.logical_model NOT LIKE 'e2e-%'
+      GROUP BY SUBSTRING(ar.created_at::text FROM 1 FOR 10), ar.logical_model
+      ORDER BY day ASC
+    `);
+
+    // Group by date
+    const dateMap = new Map<string, Record<string, { requests: number; tokens: number; users: number; avgPrice: number }>>();
+    for (const row of result.rows) {
+      const d = String(row.day);
+      if (!dateMap.has(d)) dateMap.set(d, {});
+      dateMap.get(d)![row.logicalModel] = {
+        requests: Number(row.requests),
+        tokens: Number(row.tokens),
+        users: Number(row.users),
+        avgPrice: Number(row.avgPrice),
+      };
+    }
+
+    return Array.from(dateMap.entries()).map(([date, models]) => ({ date, models }));
+  },
+
+  async getSupplyDaily(userId: string, year: number) {
+    await ensureDevSeed();
+    const pool = getPool();
+    const startDate = `${year}-01-01`;
+    const endDate = `${year + 1}-01-01`;
+    const result = await pool.query(`
+      SELECT
+        SUBSTRING(ar.created_at::text FROM 1 FOR 10) AS "date",
+        COALESCE(SUM(ar.total_tokens), 0)::text AS "totalTokens",
+        COUNT(ar.id)::text AS "requestCount"
+      FROM api_requests ar
+      JOIN offerings o ON o.id = ar.chosen_offering_id
+      WHERE o.owner_user_id = $1
+        AND ar.created_at >= $2 AND ar.created_at < $3
+      GROUP BY SUBSTRING(ar.created_at::text FROM 1 FOR 10)
+      ORDER BY "date" ASC
+    `, [userId, startDate, endDate]);
+    return result.rows;
+  },
+
+  async getAvgSettlementPrice7d() {
+    await ensureDevSeed();
+    const pool = getPool();
+    const result = await pool.query(`
+      SELECT
+        COALESCE(AVG(o.fixed_price_per_1k_input), 0) AS "avgInput",
+        COALESCE(AVG(o.fixed_price_per_1k_output), 0) AS "avgOutput"
+      FROM api_requests ar
+      JOIN offerings o ON o.id = ar.chosen_offering_id
+      WHERE ar.created_at > NOW() - INTERVAL '7 days'
+        AND ar.logical_model NOT LIKE 'community-%'
+        AND ar.logical_model NOT LIKE 'e2e-%'
+    `);
+    const row = result.rows[0];
+    if (!row) return null;
+    return { avgInput: Math.round(Number(row.avgInput)), avgOutput: Math.round(Number(row.avgOutput)) };
+  },
+
+  async getNetworkModelStats() {
+    await ensureDevSeed();
+    const pool = getPool();
+
+    // Per-model stats from api_requests (last 30 days)
+    const statsResult = await pool.query(`
+      SELECT
+        logical_model AS "logicalModel",
+        COUNT(*) AS "totalRequests",
+        SUM(total_tokens) AS "totalTokens",
+        SUM(input_tokens) AS "totalInputTokens",
+        SUM(output_tokens) AS "totalOutputTokens",
+        COUNT(DISTINCT requester_user_id) AS "uniqueUsers"
+      FROM api_requests
+      WHERE created_at > NOW() - INTERVAL '30 days'
+        AND logical_model NOT LIKE 'community-%'
+        AND logical_model NOT LIKE 'e2e-%'
+      GROUP BY logical_model
+      ORDER BY COUNT(*) DESC
+    `);
+
+    // 7-day daily trend per model
+    const trendResult = await pool.query(`
+      SELECT
+        logical_model AS "logicalModel",
+        DATE(created_at) AS day,
+        COUNT(*) AS reqs
+      FROM api_requests
+      WHERE created_at > NOW() - INTERVAL '7 days'
+        AND logical_model NOT LIKE 'community-%'
+        AND logical_model NOT LIKE 'e2e-%'
+      GROUP BY logical_model, DATE(created_at)
+      ORDER BY logical_model, day
+    `);
+
+    // Build trend map: model → [day0, day1, ..., day6]
+    const trendMap: Record<string, number[]> = {};
+    const today = new Date();
+    for (const row of trendResult.rows) {
+      if (!trendMap[row.logicalModel]) {
+        trendMap[row.logicalModel] = new Array(7).fill(0);
+      }
+      const dayDate = new Date(row.day);
+      const daysAgo = Math.floor((today.getTime() - dayDate.getTime()) / 86400000);
+      const idx = 6 - Math.min(daysAgo, 6);
+      trendMap[row.logicalModel]![idx] = Number(row.reqs);
+    }
+
+    return statsResult.rows.map((row) => ({
+      logicalModel: row.logicalModel,
+      totalRequests: Number(row.totalRequests),
+      totalTokens: Number(row.totalTokens),
+      totalInputTokens: Number(row.totalInputTokens),
+      totalOutputTokens: Number(row.totalOutputTokens),
+      uniqueUsers: Number(row.uniqueUsers),
+      last7dTrend: trendMap[row.logicalModel] ?? new Array(7).fill(0)
+    }));
   },
 
   devUserApiKey: DEV_USER_API_KEY,

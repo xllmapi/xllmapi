@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiJson } from "@/lib/api";
-import { formatNumber, formatTokens } from "@/lib/utils";
+import { formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { StatCard } from "@/components/ui/StatCard";
 import { ContributionGraph } from "@/components/ui/ContributionGraph";
@@ -11,6 +11,7 @@ interface UsageSummary {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  supplierReward?: number;
 }
 
 interface ConsumptionItem {
@@ -41,6 +42,19 @@ interface DailyData {
 
 type ViewMode = "requests" | "models";
 
+interface MergedRecord {
+  id: string;
+  type: "consume" | "supply";
+  logicalModel: string;
+  provider?: string;
+  realModel?: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  createdAt?: string;
+  supplierReward?: number;
+}
+
 export function OverviewPage() {
   const { t } = useLocale();
   const currentYear = new Date().getFullYear();
@@ -52,6 +66,8 @@ export function OverviewPage() {
   const [consumptionUsage, setConsumptionUsage] = useState<UsageSummary | null>(null);
   const [consumptionItems, setConsumptionItems] = useState<ConsumptionItem[]>([]);
   const [recentRequests, setRecentRequests] = useState<RequestRecord[]>([]);
+  const [supplyRecent, setSupplyRecent] = useState<RequestRecord[]>([]);
+  const [supplyModelItems, setSupplyModelItems] = useState<ConsumptionItem[]>([]);
   const [offeringCount, setOfferingCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -64,6 +80,7 @@ export function OverviewPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("requests");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  // supply always included in merged list
 
   const availableYears = Array.from(
     { length: currentYear - 2024 + 1 },
@@ -79,33 +96,43 @@ export function OverviewPage() {
       apiJson<{ data: { summary: UsageSummary; items: ConsumptionItem[] } }>("/v1/usage/consumption"),
       apiJson<{ data: unknown[] }>("/v1/offerings"),
       apiJson<{ data: RequestRecord[] }>("/v1/usage/consumption/recent?days=30"),
+      apiJson<{ data: RequestRecord[] }>("/v1/usage/supply/recent?days=30").catch(() => ({ data: [] })),
     ])
-      .then(([meRes, walletRes, supplyRes, consumptionRes, offeringsRes, recentRes]) => {
+      .then(([meRes, walletRes, supplyRes, consumptionRes, offeringsRes, recentRes, supplyRecentRes]) => {
         setMe(meRes.data);
         setWallet(walletRes.data?.balance ?? 0);
         setSupplyUsage(supplyRes.data?.summary ?? null);
+        setSupplyModelItems((supplyRes.data?.items as ConsumptionItem[]) ?? []);
         setConsumptionUsage(consumptionRes.data?.summary ?? null);
         const items = consumptionRes.data?.items ?? [];
         setConsumptionItems(items);
         setActiveModels(items.map((i: ConsumptionItem) => i.logicalModel));
         setOfferingCount(offeringsRes.data?.length ?? 0);
         setRecentRequests(recentRes.data ?? []);
+        setSupplyRecent((supplyRecentRes as { data: RequestRecord[] }).data ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  // Load heatmap data when year changes
+  // Load heatmap data when year changes — net value (consume - supply)
   useEffect(() => {
-    apiJson<{ data: DailyData[] }>(`/v1/usage/consumption/daily?year=${selectedYear}`)
-      .then((res) => {
-        const map: Record<string, number> = {};
-        for (const d of res.data ?? []) {
-          map[d.date] = d.totalTokens;
-        }
-        setHeatmapData(map);
-      })
-      .catch(() => {});
+    Promise.all([
+      apiJson<{ data: DailyData[] }>(`/v1/usage/consumption/daily?year=${selectedYear}`),
+      apiJson<{ data: DailyData[] }>(`/v1/usage/supply/daily?year=${selectedYear}`).catch(() => ({ data: [] })),
+    ]).then(([consumeRes, supplyRes]) => {
+      const map: Record<string, number> = {};
+      // Positive = consumption
+      for (const d of consumeRes.data ?? []) {
+        map[d.date] = Number(d.totalTokens);
+      }
+      // Negative = supply income
+      for (const d of supplyRes.data ?? []) {
+        const existing = map[d.date] ?? 0;
+        map[d.date] = existing - Number(d.totalTokens);
+      }
+      setHeatmapData(map);
+    }).catch(() => {});
   }, [selectedYear]);
 
   // Handle date click on heatmap
@@ -128,14 +155,70 @@ export function OverviewPage() {
     setSelectedDate(null);
   }, [selectedModel]);
 
+  // Build merged list (consume + supply when toggled)
+  const mergedRecords: MergedRecord[] = recentRequests.map((r) => ({
+    id: r.requestId,
+    type: "consume" as const,
+    logicalModel: r.logicalModel,
+    provider: r.provider,
+    realModel: r.realModel,
+    inputTokens: Number(r.inputTokens),
+    outputTokens: Number(r.outputTokens),
+    totalTokens: Number(r.totalTokens),
+    createdAt: r.createdAt,
+  }));
+  {
+    const consumeIds = new Set(recentRequests.map((r) => r.requestId));
+    for (const s of supplyRecent) {
+      if (consumeIds.has(s.requestId)) continue;
+      mergedRecords.push({
+        id: `supply-${s.requestId}`,
+        type: "supply",
+        logicalModel: s.logicalModel,
+        provider: s.provider,
+        realModel: s.realModel,
+        inputTokens: Number(s.inputTokens),
+        outputTokens: Number(s.outputTokens),
+        totalTokens: Number(s.totalTokens),
+        createdAt: s.createdAt,
+      });
+    }
+    mergedRecords.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  }
+
   // Filtered data
-  const filteredRequests = recentRequests.filter((r) => {
-    if (selectedDate && r.createdAt.slice(0, 10) !== selectedDate) return false;
+  const filteredRequests = mergedRecords.filter((r) => {
+    if (selectedDate && r.createdAt?.slice(0, 10) !== selectedDate) return false;
     if (selectedModel && r.logicalModel !== selectedModel) return false;
     return true;
   });
 
-  const filteredModels = consumptionItems.filter((r) => {
+  // Build merged model data (consume + supply per model)
+  interface MergedModelRow {
+    logicalModel: string;
+    cTokens: number; sTokens: number;
+    cRequests: number; sRequests: number;
+    cInput: number; sInput: number;
+    cOutput: number; sOutput: number;
+  }
+  const modelMap = new Map<string, MergedModelRow>();
+  for (const c of consumptionItems) {
+    const key = c.logicalModel;
+    const row = modelMap.get(key) ?? { logicalModel: key, cTokens: 0, sTokens: 0, cRequests: 0, sRequests: 0, cInput: 0, sInput: 0, cOutput: 0, sOutput: 0 };
+    row.cTokens = Number(c.totalTokens); row.cRequests = Number(c.requestCount);
+    row.cInput = Number(c.inputTokens); row.cOutput = Number(c.outputTokens);
+    modelMap.set(key, row);
+  }
+  for (const s of supplyModelItems) {
+    const key = s.logicalModel;
+    const row = modelMap.get(key) ?? { logicalModel: key, cTokens: 0, sTokens: 0, cRequests: 0, sRequests: 0, cInput: 0, sInput: 0, cOutput: 0, sOutput: 0 };
+    row.sTokens = Number(s.totalTokens); row.sRequests = Number(s.requestCount);
+    row.sInput = Number(s.inputTokens); row.sOutput = Number(s.outputTokens);
+    modelMap.set(key, row);
+  }
+  const mergedModels = [...modelMap.values()];
+
+  const filteredModels = mergedModels.filter((r) => {
     if (selectedModel && r.logicalModel !== selectedModel) return false;
     return true;
   });
@@ -144,14 +227,22 @@ export function OverviewPage() {
     return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
   }
 
-  const requestColumns: Column<RequestRecord>[] = [
+  const requestColumns: Column<MergedRecord>[] = [
+    {
+      key: "type",
+      header: "",
+      className: "w-2 !px-0",
+      render: (r) => (
+        <span className={`inline-block w-1.5 h-4 rounded-full ${r.type === "supply" ? "bg-emerald-400/60" : "bg-amber-300/50"}`} />
+      ),
+    },
     {
       key: "createdAt",
       header: t("overview.time"),
       className: "text-xs text-text-tertiary whitespace-nowrap",
       render: (r) => {
-        const d = r.createdAt;
-        return `${d.slice(5, 10)} ${d.slice(11, 16)}`;
+        if (!r.createdAt) return "—";
+        return `${r.createdAt.slice(5, 10)} ${r.createdAt.slice(11, 16)}`;
       },
     },
     {
@@ -181,16 +272,19 @@ export function OverviewPage() {
       key: "provider",
       header: "Provider",
       className: "text-xs text-text-tertiary",
+      render: (r) => r.type === "supply" ? t("overview.viewSupply") : (r.provider ?? "—"),
     },
   ];
 
-  const modelColumns: Column<ConsumptionItem>[] = [
-    {
-      key: "lastUsedAt",
-      header: t("overview.lastUsed"),
-      className: "text-xs text-text-tertiary",
-      render: (r) => r.lastUsedAt?.slice(0, 10) ?? "—",
-    },
+  const dualCell = (c: number, s: number) => (
+    <span className="inline-flex items-center gap-0.5">
+      <span className={c > 0 ? "text-amber-300/80" : "text-text-tertiary/30"}>{c > 0 ? formatTokens(c) : "—"}</span>
+      <span className="text-text-tertiary/30">/</span>
+      <span className={s > 0 ? "text-emerald-400/80" : "text-text-tertiary/30"}>{s > 0 ? formatTokens(s) : "—"}</span>
+    </span>
+  );
+
+  const modelColumns: Column<MergedModelRow>[] = [
     {
       key: "logicalModel",
       header: t("overview.model"),
@@ -200,25 +294,25 @@ export function OverviewPage() {
       key: "totalTokens",
       header: "xtokens",
       align: "right",
-      render: (r) => formatTokens(r.totalTokens),
+      render: (r) => dualCell(r.cTokens, r.sTokens),
     },
     {
       key: "requestCount",
       header: t("overview.requests"),
       align: "right",
-      render: (r) => formatNumber(r.requestCount),
+      render: (r) => dualCell(r.cRequests, r.sRequests),
     },
     {
       key: "inputTokens",
       header: "Input",
       align: "right",
-      render: (r) => formatTokens(r.inputTokens),
+      render: (r) => dualCell(r.cInput, r.sInput),
     },
     {
       key: "outputTokens",
       header: "Output",
       align: "right",
-      render: (r) => formatTokens(r.outputTokens),
+      render: (r) => dualCell(r.cOutput, r.sOutput),
     },
   ];
 
@@ -232,7 +326,7 @@ export function OverviewPage() {
       </h1>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatCard
           label={t("overview.balance")}
           value={`${formatTokens(wallet)} xtokens`}
@@ -296,6 +390,12 @@ export function OverviewPage() {
             </button>
           </div>
 
+          {/* Color legend */}
+          <div className="flex items-center gap-2 text-[10px] text-text-tertiary">
+            <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-3 rounded-full bg-amber-300/50" />消费</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-3 rounded-full bg-emerald-400/60" />供应</span>
+          </div>
+
           {/* Active filter badge */}
           {hasFilter && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 text-accent text-[11px] font-medium">
@@ -311,10 +411,7 @@ export function OverviewPage() {
         </div>
 
         <span className="text-[11px] text-text-tertiary">
-          {viewMode === "requests"
-            ? `${filteredRequests.length} requests`
-            : `${filteredModels.length} models`
-          }
+          {viewMode === "requests" ? `${filteredRequests.length} records` : `${filteredModels.length} models`}
         </span>
       </div>
 
@@ -322,8 +419,9 @@ export function OverviewPage() {
         <DataTable
           columns={requestColumns}
           data={filteredRequests}
-          rowKey={(r) => r.requestId}
+          rowKey={(r) => r.id}
           emptyText={t("overview.noRecords")}
+          rowClassName={(r) => r.type === "supply" ? "bg-emerald-400/5" : "bg-amber-300/3"}
         />
       ) : (
         <DataTable

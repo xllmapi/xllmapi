@@ -40,7 +40,7 @@ export function Header() {
         </Link>
 
         <nav className="flex items-center gap-5 text-sm">
-          <Link to="/models" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+          <Link to="/mnetwork" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.models")}
           </Link>
           <Link to="/docs" className="text-text-secondary hover:text-text-primary no-underline transition-colors">

@@ -62,12 +62,11 @@ export function useChatStore() {
     }
   }, []);
 
-  // --- loadConversations ---
-  const loadConversations = useCallback(async (m: string) => {
-    if (!m) return;
+  // --- loadConversations --- (load all, no model filter)
+  const loadConversations = useCallback(async (_m?: string) => {
     try {
       const r = await apiJson<{ data: Conversation[] }>(
-        `/v1/chat/conversations?model=${encodeURIComponent(m)}`
+        `/v1/chat/conversations?limit=100`
       );
       setConversations(r.data ?? []);
     } catch { /* ignore */ }

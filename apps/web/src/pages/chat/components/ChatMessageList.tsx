@@ -69,6 +69,7 @@ export function ChatMessageList({ messages, model, streaming, metaMap, onRetry }
               model={model}
               meta={metaMap[msg.id]}
               isError={msg.role === "assistant" && msg.content.startsWith("Error:")}
+              isStreaming={streaming && msg.role === "assistant" && idx === messages.length - 1}
               onRetry={
                 msg.role === "assistant" &&
                 msg.content.startsWith("Error:") &&

@@ -210,6 +210,11 @@ export type PlatformRepository = {
     ownerUserId: string;
     title: string;
   }): MaybePromise<any>;
+  getSupplyRecent(userId: string, days?: number, limit?: number): MaybePromise<any[]>;
+  getSupplyDaily(userId: string, year: number): MaybePromise<any[]>;
+  getNetworkModelStats(): MaybePromise<any[]>;
+  getNetworkTrends(days: number): MaybePromise<any[]>;
+  getAvgSettlementPrice7d?(): MaybePromise<{ avgInput: number; avgOutput: number } | null>;
   devUserApiKey: string;
   devAdminApiKey: string;
 };

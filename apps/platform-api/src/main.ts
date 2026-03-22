@@ -15,6 +15,69 @@ import { metricsService } from "./metrics.js";
 import { platformService } from "./services/platform-service.js";
 import { executeStreamingRequest, executeRequest } from "./core/provider-executor.js";
 
+// Context window limits per model family (tokens)
+const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  "deepseek": 64000,
+  "minimax": 200000,
+  "gpt-4o": 128000,
+  "gpt-4o-mini": 128000,
+  "claude": 200000,
+};
+const DEFAULT_CONTEXT_LIMIT = 64000;
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 3.5);
+}
+
+function getContextLimit(model: string): number {
+  const lower = model.toLowerCase();
+  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
+    if (lower.includes(key)) return limit;
+  }
+  return DEFAULT_CONTEXT_LIMIT;
+}
+
+type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
+
+/** Trim messages to fit within 80% of model's context window, keeping most recent */
+function trimToContextWindow(messages: ChatMsg[], model: string): ChatMsg[] {
+  const maxTokens = Math.floor(getContextLimit(model) * 0.8);
+
+  // Always keep the last message (current user input)
+  if (messages.length <= 1) return messages;
+
+  const lastMsg = messages[messages.length - 1]!;
+  let usedTokens = estimateTokens(lastMsg.content);
+
+  // Separate system messages (always keep)
+  const systemMsgs = messages.filter((m): m is ChatMsg => m.role === "system");
+  const nonSystem = messages.filter((m): m is ChatMsg => m.role !== "system");
+
+  for (const sm of systemMsgs) {
+    usedTokens += estimateTokens(sm.content);
+  }
+
+  // Take from most recent backwards (excluding the last which is current input)
+  const kept: ChatMsg[] = [];
+  for (let i = nonSystem.length - 2; i >= 0; i--) {
+    const msg = nonSystem[i]!;
+    const tokens = estimateTokens(msg.content);
+    if (usedTokens + tokens > maxTokens) break;
+    usedTokens += tokens;
+    kept.unshift(msg);
+  }
+
+  // Ensure at least 2 recent exchanges (4 messages) if possible
+  if (kept.length < 4 && nonSystem.length > 5) {
+    const minKeep = nonSystem.slice(Math.max(nonSystem.length - 5, 0), nonSystem.length - 1);
+    if (minKeep.length > kept.length) {
+      return [...systemMsgs, ...minKeep, lastMsg];
+    }
+  }
+
+  return [...systemMsgs, ...kept, lastMsg];
+}
+
 const host = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 3000);
 const webDistRoot = resolve(process.cwd(), "apps/web/dist");
@@ -679,6 +742,27 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/v1/network/trends") {
+      const days = Math.min(Math.max(Number(url.searchParams.get("days") ?? 30), 1), 90);
+      const response = json(200, {
+        requestId,
+        data: await platformService.getNetworkTrends(days)
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/network/models/stats") {
+      const response = json(200, {
+        requestId,
+        data: await platformService.getNetworkModelStats()
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/v1/provider-catalog") {
       const auth = await authenticate_request_(req);
       if (!auth) {
@@ -819,14 +903,8 @@ const server = createServer(async (req, res) => {
         res.end(response.payload);
         return;
       }
-      const logicalModel = url.searchParams.get("model")?.trim();
-      if (!logicalModel) {
-        const response = json(400, { error: { message: "model is required", requestId } });
-        res.writeHead(response.statusCode, response.headers);
-        res.end(response.payload);
-        return;
-      }
-      if (has_legacy_model_prefix_(logicalModel)) {
+      const logicalModel = url.searchParams.get("model")?.trim() || "";
+      if (logicalModel && has_legacy_model_prefix_(logicalModel)) {
         const response = json(400, { error: { code: "invalid_model_name", message: "legacy model prefix xllm/ is no longer supported", requestId } });
         res.writeHead(response.statusCode, response.headers);
         res.end(response.payload);
@@ -1035,15 +1113,19 @@ const server = createServer(async (req, res) => {
         });
       }
 
+      // Build messages with context window management
+      const allMessages = [
+        ...history.map((item: { role: "system" | "user" | "assistant"; content: string }) => ({ role: item.role, content: item.content })),
+        { role: "user" as const, content: body.content.trim() }
+      ];
+      const contextMessages = trimToContextWindow(allMessages, logicalModel);
+
       const mappedBody: PublicChatCompletionsRequest = {
         model: logicalModel,
         temperature: body.temperature,
         max_tokens: body.max_tokens,
         stream: true,
-        messages: [
-          ...history.map((item: { role: "system" | "user" | "assistant"; content: string }) => ({ role: item.role, content: item.content })),
-          { role: "user", content: body.content.trim() }
-        ]
+        messages: contextMessages
       };
       console.log(`[chat-stream] requestId=${requestId} candidateCount=${candidateOfferings.length}`);
 
@@ -2046,6 +2128,37 @@ const server = createServer(async (req, res) => {
       const days = Math.min(Number(url.searchParams.get("days") ?? 30), 365);
       const limit = Math.min(Number(url.searchParams.get("limit") ?? 500), 2000);
       const response = json(200, { requestId, data: await platformService.getConsumptionRecent(auth.userId, days, limit) });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/usage/supply/daily") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const year = Number(url.searchParams.get("year") ?? new Date().getFullYear());
+      const response = json(200, { requestId, data: await platformService.getSupplyDaily(auth.userId, year) });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/usage/supply/recent") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const days = Math.min(Number(url.searchParams.get("days") ?? 30), 365);
+      const limit = Math.min(Number(url.searchParams.get("limit") ?? 500), 2000);
+      const response = json(200, { requestId, data: await platformService.getSupplyRecent(auth.userId, days, limit) });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return;

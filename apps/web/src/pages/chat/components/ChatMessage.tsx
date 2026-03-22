@@ -14,6 +14,7 @@ interface ChatMessageProps {
   model?: string;
   meta?: CompletionMeta;
   isError?: boolean;
+  isStreaming?: boolean;
   onRetry?: () => void;
 }
 
@@ -75,7 +76,7 @@ function ThinkingBlock({ thinking, isThinking }: { thinking: string; isThinking:
   );
 }
 
-export function ChatMessage({ message, model, meta, isError, onRetry }: ChatMessageProps) {
+export function ChatMessage({ message, model, meta, isError, isStreaming, onRetry }: ChatMessageProps) {
   const { t } = useLocale();
 
   if (message.role === "user") {
@@ -134,7 +135,7 @@ export function ChatMessage({ message, model, meta, isError, onRetry }: ChatMess
                   rehypePlugins={[rehypeHighlight]}
                   components={{
                     code: ({ className, children }) => (
-                      <CodeBlock className={className}>{children}</CodeBlock>
+                      <CodeBlock className={className} isStreaming={isStreaming}>{children}</CodeBlock>
                     ),
                     pre: ({ children }) => <>{children}</>,
                   }}

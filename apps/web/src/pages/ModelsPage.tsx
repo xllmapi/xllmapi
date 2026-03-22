@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
@@ -7,13 +8,185 @@ import { Cpu, Users } from "lucide-react";
 interface NetworkModel {
   logicalModel: string;
   providerCount?: number;
-  enabledOfferingCount?: number;
-  credentialCount?: number;
   ownerCount?: number;
   status?: string;
   providers?: string[];
   minInputPrice?: number | null;
   minOutputPrice?: number | null;
+  featuredSuppliers?: { handle: string; displayName: string }[];
+}
+
+interface ModelStats {
+  logicalModel: string;
+  totalRequests: number;
+  totalTokens: number;
+  last7dTrend: number[];
+}
+
+interface TrendDay {
+  date: string;
+  models: Record<string, { requests: number; tokens: number; users: number; avgPrice: number }>;
+}
+
+type TrendMetric = "requests" | "tokens" | "users" | "price";
+
+const MODEL_COLORS: Record<string, string> = {
+  "deepseek-chat": "#8be3da",
+  "deepseek-reasoner": "#5cc8be",
+  "MiniMax-M2.7": "#a78bfa",
+  "MiniMax-M2.5": "#c4b5fd",
+  "MiniMax-Text-01": "#8b5cf6",
+  "gpt-4o-mini": "#34d399",
+  "gpt-4o": "#10b981",
+  "claude-sonnet-4-20250514": "#fb923c",
+};
+const FALLBACK_COLORS = ["#94a3b8", "#64748b", "#475569", "#cbd5e1"];
+
+function getModelColor(name: string, idx: number): string {
+  return MODEL_COLORS[name] ?? FALLBACK_COLORS[idx % FALLBACK_COLORS.length]!;
+}
+
+/** SVG Area Chart for trends */
+function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; metric: TrendMetric; allModels: string[]; days?: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(800);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => setContainerW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Fill in all dates in the range so chart always shows full span
+  const filledData: TrendDay[] = (() => {
+    const dataMap = new Map(data.map((d) => [d.date, d]));
+    const result: TrendDay[] = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      result.push(dataMap.get(key) ?? { date: key, models: {} });
+    }
+    return result;
+  })();
+
+  const W = containerW, H = 360, PX = 50, PY = 30;
+  const chartW = W - PX * 2, chartH = H - PY * 2;
+
+  // Extract values per model, compute totals, sort biggest first (bottom of stack)
+  const rawSeries = allModels.map((model) => {
+    const values = filledData.map((d) => {
+      const m = d.models[model];
+      if (!m) return 0;
+      return metric === "requests" ? m.requests : metric === "tokens" ? m.tokens : metric === "users" ? m.users : m.avgPrice;
+    });
+    return { model, values, total: values.reduce((a, b) => a + b, 0) };
+  });
+
+  // Filter out models with zero data, sort by total descending (biggest = bottom of stack)
+  const activeSeries = rawSeries.filter((s) => s.total > 0).sort((a, b) => b.total - a.total);
+  const sortedModels = activeSeries.map((s) => s.model);
+  const seriesData = activeSeries.map((s) => s.values);
+
+  // Stacked cumulative sums
+  const stacked: number[][] = seriesData.map(() => new Array(filledData.length).fill(0) as number[]);
+  for (let day = 0; day < filledData.length; day++) {
+    let cum = 0;
+    for (let s = 0; s < sortedModels.length; s++) {
+      cum += seriesData[s]![day]!;
+      stacked[s]![day] = cum;
+    }
+  }
+
+  const maxVal = Math.max(...(stacked[sortedModels.length - 1] ?? [0]), 1);
+
+  const x = (i: number) => PX + (i / Math.max(filledData.length - 1, 1)) * chartW;
+  const y = (v: number) => PY + chartH - (v / maxVal) * chartH;
+
+  // Build area paths (bottom to top)
+  const areas = sortedModels.map((model, s) => {
+    const top = filledData.map((_, i) => `${x(i)},${y(stacked[s]![i]!)}`).join(" ");
+    const prevBottom = s === 0
+      ? filledData.map((_, i) => `${x(i)},${y(0)}`).reverse().join(" ")
+      : filledData.map((_, i) => `${x(i)},${y(stacked[s - 1]![i]!)}`).reverse().join(" ");
+    return { model, color: getModelColor(model, s), d: `M${top} L${prevBottom} Z` };
+  });
+
+  // X-axis labels (show ~8 labels)
+  const labelStep = Math.max(Math.floor(filledData.length / 8), 1);
+  const xLabels = filledData.filter((_, i) => i % labelStep === 0 || i === filledData.length - 1).map((d) => ({
+    x: x(filledData.indexOf(d)),
+    label: d.date.slice(5), // MM-DD
+  }));
+
+  // Y-axis labels
+  const ySteps = 4;
+  const yLabels = Array.from({ length: ySteps + 1 }, (_, i) => {
+    const v = (maxVal / ySteps) * i;
+    return { y: y(v), label: v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(Math.round(v)) };
+  });
+
+  return (
+    <div ref={containerRef}>
+      <svg width={W} height={H}>
+        {/* Grid lines */}
+        {yLabels.map((yl, i) => (
+          <line key={i} x1={PX} x2={W - PX} y1={yl.y} y2={yl.y} stroke="rgba(136,154,196,0.08)" strokeWidth="1" />
+        ))}
+        {/* Y labels */}
+        {yLabels.map((yl, i) => (
+          <text key={i} x={PX - 6} y={yl.y + 4} textAnchor="end" className="fill-text-tertiary" fontSize="11">{yl.label}</text>
+        ))}
+        {/* Areas (render bottom to top) */}
+        {areas.map((a) => (
+          <path key={a.model} d={a.d} fill={a.color} opacity="0.25" />
+        ))}
+        {/* Lines on top — only draw segments where this model has data */}
+        {sortedModels.map((model, s) => {
+          // Build segments: only connect consecutive days where this model contributed
+          const segments: string[][] = [];
+          let current: string[] = [];
+          for (let i = 0; i < filledData.length; i++) {
+            const hasData = seriesData[s]![i]! > 0;
+            if (hasData) {
+              current.push(`${x(i)},${y(stacked[s]![i]!)}`);
+            } else {
+              if (current.length > 0) { segments.push(current); current = []; }
+            }
+          }
+          if (current.length > 0) segments.push(current);
+          return segments.map((seg, si) => (
+            <polyline key={`${model}-${si}`} points={seg.join(" ")} fill="none" stroke={getModelColor(model, s)} strokeWidth="2" opacity="0.8" />
+          ));
+        })}
+        {/* X labels */}
+        {xLabels.map((xl, i) => (
+          <text key={i} x={xl.x} y={H - 4} textAnchor="middle" className="fill-text-tertiary" fontSize="11">{xl.label}</text>
+        ))}
+      </svg>
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 mt-3 px-1">
+        {sortedModels.map((model, i) => (
+          <span key={model} className="flex items-center gap-2 text-xs text-text-secondary">
+            <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: getModelColor(model, i) }} />
+            {model}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatTokens(v: number | string): string {
+  const n = Number(v) || 0;
+  if (n >= 999_950) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(Math.round(n));
 }
 
 function StatusDot({ status }: { status: string }) {
@@ -26,106 +199,208 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
+function Sparkline({ data }: { data: number[] }) {
+  if (!data || data.length === 0) return null;
+  const max = Math.max(...data, 1);
+  const w = 64, h = 18;
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - (v / max) * (h - 2) - 1}`).join(" ");
+  return (
+    <svg width={w} height={h} className="shrink-0">
+      <polyline points={pts} fill="none" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+    </svg>
+  );
+}
+
+function HeatBar({ value, max }: { value: number; max: number }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  return (
+    <div className="h-1 rounded-full bg-line overflow-hidden">
+      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--color-accent), rgba(139,227,218,0.5))" }} />
+    </div>
+  );
+}
+
+type SortKey = "requests" | "tokens" | "price";
+
 export function ModelsPage() {
   const [models, setModels] = useState<NetworkModel[]>([]);
+  const [stats, setStats] = useState<ModelStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [trendData, setTrendData] = useState<TrendDay[]>([]);
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>("requests");
+  const [trendDays, setTrendDays] = useState(7);
+  const [sortBy, setSortBy] = useState<SortKey>("requests");
+  const [search, setSearch] = useState("");
   const { t } = useLocale();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    apiJson<{ data: NetworkModel[] }>("/v1/network/models")
-      .then((r) => setModels(
-        (r.data ?? []).filter((m) => !m.logicalModel.startsWith("community-") && !m.logicalModel.startsWith("e2e-"))
-      ))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    Promise.all([
+      apiJson<{ data: NetworkModel[] }>("/v1/network/models"),
+      apiJson<{ data: ModelStats[] }>("/v1/network/models/stats").catch(() => ({ data: [] })),
+      apiJson<{ data: TrendDay[] }>(`/v1/network/trends?days=${trendDays}`).catch(() => ({ data: [] })),
+    ]).then(([modelsRes, statsRes, trendRes]) => {
+      setModels((modelsRes.data ?? []).filter((m) => !m.logicalModel.startsWith("community-") && !m.logicalModel.startsWith("e2e-")));
+      setStats(statsRes.data ?? []);
+      setTrendData(trendRes.data ?? []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [trendDays]);
 
+  const statsMap = new Map(stats.map((s) => [s.logicalModel, s]));
   const totalNodes = models.reduce((sum, m) => sum + (m.ownerCount ?? 0), 0);
-  const totalProviders = new Set(models.flatMap((m) => m.providers ?? [])).size;
+  const totalSuppliers = new Set(models.flatMap((m) => (m.featuredSuppliers ?? []).map((s) => s.handle))).size;
+  const totalTokens = stats.reduce((sum, s) => sum + s.totalTokens, 0);
+  const maxRequests = Math.max(...stats.map((s) => s.totalRequests), 1);
+
+  const filtered = models.filter((m) => !search || m.logicalModel.toLowerCase().includes(search.toLowerCase()));
+  const sorted = [...filtered].sort((a, b) => {
+    const sa = statsMap.get(a.logicalModel), sb = statsMap.get(b.logicalModel);
+    if (sortBy === "requests") return (sb?.totalRequests ?? 0) - (sa?.totalRequests ?? 0);
+    if (sortBy === "tokens") return (sb?.totalTokens ?? 0) - (sa?.totalTokens ?? 0);
+    return (a.minInputPrice ?? 9999) - (b.minInputPrice ?? 9999);
+  });
 
   return (
     <div className="min-h-screen flex flex-col pt-14">
-      {/* Header */}
       <section className="pt-16 pb-10 px-6 text-center">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-          {t("models.title")}
-        </h1>
-        <p className="text-text-secondary text-base max-w-xl mx-auto">
-          {t("models.subtitle")}
-        </p>
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">{t("models.title")}</h1>
+        <p className="text-text-secondary text-base max-w-xl mx-auto">{t("models.subtitle")}</p>
       </section>
 
       {/* Stats */}
       <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-8">
-        <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-accent">{models.length}</div>
-            <div className="text-xs text-text-tertiary mt-1">{t("models.stat.models")}</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
+          {[
+            { value: models.length, label: t("models.stat.models") },
+            { value: totalNodes, label: t("models.stat.nodes") },
+            { value: totalSuppliers, label: t("models.stat.suppliers") },
+            { value: formatTokens(totalTokens), label: t("models.stat.tokens") },
+          ].map((s, i) => (
+            <div key={i} className="text-center">
+              <div className="text-2xl font-bold text-accent">{s.value}</div>
+              <div className="text-xs text-text-tertiary mt-1">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Sort + Search */}
+      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-1">
+            {(["requests", "tokens", "price"] as SortKey[]).map((key) => (
+              <button key={key} onClick={() => setSortBy(key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${sortBy === key ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"}`}>
+                {t(`models.sort.${key}`)}
+              </button>
+            ))}
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-accent">{totalNodes}</div>
-            <div className="text-xs text-text-tertiary mt-1">{t("models.stat.nodes")}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-accent">{totalProviders}</div>
-            <div className="text-xs text-text-tertiary mt-1">{t("models.stat.providers")}</div>
-          </div>
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("models.search")}
+            className="rounded-[var(--radius-input)] border border-line px-3 py-1.5 text-sm text-text-primary w-44 focus:outline-none focus:border-accent transition-colors font-mono"
+            style={{ backgroundColor: "rgba(16,21,34,0.6)" }} />
         </div>
       </section>
 
       {/* Model grid */}
-      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-24 flex-1">
+      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-8">
         {loading ? (
-          <div className="text-center text-text-tertiary py-20">{t("common.loading")}</div>
-        ) : models.length === 0 ? (
-          <div className="text-center text-text-tertiary py-20">{t("models.empty")}</div>
-        ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {models.map((m) => (
-              <div
-                key={m.logicalModel}
-                className="rounded-[var(--radius-card)] border border-line bg-panel p-5 transition-colors hover:border-accent/25"
-              >
-                {/* Top row: name + status */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">
-                    {m.logicalModel}
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <StatusDot status={m.status ?? "available"} />
-                    <span className="text-[10px] text-text-tertiary capitalize">{m.status ?? "available"}</span>
-                  </div>
-                </div>
-
-                {/* Stats row */}
-                <div className="flex items-center gap-4 text-xs text-text-secondary">
-                  <span className="flex items-center gap-1">
-                    <Cpu className="w-3 h-3 text-text-tertiary" />
-                    {m.ownerCount ?? 0} {t("models.nodes")}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3 text-text-tertiary" />
-                    {m.ownerCount ?? 0} {t("models.suppliers")}
-                  </span>
-                </div>
-
-                {/* Providers */}
-                {m.providers && m.providers.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {m.providers.map((p) => (
-                      <span
-                        key={p}
-                        className="text-[10px] text-text-tertiary bg-accent/6 border border-accent/10 rounded-full px-2 py-0.5"
-                      >
-                        {p}
-                      </span>
-                    ))}
-                  </div>
-                )}
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-[var(--radius-card)] border border-line bg-panel p-5 animate-pulse">
+                <div className="h-4 bg-line rounded w-2/3 mb-3" />
+                <div className="h-3 bg-line rounded w-1/2 mb-2" />
+                <div className="h-2 bg-line rounded w-full" />
               </div>
             ))}
           </div>
+        ) : sorted.length === 0 ? (
+          <div className="text-center text-text-tertiary py-20">{t("models.empty")}</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sorted.map((m) => {
+              const s = statsMap.get(m.logicalModel);
+              return (
+                <div key={m.logicalModel}
+                  onClick={() => navigate(`/mnetwork/${encodeURIComponent(m.logicalModel)}`)}
+                  className="rounded-[var(--radius-card)] border border-line bg-panel p-5 transition-colors hover:border-accent/25 cursor-pointer">
+
+                  {/* Name + status */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">{m.logicalModel}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <StatusDot status={m.status ?? "available"} />
+                      <span className="text-[10px] text-text-tertiary capitalize">{m.status ?? "available"}</span>
+                    </div>
+                  </div>
+
+                  {/* Nodes + suppliers */}
+                  <div className="flex items-center gap-4 text-xs text-text-secondary mb-2">
+                    <span className="flex items-center gap-1"><Cpu className="w-3 h-3 text-text-tertiary" />{m.ownerCount ?? 0} {t("models.nodes")}</span>
+                    <span className="flex items-center gap-1"><Users className="w-3 h-3 text-text-tertiary" />{m.ownerCount ?? 0} {t("models.suppliers")}</span>
+                  </div>
+
+                  {/* Provider tags */}
+                  {m.providers && m.providers.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {m.providers.map((p) => (
+                        <span key={p} className="text-[10px] text-text-tertiary bg-accent/6 border border-accent/10 rounded-full px-2 py-0.5">{p}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Stats line */}
+                  <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
+                    <span>{s?.totalRequests ?? 0} {t("models.requests")} · {formatTokens(s?.totalTokens ?? 0)} xt</span>
+                    {m.minInputPrice != null && <span>{m.minInputPrice}/{m.minOutputPrice} /1K</span>}
+                  </div>
+
+                  {/* Heat bar + sparkline */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1"><HeatBar value={s?.totalRequests ?? 0} max={maxRequests} /></div>
+                    {s?.last7dTrend && <Sparkline data={s.last7dTrend} />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
+      </section>
+
+      {/* Trend chart */}
+      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-16 flex-1 w-full">
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6">
+            <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold text-text-secondary">{t("models.trends.title")}</h2>
+                <div className="flex items-center bg-panel-strong rounded-md p-0.5">
+                  {[7, 30].map((d) => (
+                    <button key={d} onClick={() => setTrendDays(d)}
+                      className={`px-2.5 py-1 text-[11px] rounded transition-colors cursor-pointer ${
+                        trendDays === d ? "bg-bg-1 text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                      }`}>
+                      {d}d
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {(["requests", "tokens", "users", "price"] as TrendMetric[]).map((m) => (
+                  <button key={m} onClick={() => setTrendMetric(m)}
+                    className={`px-3 py-1 text-xs rounded-full transition-colors cursor-pointer border ${
+                      trendMetric === m ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"
+                    }`}>
+                    {t(`models.trends.${m}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <TrendChart
+              data={trendData}
+              metric={trendMetric}
+              allModels={[...new Set(trendData.flatMap((d) => Object.keys(d.models)))]}
+              days={trendDays}
+            />
+        </div>
       </section>
 
       <Footer />

@@ -94,6 +94,18 @@ export function NetworkPage() {
   const [customModelInput, setCustomModelInput] = useState("");
   const discoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Per-model pricing state: modelId → { input, output }
+  const [modelPricing, setModelPricing] = useState<Record<string, { input: string; output: string }>>({});
+  const [pricingGuidance, setPricingGuidance] = useState<{
+    platformMinInput: number;
+    platformMaxInput: number;
+    platformMinOutput: number;
+    platformMaxOutput: number;
+    avg7dInputPricePer1k: number | null;
+    avg7dOutputPricePer1k: number | null;
+  } | null>(null);
+  const [guidanceDefaults, setGuidanceDefaults] = useState<Record<string, { input: number; output: number }>>({});
+
   const myKey = getApiKey() ?? "";
 
   const loadData = useCallback(async () => {
@@ -196,11 +208,37 @@ export function NetworkPage() {
     }
   }
 
+  // Fetch pricing guidance when a model is toggled on
+  const fetchGuidanceForModel = useCallback((modelLabel: string, modelId: string) => {
+    if (guidanceDefaults[modelId]) return;
+    apiJson<any>(`/v1/pricing/guidance?logicalModel=${encodeURIComponent(modelLabel)}`)
+      .then((res) => {
+        setGuidanceDefaults((prev) => ({ ...prev, [modelId]: { input: res.inputPricePer1k ?? 300, output: res.outputPricePer1k ?? 500 } }));
+        setModelPricing((prev) => prev[modelId] ? prev : { ...prev, [modelId]: { input: String(res.inputPricePer1k ?? ""), output: String(res.outputPricePer1k ?? "") } });
+        if (!pricingGuidance) {
+          setPricingGuidance({
+            platformMinInput: res.platformMinInput ?? 0,
+            platformMaxInput: res.platformMaxInput ?? 0,
+            platformMinOutput: res.platformMinOutput ?? 0,
+            platformMaxOutput: res.platformMaxOutput ?? 0,
+            avg7dInputPricePer1k: res.avg7dInputPricePer1k,
+            avg7dOutputPricePer1k: res.avg7dOutputPricePer1k,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [guidanceDefaults, pricingGuidance]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggleModel = (id: string) => {
     setSelectedModels((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        const item = selectableModels.find((m) => m.id === id);
+        if (item) fetchGuidanceForModel(item.label, id);
+      }
       return next;
     });
   };
@@ -226,11 +264,17 @@ export function NetworkPage() {
     setSuccess("");
     if (!selectedProvider || selectedModels.size === 0 || !apiKey.trim()) return;
 
-    const modelsToSubmit: { logicalModel: string; realModel: string }[] = [];
+    const modelsToSubmit: { logicalModel: string; realModel: string; inputPrice?: number; outputPrice?: number }[] = [];
     for (const id of selectedModels) {
       const item = selectableModels.find((m) => m.id === id);
       if (item) {
-        modelsToSubmit.push({ logicalModel: item.label, realModel: item.realModel });
+        const p = modelPricing[id];
+        modelsToSubmit.push({
+          logicalModel: item.label,
+          realModel: item.realModel,
+          inputPrice: p?.input ? Number(p.input) : undefined,
+          outputPrice: p?.output ? Number(p.output) : undefined,
+        });
       }
     }
     if (modelsToSubmit.length === 0) return;
@@ -269,6 +313,8 @@ export function NetworkPage() {
               logicalModel: model.logicalModel,
               credentialId: credResult.data.id,
               realModel: model.realModel,
+              ...(model.inputPrice ? { fixedPricePer1kInput: model.inputPrice } : {}),
+              ...(model.outputPrice ? { fixedPricePer1kOutput: model.outputPrice } : {}),
             }),
           });
           created++;
@@ -286,6 +332,9 @@ export function NetworkPage() {
         setDiscoveryDone(false);
         setDiscoveryFailed(false);
         setCustomModelInput("");
+        setModelPricing({});
+        setGuidanceDefaults({});
+        setPricingGuidance(null);
         await loadData();
       }
     } catch (err: unknown) {
@@ -408,36 +457,71 @@ export function NetworkPage() {
             </div>
           )}
 
-          {/* Row 3: Model selection */}
+          {/* Row 3: Model selection with per-model pricing */}
           {selectedProvider && selectableModels.length > 0 && !discovering && (
             <div>
-              <label className="text-text-secondary text-xs block mb-2">
-                {t("network.selectModels")} ({providerLabel})
-              </label>
-              <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto">
-                {selectableModels.map((sm) => (
-                  <label
-                    key={sm.id}
-                    className={`flex items-center gap-3 rounded-[var(--radius-input)] border px-4 py-2.5 cursor-pointer transition-colors ${
-                      selectedModels.has(sm.id)
-                        ? "border-accent/40 bg-accent-bg"
-                        : "border-line bg-[rgba(16,21,34,0.4)] hover:border-line-strong"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedModels.has(sm.id)}
-                      onChange={() => toggleModel(sm.id)}
-                      className="accent-[var(--color-accent)] w-4 h-4"
-                    />
-                    <div className="flex-1 min-w-0 flex items-center gap-2">
-                      <span className="font-mono text-sm text-text-primary truncate">{sm.label}</span>
-                      {sm.source === "discovered" && (
-                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">API</span>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-text-secondary text-xs">{t("network.selectModels")} ({providerLabel})</label>
+                {pricingGuidance && (pricingGuidance.platformMinInput > 0 || pricingGuidance.avg7dInputPricePer1k != null) && (
+                  <span className="text-[10px] text-text-tertiary">
+                    {pricingGuidance.platformMinInput > 0 && `最低 ${pricingGuidance.platformMinInput}/${pricingGuidance.platformMinOutput}`}
+                    {pricingGuidance.platformMaxInput > 0 && ` · 最高 ${pricingGuidance.platformMaxInput}/${pricingGuidance.platformMaxOutput}`}
+                    {pricingGuidance.avg7dInputPricePer1k != null && ` · 7天均价 ${pricingGuidance.avg7dInputPricePer1k}/${pricingGuidance.avg7dOutputPricePer1k}`}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto">
+                {selectableModels.map((sm) => {
+                  const checked = selectedModels.has(sm.id);
+                  const pricing = modelPricing[sm.id];
+                  const defaults = guidanceDefaults[sm.id];
+                  return (
+                    <div
+                      key={sm.id}
+                      className={`flex items-center gap-3 rounded-[var(--radius-input)] border px-4 py-2.5 transition-colors ${
+                        checked ? "border-accent/40 bg-accent-bg" : "border-line bg-[rgba(16,21,34,0.4)] hover:border-line-strong"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleModel(sm.id)}
+                        className="accent-[var(--color-accent)] w-4 h-4 cursor-pointer"
+                      />
+                      <div className="flex-1 min-w-0 flex items-center gap-2">
+                        <span className="font-mono text-sm text-text-primary truncate">{sm.label}</span>
+                        {sm.source === "discovered" && (
+                          <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">API</span>
+                        )}
+                      </div>
+                      {/* Per-model pricing inputs (shown when checked) */}
+                      {checked && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] text-text-tertiary">xt/1K:</span>
+                          <input
+                            type="number"
+                            value={pricing?.input ?? ""}
+                            onChange={(e) => setModelPricing((prev) => ({ ...prev, [sm.id]: { ...prev[sm.id]!, input: e.target.value, output: prev[sm.id]?.output ?? "" } }))}
+                            placeholder={String(defaults?.input ?? "")}
+                            className="w-16 rounded border border-line px-1.5 py-1 text-[11px] text-text-primary font-mono focus:outline-none focus:border-accent"
+                            style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="text-[10px] text-text-tertiary">/</span>
+                          <input
+                            type="number"
+                            value={pricing?.output ?? ""}
+                            onChange={(e) => setModelPricing((prev) => ({ ...prev, [sm.id]: { input: prev[sm.id]?.input ?? "", output: e.target.value } }))}
+                            placeholder={String(defaults?.output ?? "")}
+                            className="w-16 rounded border border-line px-1.5 py-1 text-[11px] text-text-primary font-mono focus:outline-none focus:border-accent"
+                            style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
                       )}
                     </div>
-                  </label>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
