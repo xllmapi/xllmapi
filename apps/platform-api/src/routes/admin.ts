@@ -352,5 +352,25 @@ export async function handleAdminRoutes(
     return true;
   }
 
+  // DELETE /v1/admin/comments/:id — admin delete comment
+  const adminDeleteCommentMatch = req.method === "DELETE"
+    ? url.pathname.match(/^\/v1\/admin\/comments\/([^/]+)$/)
+    : null;
+  if (adminDeleteCommentMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const commentId = adminDeleteCommentMatch[1];
+    await platformService.adminDeleteComment(commentId);
+    const response = json(200, { requestId, ok: true });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   return false;
 }

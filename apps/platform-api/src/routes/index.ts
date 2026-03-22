@@ -6,5 +6,6 @@ export { handleUsageRoutes } from "./usage.js";
 export { handleNetworkRoutes } from "./network.js";
 export { handleNotificationRoutes } from "./notification.js";
 export { handleNodeRoutes } from "./node.js";
+export { handleMarketRoutes } from "./market.js";
 export { handleAdminRoutes } from "./admin.js";
 export { handlePublicRoutes } from "./public.js";

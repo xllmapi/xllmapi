@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 import type {
   CandidateOffering
 } from "@xllmapi/shared-types";
@@ -172,6 +174,9 @@ const validate_provider_connectivity_ = async (params: {
 };
 
 export const platformService = {
+  /** Direct access to the underlying repository (used by node-connection-manager, etc.) */
+  repo: platformRepository,
+
   listProviderCatalog() {
     return PROVIDER_PRESETS;
   },
@@ -687,5 +692,70 @@ export const platformService = {
   },
   async updateNodePreferences(userId: string, prefs: { allowDistributedNodes: boolean; trustMode: string; trustedSupplierIds: string[]; trustedOfferingIds: string[] }) {
     return platformRepository.upsertNodePreferences({ userId, ...prefs });
+  },
+
+  // Votes
+  async castVote(userId: string, offeringId: string, vote: 'upvote' | 'downvote') {
+    return platformRepository.castVote({ userId, offeringId, vote });
+  },
+  async removeVote(userId: string, offeringId: string) {
+    return platformRepository.removeVote({ userId, offeringId });
+  },
+  async getVoteSummary(offeringId: string, userId?: string) {
+    return platformRepository.getVoteSummary(offeringId, userId);
+  },
+
+  // Favorites
+  async addFavorite(userId: string, offeringId: string) {
+    return platformRepository.addFavorite({ userId, offeringId });
+  },
+  async removeFavorite(userId: string, offeringId: string) {
+    return platformRepository.removeFavorite({ userId, offeringId });
+  },
+  async listFavorites(userId: string) {
+    return platformRepository.listFavorites(userId);
+  },
+
+  // Comments
+  async addComment(userId: string, offeringId: string, content: string) {
+    const commentId = 'cmt_' + crypto.randomUUID();
+    await platformRepository.addComment({ commentId, userId, offeringId, content });
+    return { id: commentId };
+  },
+  async listComments(offeringId: string, page?: number, limit?: number) {
+    return platformRepository.listComments({ offeringId, limit: limit ?? 20, offset: ((page ?? 1) - 1) * (limit ?? 20) });
+  },
+  async deleteComment(userId: string, commentId: string) {
+    return platformRepository.deleteComment({ commentId, userId });
+  },
+  async adminDeleteComment(commentId: string) {
+    return platformRepository.deleteComment({ commentId });
+  },
+
+  // Connection Pool
+  async joinConnectionPool(userId: string, offeringId: string) {
+    return platformRepository.joinConnectionPool({ userId, offeringId });
+  },
+  async leaveConnectionPool(userId: string, offeringId: string) {
+    return platformRepository.leaveConnectionPool({ userId, offeringId });
+  },
+  async listConnectionPool(userId: string) {
+    return platformRepository.listConnectionPool(userId);
+  },
+
+  // Market
+  async listMarketOfferings(params: { page?: number; limit?: number; executionMode?: string; logicalModel?: string; sort?: string }) {
+    return platformRepository.listMarketOfferings(params);
+  },
+  async getMarketOffering(offeringId: string, userId?: string) {
+    return platformRepository.getMarketOffering({ offeringId, userId });
+  },
+
+  // User Profiles
+  async getPublicUserProfile(handle: string) {
+    return platformRepository.getPublicUserProfile(handle);
+  },
+  async listUserOfferings(handle: string) {
+    return platformRepository.listUserOfferings(handle);
   }
 };

@@ -19,9 +19,11 @@ import {
   handleNetworkRoutes,
   handleNotificationRoutes,
   handleNodeRoutes,
+  handleMarketRoutes,
   handleAdminRoutes,
   handlePublicRoutes
 } from "./routes/index.js";
+import { nodeConnectionManager } from "./core/node-connection-manager.js";
 
 const host = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 3000);
@@ -154,6 +156,7 @@ const server = createServer(async (req, res) => {
     if (await handleUserRoutes(req, res, url, requestId)) return;
     if (await handleChatRoutes(req, res, url, requestId)) return;
     if (await handleNetworkRoutes(req, res, url, requestId)) return;
+    if (await handleMarketRoutes(req, res, url, requestId)) return;
     if (await handlePublicRoutes(req, res, url, requestId)) return;
     if (await handleProviderRoutes(req, res, url, requestId)) return;
     if (await handleUsageRoutes(req, res, url, requestId)) return;
@@ -192,6 +195,15 @@ const server = createServer(async (req, res) => {
     });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
+  }
+});
+
+server.on('upgrade', (req, socket, head) => {
+  const upgradeUrl = new URL(req.url ?? '', `http://${req.headers.host}`);
+  if (upgradeUrl.pathname === '/ws/node') {
+    nodeConnectionManager.handleUpgrade(req, socket, head);
+  } else {
+    socket.destroy();
   }
 });
 
