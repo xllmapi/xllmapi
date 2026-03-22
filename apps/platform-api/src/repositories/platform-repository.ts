@@ -227,6 +227,60 @@ export type PlatformRepository = {
   listUserNotifications(userId: string): MaybePromise<any[]>;
   markNotificationRead(notificationId: string, userId: string): MaybePromise<any>;
   getUnreadCount(userId: string): MaybePromise<number>;
+
+  // --- Node Token Methods ---
+  createNodeToken(params: { userId: string; label: string }): MaybePromise<{ id: string; rawToken: string }>;
+  listNodeTokens(userId: string): MaybePromise<any[]>;
+  revokeNodeToken(params: { userId: string; tokenId: string }): MaybePromise<boolean>;
+  authenticateNodeToken(rawToken: string): MaybePromise<{ userId: string; tokenId: string; nodeTokenId: string } | null>;
+
+  // --- Node Instance Methods ---
+  upsertNode(params: { nodeId: string; userId: string; tokenId: string; ipAddress?: string; userAgent?: string; capabilities?: any[] }): MaybePromise<void>;
+  updateNodeStatus(params: { nodeId: string; status: string; lastHeartbeatAt?: string }): MaybePromise<void>;
+  updateNodeCapabilities(params: { nodeId: string; capabilities: any[] }): MaybePromise<void>;
+  listUserNodes(userId: string): MaybePromise<any[]>;
+  getNode(nodeId: string): MaybePromise<any | null>;
+  listOnlineNodes(): MaybePromise<any[]>;
+  setNodeOffline(nodeId: string): MaybePromise<void>;
+  incrementNodeStats(params: { nodeId: string; success: boolean }): MaybePromise<void>;
+
+  // --- Node Preferences ---
+  getNodePreferences(userId: string): MaybePromise<any | null>;
+  upsertNodePreferences(params: { userId: string; allowDistributedNodes: boolean; trustMode: string; trustedSupplierIds: string[]; trustedOfferingIds: string[] }): MaybePromise<void>;
+
+  // --- Node Offerings ---
+  createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; description?: string; maxConcurrency?: number }): MaybePromise<void>;
+  findOfferingsForModelWithNodes(params: { logicalModel: string; userId?: string }): MaybePromise<any[]>;
+  setNodeOfferingsAvailability(params: { nodeId: string; available: boolean }): MaybePromise<void>;
+
+  // --- Social: Votes ---
+  castVote(params: { userId: string; offeringId: string; vote: 'upvote' | 'downvote' }): MaybePromise<void>;
+  removeVote(params: { userId: string; offeringId: string }): MaybePromise<void>;
+  getVoteSummary(offeringId: string, userId?: string): MaybePromise<{ upvotes: number; downvotes: number; myVote: string | null }>;
+
+  // --- Social: Favorites ---
+  addFavorite(params: { userId: string; offeringId: string }): MaybePromise<void>;
+  removeFavorite(params: { userId: string; offeringId: string }): MaybePromise<void>;
+  listFavorites(userId: string): MaybePromise<any[]>;
+
+  // --- Social: Comments ---
+  addComment(params: { commentId: string; userId: string; offeringId: string; content: string }): MaybePromise<void>;
+  listComments(params: { offeringId: string; limit?: number; offset?: number }): MaybePromise<any[]>;
+  deleteComment(params: { commentId: string; userId?: string }): MaybePromise<boolean>;
+
+  // --- Connection Pool ---
+  joinConnectionPool(params: { userId: string; offeringId: string }): MaybePromise<void>;
+  leaveConnectionPool(params: { userId: string; offeringId: string }): MaybePromise<void>;
+  listConnectionPool(userId: string): MaybePromise<any[]>;
+
+  // --- Market ---
+  listMarketOfferings(params: { page?: number; limit?: number; executionMode?: string; logicalModel?: string; sort?: string }): MaybePromise<{ data: any[]; total: number }>;
+  getMarketOffering(params: { offeringId: string; userId?: string }): MaybePromise<any | null>;
+
+  // --- User Profile ---
+  getPublicUserProfile(handle: string): MaybePromise<any | null>;
+  listUserOfferings(handle: string): MaybePromise<any[]>;
+
   devUserApiKey: string;
   devAdminApiKey: string;
 };

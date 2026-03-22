@@ -330,6 +330,59 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return 0;
   },
 
+  // --- Node Token Methods (stubs) ---
+  createNodeToken() { return { id: '', rawToken: '' }; },
+  listNodeTokens() { return []; },
+  revokeNodeToken() { return false; },
+  authenticateNodeToken() { return null; },
+
+  // --- Node Instance Methods (stubs) ---
+  upsertNode() {},
+  updateNodeStatus() {},
+  updateNodeCapabilities() {},
+  listUserNodes() { return []; },
+  getNode() { return null; },
+  listOnlineNodes() { return []; },
+  setNodeOffline() {},
+  incrementNodeStats() {},
+
+  // --- Node Preferences (stubs) ---
+  getNodePreferences() { return null; },
+  upsertNodePreferences() {},
+
+  // --- Node Offerings (stubs) ---
+  createNodeOffering() {},
+  findOfferingsForModelWithNodes() { return []; },
+  setNodeOfferingsAvailability() {},
+
+  // --- Social: Votes (stubs) ---
+  castVote() {},
+  removeVote() {},
+  getVoteSummary() { return { upvotes: 0, downvotes: 0, myVote: null }; },
+
+  // --- Social: Favorites (stubs) ---
+  addFavorite() {},
+  removeFavorite() {},
+  listFavorites() { return []; },
+
+  // --- Social: Comments (stubs) ---
+  addComment() {},
+  listComments() { return []; },
+  deleteComment() { return false; },
+
+  // --- Connection Pool (stubs) ---
+  joinConnectionPool() {},
+  leaveConnectionPool() {},
+  listConnectionPool() { return []; },
+
+  // --- Market (stubs) ---
+  listMarketOfferings() { return { data: [], total: 0 }; },
+  getMarketOffering() { return null; },
+
+  // --- User Profile (stubs) ---
+  getPublicUserProfile() { return null; },
+  listUserOfferings() { return []; },
+
   devUserApiKey: DEV_USER_API_KEY,
   devAdminApiKey: DEV_ADMIN_API_KEY
 };

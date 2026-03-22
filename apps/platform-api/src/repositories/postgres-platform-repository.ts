@@ -2020,6 +2020,598 @@ export const postgresPlatformRepository: PlatformRepository = {
     return Number(result.rows[0]?.count ?? 0);
   },
 
+  // --- Node Token Methods ---
+
+  async createNodeToken(params: { userId: string; label: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const id = randomUUID();
+    const rawToken = `ntok_${randomUUID()}`;
+    const hashedToken = hashApiKey(rawToken);
+    await currentPool.query(`
+      INSERT INTO node_tokens (id, user_id, label, hashed_token, status, created_at)
+      VALUES ($1, $2, $3, $4, 'active', NOW())
+    `, [id, params.userId, params.label, hashedToken]);
+    return { id, rawToken };
+  },
+
+  async listNodeTokens(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        id,
+        user_id AS "userId",
+        label,
+        status,
+        created_at AS "createdAt",
+        last_used_at AS "lastUsedAt"
+      FROM node_tokens
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [userId]);
+    return result.rows;
+  },
+
+  async revokeNodeToken(params: { userId: string; tokenId: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      UPDATE node_tokens SET status = 'revoked'
+      WHERE id = $1 AND user_id = $2 AND status = 'active'
+    `, [params.tokenId, params.userId]);
+    return (result.rowCount ?? 0) > 0;
+  },
+
+  async authenticateNodeToken(rawToken: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const hashedToken = hashApiKey(rawToken);
+    const result = await currentPool.query(`
+      SELECT
+        id AS "nodeTokenId",
+        user_id AS "userId",
+        id AS "tokenId"
+      FROM node_tokens
+      WHERE hashed_token = $1 AND status = 'active'
+      LIMIT 1
+    `, [hashedToken]);
+    if (!result.rows[0]) return null;
+    await currentPool.query(`UPDATE node_tokens SET last_used_at = NOW() WHERE id = $1`, [result.rows[0].nodeTokenId]);
+    return result.rows[0];
+  },
+
+  // --- Node Instance Methods ---
+
+  async upsertNode(params: { nodeId: string; userId: string; tokenId: string; ipAddress?: string; userAgent?: string; capabilities?: any[] }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const caps = params.capabilities ? JSON.stringify(params.capabilities) : '[]';
+    await currentPool.query(`
+      INSERT INTO nodes (id, user_id, token_id, ip_address, user_agent, capabilities, status, last_heartbeat_at, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'online', NOW(), NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        ip_address = EXCLUDED.ip_address,
+        user_agent = EXCLUDED.user_agent,
+        capabilities = EXCLUDED.capabilities,
+        status = 'online',
+        last_heartbeat_at = NOW(),
+        updated_at = NOW()
+    `, [params.nodeId, params.userId, params.tokenId, params.ipAddress ?? null, params.userAgent ?? null, caps]);
+  },
+
+  async updateNodeStatus(params: { nodeId: string; status: string; lastHeartbeatAt?: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      UPDATE nodes SET status = $2, last_heartbeat_at = COALESCE($3::timestamptz, NOW()), updated_at = NOW()
+      WHERE id = $1
+    `, [params.nodeId, params.status, params.lastHeartbeatAt ?? null]);
+  },
+
+  async updateNodeCapabilities(params: { nodeId: string; capabilities: any[] }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      UPDATE nodes SET capabilities = $2::jsonb, updated_at = NOW()
+      WHERE id = $1
+    `, [params.nodeId, JSON.stringify(params.capabilities)]);
+  },
+
+  async listUserNodes(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        id,
+        user_id AS "userId",
+        token_id AS "tokenId",
+        ip_address AS "ipAddress",
+        user_agent AS "userAgent",
+        capabilities,
+        status,
+        last_heartbeat_at AS "lastHeartbeatAt",
+        total_requests AS "totalRequests",
+        failed_requests AS "failedRequests",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM nodes
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [userId]);
+    return result.rows;
+  },
+
+  async getNode(nodeId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        id,
+        user_id AS "userId",
+        token_id AS "tokenId",
+        ip_address AS "ipAddress",
+        user_agent AS "userAgent",
+        capabilities,
+        status,
+        last_heartbeat_at AS "lastHeartbeatAt",
+        total_requests AS "totalRequests",
+        failed_requests AS "failedRequests",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM nodes
+      WHERE id = $1
+      LIMIT 1
+    `, [nodeId]);
+    return result.rows[0] ?? null;
+  },
+
+  async listOnlineNodes() {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        id,
+        user_id AS "userId",
+        token_id AS "tokenId",
+        ip_address AS "ipAddress",
+        capabilities,
+        status,
+        last_heartbeat_at AS "lastHeartbeatAt",
+        total_requests AS "totalRequests",
+        failed_requests AS "failedRequests"
+      FROM nodes
+      WHERE status = 'online'
+      ORDER BY last_heartbeat_at DESC
+    `);
+    return result.rows;
+  },
+
+  async setNodeOffline(nodeId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      UPDATE nodes SET status = 'offline', updated_at = NOW() WHERE id = $1
+    `, [nodeId]);
+  },
+
+  async incrementNodeStats(params: { nodeId: string; success: boolean }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    if (params.success) {
+      await currentPool.query(`
+        UPDATE nodes SET total_requests = total_requests + 1, updated_at = NOW() WHERE id = $1
+      `, [params.nodeId]);
+    } else {
+      await currentPool.query(`
+        UPDATE nodes SET total_requests = total_requests + 1, failed_requests = failed_requests + 1, updated_at = NOW() WHERE id = $1
+      `, [params.nodeId]);
+    }
+  },
+
+  // --- Node Preferences ---
+
+  async getNodePreferences(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        user_id AS "userId",
+        allow_distributed_nodes AS "allowDistributedNodes",
+        trust_mode AS "trustMode",
+        trusted_supplier_ids AS "trustedSupplierIds",
+        trusted_offering_ids AS "trustedOfferingIds",
+        updated_at AS "updatedAt"
+      FROM user_node_preferences
+      WHERE user_id = $1
+      LIMIT 1
+    `, [userId]);
+    return result.rows[0] ?? null;
+  },
+
+  async upsertNodePreferences(params: { userId: string; allowDistributedNodes: boolean; trustMode: string; trustedSupplierIds: string[]; trustedOfferingIds: string[] }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO user_node_preferences (user_id, allow_distributed_nodes, trust_mode, trusted_supplier_ids, trusted_offering_ids, updated_at)
+      VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, NOW())
+      ON CONFLICT (user_id) DO UPDATE SET
+        allow_distributed_nodes = EXCLUDED.allow_distributed_nodes,
+        trust_mode = EXCLUDED.trust_mode,
+        trusted_supplier_ids = EXCLUDED.trusted_supplier_ids,
+        trusted_offering_ids = EXCLUDED.trusted_offering_ids,
+        updated_at = NOW()
+    `, [params.userId, params.allowDistributedNodes, params.trustMode, JSON.stringify(params.trustedSupplierIds), JSON.stringify(params.trustedOfferingIds)]);
+  },
+
+  // --- Node Offerings ---
+
+  async createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; description?: string; maxConcurrency?: number }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, execution_mode, node_id, description, max_concurrency, enabled, review_status, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'node', $8, $9, $10, true, 'approved', NOW())
+    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.nodeId, params.description ?? null, params.maxConcurrency ?? 1]);
+  },
+
+  async findOfferingsForModelWithNodes(params: { logicalModel: string; userId?: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        o.id,
+        o.owner_user_id AS "ownerUserId",
+        o.logical_model AS "logicalModel",
+        o.real_model AS "realModel",
+        o.pricing_mode AS "pricingMode",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.execution_mode AS "executionMode",
+        o.node_id AS "nodeId",
+        o.description,
+        o.max_concurrency AS "maxConcurrency",
+        n.status AS "nodeStatus",
+        n.last_heartbeat_at AS "nodeLastHeartbeatAt"
+      FROM offerings o
+      JOIN nodes n ON n.id = o.node_id
+      WHERE o.logical_model = $1
+        AND o.execution_mode = 'node'
+        AND o.enabled = true
+        AND o.review_status = 'approved'
+        AND n.status = 'online'
+      ORDER BY o.fixed_price_per_1k_input ASC
+    `, [params.logicalModel]);
+    return result.rows;
+  },
+
+  async setNodeOfferingsAvailability(params: { nodeId: string; available: boolean }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      UPDATE offerings SET enabled = $2 WHERE node_id = $1 AND execution_mode = 'node'
+    `, [params.nodeId, params.available]);
+  },
+
+  // --- Social: Votes ---
+
+  async castVote(params: { userId: string; offeringId: string; vote: 'upvote' | 'downvote' }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO offering_votes (user_id, offering_id, vote, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      ON CONFLICT (user_id, offering_id) DO UPDATE SET vote = $3, updated_at = NOW()
+    `, [params.userId, params.offeringId, params.vote]);
+  },
+
+  async removeVote(params: { userId: string; offeringId: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      DELETE FROM offering_votes WHERE user_id = $1 AND offering_id = $2
+    `, [params.userId, params.offeringId]);
+  },
+
+  async getVoteSummary(offeringId: string, userId?: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const countsResult = await currentPool.query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN vote = 'upvote' THEN 1 ELSE 0 END), 0)::int AS "upvotes",
+        COALESCE(SUM(CASE WHEN vote = 'downvote' THEN 1 ELSE 0 END), 0)::int AS "downvotes"
+      FROM offering_votes
+      WHERE offering_id = $1
+    `, [offeringId]);
+    let myVote: string | null = null;
+    if (userId) {
+      const myResult = await currentPool.query(`
+        SELECT vote FROM offering_votes WHERE user_id = $1 AND offering_id = $2 LIMIT 1
+      `, [userId, offeringId]);
+      myVote = myResult.rows[0]?.vote ?? null;
+    }
+    return {
+      upvotes: countsResult.rows[0]?.upvotes ?? 0,
+      downvotes: countsResult.rows[0]?.downvotes ?? 0,
+      myVote
+    };
+  },
+
+  // --- Social: Favorites ---
+
+  async addFavorite(params: { userId: string; offeringId: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO offering_favorites (user_id, offering_id, created_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (user_id, offering_id) DO NOTHING
+    `, [params.userId, params.offeringId]);
+  },
+
+  async removeFavorite(params: { userId: string; offeringId: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      DELETE FROM offering_favorites WHERE user_id = $1 AND offering_id = $2
+    `, [params.userId, params.offeringId]);
+  },
+
+  async listFavorites(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        f.offering_id AS "offeringId",
+        f.created_at AS "createdAt",
+        o.logical_model AS "logicalModel",
+        o.real_model AS "realModel",
+        o.owner_user_id AS "ownerUserId",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput"
+      FROM offering_favorites f
+      JOIN offerings o ON o.id = f.offering_id
+      WHERE f.user_id = $1
+      ORDER BY f.created_at DESC
+    `, [userId]);
+    return result.rows;
+  },
+
+  // --- Social: Comments ---
+
+  async addComment(params: { commentId: string; userId: string; offeringId: string; content: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO offering_comments (id, user_id, offering_id, content, created_at)
+      VALUES ($1, $2, $3, $4, NOW())
+    `, [params.commentId, params.userId, params.offeringId, params.content]);
+  },
+
+  async listComments(params: { offeringId: string; limit?: number; offset?: number }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const limit = params.limit ?? 50;
+    const offset = params.offset ?? 0;
+    const result = await currentPool.query(`
+      SELECT
+        c.id,
+        c.user_id AS "userId",
+        c.offering_id AS "offeringId",
+        c.content,
+        c.created_at AS "createdAt",
+        u.display_name AS "displayName",
+        u.handle,
+        u.avatar_url AS "avatarUrl"
+      FROM offering_comments c
+      JOIN users u ON u.id = c.user_id
+      WHERE c.offering_id = $1
+      ORDER BY c.created_at DESC
+      LIMIT $2 OFFSET $3
+    `, [params.offeringId, limit, offset]);
+    return result.rows;
+  },
+
+  async deleteComment(params: { commentId: string; userId?: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    let result;
+    if (params.userId) {
+      result = await currentPool.query(`
+        DELETE FROM offering_comments WHERE id = $1 AND user_id = $2
+      `, [params.commentId, params.userId]);
+    } else {
+      result = await currentPool.query(`
+        DELETE FROM offering_comments WHERE id = $1
+      `, [params.commentId]);
+    }
+    return (result.rowCount ?? 0) > 0;
+  },
+
+  // --- Connection Pool ---
+
+  async joinConnectionPool(params: { userId: string; offeringId: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO user_connection_pool (user_id, offering_id, joined_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (user_id, offering_id) DO NOTHING
+    `, [params.userId, params.offeringId]);
+  },
+
+  async leaveConnectionPool(params: { userId: string; offeringId: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      DELETE FROM user_connection_pool WHERE user_id = $1 AND offering_id = $2
+    `, [params.userId, params.offeringId]);
+  },
+
+  async listConnectionPool(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        cp.offering_id AS "offeringId",
+        cp.joined_at AS "joinedAt",
+        o.logical_model AS "logicalModel",
+        o.real_model AS "realModel",
+        o.owner_user_id AS "ownerUserId",
+        o.execution_mode AS "executionMode",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput"
+      FROM user_connection_pool cp
+      JOIN offerings o ON o.id = cp.offering_id
+      WHERE cp.user_id = $1
+      ORDER BY cp.joined_at DESC
+    `, [userId]);
+    return result.rows;
+  },
+
+  // --- Market ---
+
+  async listMarketOfferings(params: { page?: number; limit?: number; executionMode?: string; logicalModel?: string; sort?: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const page = params.page ?? 1;
+    const limit = params.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = [`o.enabled = true`, `o.review_status = 'approved'`];
+    const values: any[] = [];
+    let paramIdx = 1;
+
+    if (params.executionMode) {
+      conditions.push(`o.execution_mode = $${paramIdx}`);
+      values.push(params.executionMode);
+      paramIdx++;
+    }
+    if (params.logicalModel) {
+      conditions.push(`o.logical_model = $${paramIdx}`);
+      values.push(params.logicalModel);
+      paramIdx++;
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    let orderBy = 'o.created_at DESC';
+    if (params.sort === 'price_asc') orderBy = 'o.fixed_price_per_1k_input ASC';
+    else if (params.sort === 'price_desc') orderBy = 'o.fixed_price_per_1k_input DESC';
+    else if (params.sort === 'votes') orderBy = '"upvotes" DESC';
+
+    const countResult = await currentPool.query(`
+      SELECT COUNT(*)::int AS "total" FROM offerings o WHERE ${whereClause}
+    `, values);
+
+    const dataResult = await currentPool.query(`
+      SELECT
+        o.id,
+        o.owner_user_id AS "ownerUserId",
+        o.logical_model AS "logicalModel",
+        o.real_model AS "realModel",
+        o.pricing_mode AS "pricingMode",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.execution_mode AS "executionMode",
+        o.node_id AS "nodeId",
+        o.description,
+        o.created_at AS "createdAt",
+        u.display_name AS "ownerDisplayName",
+        u.handle AS "ownerHandle",
+        COALESCE(v.up, 0)::int AS "upvotes",
+        COALESCE(v.down, 0)::int AS "downvotes",
+        COALESCE(fav.cnt, 0)::int AS "favoriteCount"
+      FROM offerings o
+      JOIN users u ON u.id = o.owner_user_id
+      LEFT JOIN (
+        SELECT offering_id,
+          SUM(CASE WHEN vote = 'upvote' THEN 1 ELSE 0 END) AS up,
+          SUM(CASE WHEN vote = 'downvote' THEN 1 ELSE 0 END) AS down
+        FROM offering_votes GROUP BY offering_id
+      ) v ON v.offering_id = o.id
+      LEFT JOIN (
+        SELECT offering_id, COUNT(*) AS cnt FROM offering_favorites GROUP BY offering_id
+      ) fav ON fav.offering_id = o.id
+      WHERE ${whereClause}
+      ORDER BY ${orderBy}
+      LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+    `, [...values, limit, offset]);
+
+    return { data: dataResult.rows, total: countResult.rows[0]?.total ?? 0 };
+  },
+
+  async getMarketOffering(params: { offeringId: string; userId?: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        o.id,
+        o.owner_user_id AS "ownerUserId",
+        o.logical_model AS "logicalModel",
+        o.real_model AS "realModel",
+        o.pricing_mode AS "pricingMode",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.execution_mode AS "executionMode",
+        o.node_id AS "nodeId",
+        o.description,
+        o.created_at AS "createdAt",
+        u.display_name AS "ownerDisplayName",
+        u.handle AS "ownerHandle"
+      FROM offerings o
+      JOIN users u ON u.id = o.owner_user_id
+      WHERE o.id = $1 AND o.enabled = true AND o.review_status = 'approved'
+      LIMIT 1
+    `, [params.offeringId]);
+    if (!result.rows[0]) return null;
+
+    const offering = result.rows[0];
+    const voteSummary = await this.getVoteSummary(params.offeringId, params.userId);
+    return { ...offering, ...voteSummary };
+  },
+
+  // --- User Profile ---
+
+  async getPublicUserProfile(handle: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        u.id,
+        u.display_name AS "displayName",
+        u.handle,
+        u.avatar_url AS "avatarUrl",
+        u.created_at AS "createdAt"
+      FROM users u
+      WHERE u.handle = $1
+      LIMIT 1
+    `, [handle]);
+    return result.rows[0] ?? null;
+  },
+
+  async listUserOfferings(handle: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        o.id,
+        o.logical_model AS "logicalModel",
+        o.real_model AS "realModel",
+        o.pricing_mode AS "pricingMode",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.execution_mode AS "executionMode",
+        o.description,
+        o.created_at AS "createdAt"
+      FROM offerings o
+      JOIN users u ON u.id = o.owner_user_id
+      WHERE u.handle = $1 AND o.enabled = true AND o.review_status = 'approved'
+      ORDER BY o.created_at DESC
+    `, [handle]);
+    return result.rows;
+  },
+
   devUserApiKey: DEV_USER_API_KEY,
   devAdminApiKey: DEV_ADMIN_API_KEY
 };
