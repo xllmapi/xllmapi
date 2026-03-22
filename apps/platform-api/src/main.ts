@@ -4,10 +4,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve } from "node:path";
 
 import {
-  type CoreChatExecuteResponse,
   type PublicChatCompletionsRequest,
   type PublicChatCompletionsResponse,
-  type StreamCompletedEvent,
   exampleRouteExecuteRequest
 } from "@xllmapi/shared-types";
 import { DEV_ADMIN_API_KEY, DEV_USER_API_KEY } from "./constants.js";
@@ -15,18 +13,13 @@ import { cacheService } from "./cache.js";
 import { config } from "./config.js";
 import { metricsService } from "./metrics.js";
 import { platformService } from "./services/platform-service.js";
+import { executeStreamingRequest, executeRequest } from "./core/provider-executor.js";
 
 const host = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 3000);
-const coreBaseUrl = process.env.CORE_BASE_URL ?? "http://127.0.0.1:4001";
 const webDistRoot = resolve(process.cwd(), "apps/web/dist");
 const webLegacyRoot = resolve(process.cwd(), "apps/web/_legacy");
 const webRoot = existsSync(webDistRoot) ? webDistRoot : webLegacyRoot;
-
-type SseEvent = {
-  event: string;
-  data: string;
-};
 
 type CreateProviderCredentialBody = {
   providerId?: string;
@@ -165,40 +158,6 @@ const read_json = async <T>(req: IncomingMessage): Promise<T> => {
   return JSON.parse(raw) as T;
 };
 
-const create_sse_parser_ = (onEvent: (event: SseEvent) => void) => {
-  let buffer = "";
-
-  return (chunkText: string) => {
-    buffer += chunkText;
-
-    while (true) {
-      const boundary = buffer.indexOf("\n\n");
-      if (boundary === -1) {
-        break;
-      }
-
-      const rawEvent = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-
-      let eventName = "message";
-      const dataLines: string[] = [];
-
-      for (const line of rawEvent.split("\n")) {
-        if (line.startsWith("event:")) {
-          eventName = line.slice("event:".length).trim();
-        } else if (line.startsWith("data:")) {
-          dataLines.push(line.slice("data:".length).trimStart());
-        }
-      }
-
-      onEvent({
-        event: eventName,
-        data: dataLines.join("\n")
-      });
-    }
-  };
-};
-
 const match_id_route_ = (pathname: string, prefix: string) => {
   if (!pathname.startsWith(prefix)) {
     return null;
@@ -268,37 +227,6 @@ const read_static_file_ = (pathname: string) => {
     content: readFileSync(target)
   };
 };
-
-const map_public_response = (
-  model: string,
-  response: CoreChatExecuteResponse
-): PublicChatCompletionsResponse => ({
-  id: response.executionId,
-  object: "chat.completion",
-  created: Math.floor(Date.now() / 1000),
-  model,
-  choices: [
-    {
-      index: 0,
-      message: {
-        role: "assistant",
-        content: response.outputText
-      },
-      finish_reason: "stop"
-    }
-  ],
-  usage: {
-    prompt_tokens: response.usage.inputTokens,
-    completion_tokens: response.usage.outputTokens,
-    total_tokens: response.usage.totalTokens
-  },
-  route: {
-    offering_id: response.chosenOfferingId,
-    provider: response.provider,
-    real_model: response.realModel,
-    fallback_used: response.fallbackUsed
-  }
-});
 
 const unauthorized_ = (requestId: string) =>
   json(401, {
@@ -1071,26 +999,7 @@ const server = createServer(async (req, res) => {
           { role: "user", content: body.content.trim() }
         ]
       };
-      const coreRequest = await platformService.buildCoreRequest(requestId, auth.userId, mappedBody, candidateOfferings);
-      coreRequest.stream = true;
-      console.log(`[chat-stream] requestId=${requestId} candidateCount=${candidateOfferings.length} candidateIds=${candidateOfferings.map(c => c.offeringId).join(",")}`);
-      console.log(`[chat-stream] candidates:`, candidateOfferings.map(c => ({ id: c.offeringId, owner: c.ownerUserId, provider: c.providerType, realModel: c.realModel, hasSecret: !!(c.encryptedSecret), hasEnvName: !!(c.apiKeyEnvName), baseUrl: c.baseUrl })));
-
-      const coreResponse = await fetch(`${coreBaseUrl}/internal/core/route-execute/chat-stream`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(coreRequest)
-      });
-      console.log(`[chat-stream] coreRequest candidateOfferings:`, JSON.stringify(coreRequest.candidateOfferings?.map((c: any) => ({ id: c.offeringId, provider: c.providerType, baseUrl: c.baseUrl, hasSecret: !!c.encryptedSecret, envName: c.apiKeyEnvName })) ?? []));
-      console.log(`[chat-stream] coreResponse status=${coreResponse.status} hasBody=${!!coreResponse.body}`);
-      if (!coreResponse.ok || !coreResponse.body) {
-        const errorBody = (await coreResponse.text()) || "";
-        console.log(`[chat-stream] core ERROR: ${errorBody}`);
-        const response = json(502, { error: { message: `core returned ${coreResponse.status}`, details: errorBody, requestId } });
-        res.writeHead(response.statusCode, response.headers);
-        res.end(response.payload);
-        return;
-      }
+      console.log(`[chat-stream] requestId=${requestId} candidateCount=${candidateOfferings.length}`);
 
       res.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
@@ -1098,92 +1007,48 @@ const server = createServer(async (req, res) => {
         connection: "keep-alive"
       });
 
-      const decoder = new TextDecoder();
-      let completedEvent: StreamCompletedEvent | null = null;
-      let assistantContent = "";
-      const parseSse = create_sse_parser_((event) => {
-        if (event.event === "completed") {
-          completedEvent = JSON.parse(event.data) as StreamCompletedEvent;
-          return;
-        }
+      try {
+        const result = await executeStreamingRequest({
+          requestId,
+          offerings: candidateOfferings,
+          messages: mappedBody.messages,
+          temperature: mappedBody.temperature,
+          maxTokens: mappedBody.max_tokens,
+          onSseWrite: (chunk) => { res.write(chunk); }
+        });
+
+        console.log(`[chat-stream] completed offering=${result.chosenOffering.offeringId} usage=${JSON.stringify(result.usage)}`);
+
         try {
-          const payload = JSON.parse(event.data);
-          // Support both core-router format {"delta":"..."} and OpenAI format
-          const coreRouterDelta = payload?.delta;
-          const openaiDelta = payload?.choices?.[0]?.delta?.content;
-          const msgContent = payload?.choices?.[0]?.message?.content;
-          if (typeof coreRouterDelta === "string") {
-            assistantContent += coreRouterDelta;
-          } else if (typeof openaiDelta === "string") {
-            assistantContent += openaiDelta;
-          } else if (typeof msgContent === "string") {
-            assistantContent += msgContent;
-          }
-        } catch {
-          // passthrough payload may not be json chunk
-        }
-      });
-
-      let rawSseDebug = "";
-      for await (const chunk of coreResponse.body as AsyncIterable<Uint8Array>) {
-        const textChunk = decoder.decode(chunk, { stream: true });
-        rawSseDebug += textChunk;
-        parseSse(textChunk);
-        res.write(textChunk);
-      }
-      const finalChunk = decoder.decode();
-      if (finalChunk) {
-        rawSseDebug += finalChunk;
-        parseSse(finalChunk);
-        res.write(finalChunk);
-      }
-      if (!completedEvent) {
-        console.log(`[chat-stream] RAW SSE (first 2000 chars):`, rawSseDebug.slice(0, 2000));
-      }
-
-      const settlementEvent = completedEvent as StreamCompletedEvent | null;
-      console.log(`[chat-stream] requestId=${requestId} completedEvent=${settlementEvent ? "YES" : "NO"} assistantContentLen=${assistantContent.length}`);
-      if (settlementEvent) {
-        console.log(`[chat-stream] settlement: offering=${settlementEvent.chosenOfferingId} provider=${settlementEvent.provider} usage=${JSON.stringify(settlementEvent.usage)}`);
-        const settledOffering = candidateOfferings.find((item) => item.offeringId === settlementEvent.chosenOfferingId);
-        console.log(`[chat-stream] settledOffering=${settledOffering ? `found(owner=${settledOffering.ownerUserId}, inputPrice=${settledOffering.fixedPricePer1kInput}, outputPrice=${settledOffering.fixedPricePer1kOutput})` : "NOT FOUND"} candidateCount=${candidateOfferings.length} candidateIds=${candidateOfferings.map(c => c.offeringId).join(",")}`);
-        if (settledOffering) {
-          try {
-            await platformService.recordChatSettlement({
-              requestId,
-              requesterUserId: auth.userId,
-              supplierUserId: settledOffering.ownerUserId,
-              logicalModel,
-              offeringId: settlementEvent.chosenOfferingId,
-              provider: settlementEvent.provider,
-              realModel: settlementEvent.realModel,
-              inputTokens: settlementEvent.usage.inputTokens,
-              outputTokens: settlementEvent.usage.outputTokens,
-              totalTokens: settlementEvent.usage.totalTokens,
-              fixedPricePer1kInput: settledOffering.fixedPricePer1kInput ?? 0,
-              fixedPricePer1kOutput: settledOffering.fixedPricePer1kOutput ?? 0
-            });
-            console.log(`[chat-stream] settlement RECORDED for user=${auth.userId}`);
-          } catch (err) {
-            console.error(`[chat-stream] settlement FAILED:`, err);
-          }
-          await platformService.appendChatMessage({
-            id: `msg_${randomUUID().replaceAll("-", "")}`,
-            conversationId,
-            role: "assistant",
-            content: assistantContent || "",
-            requestId
+          await platformService.recordChatSettlement({
+            requestId,
+            requesterUserId: auth.userId,
+            supplierUserId: result.chosenOffering.ownerUserId,
+            logicalModel,
+            offeringId: result.chosenOffering.offeringId,
+            provider: result.chosenOffering.providerType,
+            realModel: result.chosenOffering.realModel,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            totalTokens: result.usage.totalTokens,
+            fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
+            fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0
           });
+        } catch (err) {
+          console.error(`[chat-stream] settlement FAILED:`, err);
         }
-      } else {
-        // No completed event - still save assistant message
-        console.log(`[chat-stream] NO completed event, saving assistant message anyway`);
+
         await platformService.appendChatMessage({
           id: `msg_${randomUUID().replaceAll("-", "")}`,
           conversationId,
           role: "assistant",
-          content: assistantContent || ""
+          content: result.content || "",
+          requestId
         });
+      } catch (err) {
+        console.error(`[chat-stream] provider execution failed:`, err);
+        const errorMsg = err instanceof Error ? err.message : "provider execution failed";
+        res.write(`event: error\ndata: ${JSON.stringify({ error: errorMsg })}\n\n`);
       }
 
       res.end();
@@ -1323,142 +1188,111 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      const coreRequest = await platformService.buildCoreRequest(requestId, requesterUserId, body, candidateOfferings);
-
       if (body.stream) {
-        coreRequest.stream = true;
-
-        const coreResponse = await fetch(`${coreBaseUrl}/internal/core/route-execute/chat-stream`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json"
-          },
-          body: JSON.stringify(coreRequest)
-        });
-
-        if (!coreResponse.ok || !coreResponse.body) {
-          metricsService.increment("coreErrors");
-          const coreErrorBody = (await coreResponse.text()) || "";
-          const response = json(502, {
-            error: {
-              message: `core returned ${coreResponse.status}`,
-              details: coreErrorBody,
-              requestId
-            }
-          });
-          res.writeHead(response.statusCode, response.headers);
-          res.end(response.payload);
-          return;
-        }
-
         res.writeHead(200, {
           "content-type": "text/event-stream; charset=utf-8",
           "cache-control": "no-cache",
           connection: "keep-alive"
         });
 
-        const decoder = new TextDecoder();
-        let completedEvent: StreamCompletedEvent | null = null;
-        const parseSse = create_sse_parser_((event) => {
-          if (event.event === "completed") {
-            completedEvent = JSON.parse(event.data) as StreamCompletedEvent;
-          }
-        });
+        try {
+          const result = await executeStreamingRequest({
+            requestId,
+            offerings: candidateOfferings,
+            messages: body.messages,
+            temperature: body.temperature,
+            maxTokens: body.max_tokens,
+            onSseWrite: (chunk) => { res.write(chunk); }
+          });
 
-        for await (const chunk of coreResponse.body as AsyncIterable<Uint8Array>) {
-          const textChunk = decoder.decode(chunk, { stream: true });
-          parseSse(textChunk);
-          res.write(textChunk);
-        }
-
-        const finalChunk = decoder.decode();
-        if (finalChunk) {
-          parseSse(finalChunk);
-          res.write(finalChunk);
-        }
-
-        const settlementEvent = completedEvent as StreamCompletedEvent | null;
-        if (settlementEvent !== null) {
-          const settledOffering = candidateOfferings.find((item) => item.offeringId === settlementEvent.chosenOfferingId);
-          if (!settledOffering) {
-            throw new Error(`chosen offering ${settlementEvent.chosenOfferingId} missing from candidate set`);
-          }
           await platformService.recordChatSettlement({
             requestId,
             requesterUserId,
-            supplierUserId: settledOffering.ownerUserId,
+            supplierUserId: result.chosenOffering.ownerUserId,
             logicalModel: body.model,
             idempotencyKey,
-            offeringId: settlementEvent.chosenOfferingId,
-            provider: settlementEvent.provider,
-            realModel: settlementEvent.realModel,
-            inputTokens: settlementEvent.usage.inputTokens,
-            outputTokens: settlementEvent.usage.outputTokens,
-            totalTokens: settlementEvent.usage.totalTokens,
-            fixedPricePer1kInput: settledOffering.fixedPricePer1kInput ?? 0,
-            fixedPricePer1kOutput: settledOffering.fixedPricePer1kOutput ?? 0
+            offeringId: result.chosenOffering.offeringId,
+            provider: result.chosenOffering.providerType,
+            realModel: result.chosenOffering.realModel,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            totalTokens: result.usage.totalTokens,
+            fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
+            fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0
           });
+        } catch (err) {
+          console.error(`[chat/completions stream] error:`, err);
+          metricsService.increment("coreErrors");
         }
 
         res.end();
         return;
       }
 
-      const coreResponse = await fetch(`${coreBaseUrl}/internal/core/route-execute/chat`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(coreRequest)
-      });
-
-      if (!coreResponse.ok) {
-        metricsService.increment("coreErrors");
-        const coreErrorBody = (await coreResponse.text()) || "";
-        const response = json(502, {
-          error: {
-            message: `core returned ${coreResponse.status}`,
-            details: coreErrorBody,
-            requestId
-          }
+      try {
+        const result = await executeRequest({
+          requestId,
+          offerings: candidateOfferings,
+          messages: body.messages,
+          temperature: body.temperature,
+          maxTokens: body.max_tokens
         });
+
+        await platformService.recordChatSettlement({
+          requestId,
+          requesterUserId,
+          supplierUserId: result.chosenOffering.ownerUserId,
+          logicalModel: body.model,
+          idempotencyKey,
+          offeringId: result.chosenOffering.offeringId,
+          provider: result.chosenOffering.providerType,
+          realModel: result.chosenOffering.realModel,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
+          fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0
+        });
+
+        const publicResponse: PublicChatCompletionsResponse = {
+          id: `exec_${requestId}`,
+          object: "chat.completion",
+          created: Math.floor(Date.now() / 1000),
+          model: body.model,
+          choices: [{
+            index: 0,
+            message: { role: "assistant", content: result.content },
+            finish_reason: "stop"
+          }],
+          usage: {
+            prompt_tokens: result.usage.inputTokens,
+            completion_tokens: result.usage.outputTokens,
+            total_tokens: result.usage.totalTokens
+          },
+          route: {
+            offering_id: result.chosenOffering.offeringId,
+            provider: result.chosenOffering.providerType,
+            real_model: result.chosenOffering.realModel,
+            fallback_used: false
+          }
+        };
+
+        const response = json(200, publicResponse);
+        if (idempotencyKey) {
+          await cacheService.setCachedResponse({
+            key: `${requesterUserId}:${idempotencyKey}`,
+            value: response.payload
+          });
+        }
         res.writeHead(response.statusCode, response.headers);
         res.end(response.payload);
-        return;
+      } catch (err) {
+        metricsService.increment("coreErrors");
+        const errorMsg = err instanceof Error ? err.message : "provider execution failed";
+        const response = json(502, { error: { message: errorMsg, requestId } });
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
       }
-
-      const result = (await coreResponse.json()) as CoreChatExecuteResponse;
-      const settledOffering = candidateOfferings.find((item) => item.offeringId === result.chosenOfferingId);
-      if (!settledOffering) {
-        throw new Error(`chosen offering ${result.chosenOfferingId} missing from candidate set`);
-      }
-      const publicResponse = map_public_response(body.model, result);
-      await platformService.recordChatSettlement({
-        requestId,
-        requesterUserId,
-        supplierUserId: settledOffering.ownerUserId,
-        logicalModel: body.model,
-        idempotencyKey,
-        offeringId: result.chosenOfferingId,
-        provider: result.provider,
-        realModel: result.realModel,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
-        totalTokens: result.usage.totalTokens,
-        fixedPricePer1kInput: settledOffering.fixedPricePer1kInput ?? 0,
-        fixedPricePer1kOutput: settledOffering.fixedPricePer1kOutput ?? 0,
-        responseBody: publicResponse
-      });
-
-      const response = json(200, publicResponse);
-      if (idempotencyKey) {
-        await cacheService.setCachedResponse({
-          key: `${requesterUserId}:${idempotencyKey}`,
-          value: response.payload
-        });
-      }
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
       return;
     }
 
@@ -1511,56 +1345,50 @@ const server = createServer(async (req, res) => {
         return;
       }
 
-      const coreRequest = await platformService.buildCoreRequest(requestId, auth.userId, mappedBody, candidateOfferings);
-      const coreResponse = await fetch(`${coreBaseUrl}/internal/core/route-execute/chat`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(coreRequest)
-      });
-      if (!coreResponse.ok) {
-        const response = json(502, { error: { message: `core returned ${coreResponse.status}`, requestId } });
+      try {
+        const result = await executeRequest({
+          requestId,
+          offerings: candidateOfferings,
+          messages: mappedBody.messages,
+          temperature: mappedBody.temperature,
+          maxTokens: mappedBody.max_tokens
+        });
+
+        await platformService.recordChatSettlement({
+          requestId,
+          requesterUserId: auth.userId,
+          supplierUserId: result.chosenOffering.ownerUserId,
+          logicalModel: mappedBody.model,
+          offeringId: result.chosenOffering.offeringId,
+          provider: result.chosenOffering.providerType,
+          realModel: result.chosenOffering.realModel,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
+          fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0
+        });
+
+        const response = json(200, {
+          id: `exec_${requestId}`,
+          type: "message",
+          role: "assistant",
+          model: mappedBody.model,
+          content: [{ type: "text", text: result.content }],
+          stop_reason: "end_turn",
+          usage: {
+            input_tokens: result.usage.inputTokens,
+            output_tokens: result.usage.outputTokens
+          }
+        });
         res.writeHead(response.statusCode, response.headers);
         res.end(response.payload);
-        return;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : "provider execution failed";
+        const response = json(502, { error: { message: errorMsg, requestId } });
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
       }
-      const result = (await coreResponse.json()) as CoreChatExecuteResponse;
-      const settledOffering = candidateOfferings.find((item) => item.offeringId === result.chosenOfferingId);
-      if (!settledOffering) {
-        throw new Error(`chosen offering ${result.chosenOfferingId} missing from candidate set`);
-      }
-      await platformService.recordChatSettlement({
-        requestId,
-        requesterUserId: auth.userId,
-        supplierUserId: settledOffering.ownerUserId,
-        logicalModel: mappedBody.model,
-        offeringId: result.chosenOfferingId,
-        provider: result.provider,
-        realModel: result.realModel,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
-        totalTokens: result.usage.totalTokens,
-        fixedPricePer1kInput: settledOffering.fixedPricePer1kInput ?? 0,
-        fixedPricePer1kOutput: settledOffering.fixedPricePer1kOutput ?? 0
-      });
-      const response = json(200, {
-        id: result.executionId,
-        type: "message",
-        role: "assistant",
-        model: mappedBody.model,
-        content: [
-          {
-            type: "text",
-            text: result.outputText
-          }
-        ],
-        stop_reason: "end_turn",
-        usage: {
-          input_tokens: result.usage.inputTokens,
-          output_tokens: result.usage.outputTokens
-        }
-      });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
       return;
     }
 
@@ -1574,12 +1402,16 @@ const server = createServer(async (req, res) => {
         return;
       }
 
+      const balance = await platformService.getWallet(auth.userId);
       const response = json(200, {
-        userId: auth.userId,
-        apiKeyId: "apiKeyId" in auth ? auth.apiKeyId : null,
-        label: "label" in auth ? auth.label : "session",
-        balance: await platformService.getWallet(auth.userId),
-        unit: "token_credit"
+        requestId,
+        data: {
+          userId: auth.userId,
+          apiKeyId: "apiKeyId" in auth ? auth.apiKeyId : null,
+          label: "label" in auth ? auth.label : "session",
+          balance,
+          unit: "token_credit"
+        }
       });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
@@ -2152,6 +1984,58 @@ const server = createServer(async (req, res) => {
         return;
       }
       const response = json(200, { requestId, data: await platformService.getConsumptionUsage(auth.userId) });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/usage/consumption/recent") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const days = Math.min(Number(url.searchParams.get("days") ?? 30), 365);
+      const limit = Math.min(Number(url.searchParams.get("limit") ?? 500), 2000);
+      const response = json(200, { requestId, data: await platformService.getConsumptionRecent(auth.userId, days, limit) });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/usage/consumption/daily") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const year = Number(url.searchParams.get("year") ?? new Date().getFullYear());
+      const response = json(200, { requestId, data: await platformService.getConsumptionDaily(auth.userId, year) });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/usage/consumption/by-date") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const date = url.searchParams.get("date") ?? "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const response = json(400, { error: { message: "date parameter required (YYYY-MM-DD)", requestId } });
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return;
+      }
+      const response = json(200, { requestId, data: await platformService.getConsumptionByDate(auth.userId, date) });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return;

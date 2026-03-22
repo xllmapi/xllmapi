@@ -93,6 +93,9 @@ export type PlatformRepository = {
   getPublicSupplierOfferings(handle: string): MaybePromise<PublicSupplierOffering[]>;
   getSupplyUsage(userId: string): MaybePromise<any>;
   getConsumptionUsage(userId: string): MaybePromise<any>;
+  getConsumptionDaily(userId: string, year: number): MaybePromise<any[]>;
+  getConsumptionByDate(userId: string, date: string): MaybePromise<any[]>;
+  getConsumptionRecent(userId: string, days?: number, limit?: number): MaybePromise<any[]>;
   getAdminUsageSummary(): MaybePromise<any>;
   getWallet(userId: string): MaybePromise<number>;
   listModels(): MaybePromise<PublicMarketModel[]>;

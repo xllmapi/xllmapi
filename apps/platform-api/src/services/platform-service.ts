@@ -294,6 +294,18 @@ export const platformService = {
     return platformRepository.getConsumptionUsage(userId);
   },
 
+  getConsumptionDaily(userId: string, year: number) {
+    return platformRepository.getConsumptionDaily(userId, year);
+  },
+
+  getConsumptionByDate(userId: string, date: string) {
+    return platformRepository.getConsumptionByDate(userId, date);
+  },
+
+  getConsumptionRecent(userId: string, days?: number, limit?: number) {
+    return platformRepository.getConsumptionRecent(userId, days, limit);
+  },
+
   getAdminUsageSummary() {
     return platformRepository.getAdminUsageSummary();
   },

@@ -21,6 +21,9 @@ import {
   get_public_supplier_offerings,
   get_public_supplier_profile,
   get_consumption_usage,
+  get_consumption_daily,
+  get_consumption_by_date,
+  get_consumption_recent,
   get_supply_usage,
   list_offerings_for_model,
   get_provider_credential_by_id,
@@ -142,6 +145,18 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   getConsumptionUsage(userId) {
     return get_consumption_usage(userId);
+  },
+
+  getConsumptionDaily(userId, year) {
+    return get_consumption_daily(userId, year);
+  },
+
+  getConsumptionByDate(userId, date) {
+    return get_consumption_by_date(userId, date);
+  },
+
+  getConsumptionRecent(userId, days, limit) {
+    return get_consumption_recent(userId, days, limit);
   },
 
   getAdminUsageSummary() {

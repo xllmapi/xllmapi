@@ -990,6 +990,66 @@ export const postgresPlatformRepository: PlatformRepository = {
     return { summary: summary.rows[0], items: items.rows };
   },
 
+  async getConsumptionDaily(userId, year) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const startDate = `${year}-01-01`;
+    const endDate = `${year + 1}-01-01`;
+    const result = await currentPool.query(`
+      SELECT
+        SUBSTRING(created_at::text FROM 1 FOR 10) AS "date",
+        COALESCE(SUM(total_tokens), 0)::text AS "totalTokens",
+        COUNT(id)::text AS "requestCount"
+      FROM api_requests
+      WHERE requester_user_id = $1
+        AND created_at >= $2 AND created_at < $3
+      GROUP BY SUBSTRING(created_at::text FROM 1 FOR 10)
+      ORDER BY "date" ASC
+    `, [userId, startDate, endDate]);
+    return result.rows;
+  },
+
+  async getConsumptionByDate(userId, date) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        logical_model AS "logicalModel",
+        COUNT(id)::text AS "requestCount",
+        COALESCE(SUM(input_tokens), 0)::text AS "inputTokens",
+        COALESCE(SUM(output_tokens), 0)::text AS "outputTokens",
+        COALESCE(SUM(total_tokens), 0)::text AS "totalTokens"
+      FROM api_requests
+      WHERE requester_user_id = $1
+        AND SUBSTRING(created_at::text FROM 1 FOR 10) = $2
+      GROUP BY logical_model
+      ORDER BY COALESCE(SUM(total_tokens), 0) DESC
+    `, [userId, date]);
+    return result.rows;
+  },
+
+  async getConsumptionRecent(userId, days = 30, limit = 500) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        id AS "requestId",
+        logical_model AS "logicalModel",
+        provider,
+        real_model AS "realModel",
+        LEAST(input_tokens, 2147483647)::text AS "inputTokens",
+        LEAST(output_tokens, 2147483647)::text AS "outputTokens",
+        LEAST(total_tokens, 2147483647)::text AS "totalTokens",
+        created_at::text AS "createdAt"
+      FROM api_requests
+      WHERE requester_user_id = $1
+        AND created_at >= (NOW() - ($2 || ' days')::interval)
+      ORDER BY created_at DESC
+      LIMIT $3
+    `, [userId, days, limit]);
+    return result.rows;
+  },
+
   async getAdminUsageSummary() {
     await ensureDevSeed();
     const currentPool = getPool();

@@ -26,14 +26,14 @@ export function AdminOverviewPage() {
       apiJson<{ data: unknown[] }>("/v1/admin/users"),
       apiJson<{ data: unknown[] }>("/v1/admin/invitations"),
       apiJson<{ data: unknown[] }>("/v1/admin/offerings/pending"),
-      apiJson<{ data: { totalTokens: number } }>("/v1/admin/usage"),
+      apiJson<{ data: { summary: { totalTokens: number; totalRequests: number } } }>("/v1/admin/usage"),
     ])
       .then(([users, invitations, pending, usage]) => {
         setStats({
           userCount: users.data?.length ?? 0,
           invitationCount: invitations.data?.length ?? 0,
           pendingCount: pending.data?.length ?? 0,
-          totalTokens: usage.data?.totalTokens ?? 0,
+          totalTokens: usage.data?.summary?.totalTokens ?? 0,
         });
       })
       .catch(() => {})

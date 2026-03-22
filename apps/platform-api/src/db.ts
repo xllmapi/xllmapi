@@ -1556,6 +1556,69 @@ export const get_consumption_usage = (userId: string) => {
   return { summary, items };
 };
 
+export const get_consumption_daily = (userId: string, year: number) => {
+  const startDate = `${year}-01-01`;
+  const endDate = `${year + 1}-01-01`;
+  return db.prepare(`
+    SELECT
+      SUBSTR(created_at, 1, 10) AS date,
+      COALESCE(SUM(total_tokens), 0) AS totalTokens,
+      COUNT(id) AS requestCount
+    FROM api_requests
+    WHERE requester_user_id = ?
+      AND created_at >= ? AND created_at < ?
+    GROUP BY SUBSTR(created_at, 1, 10)
+    ORDER BY date ASC
+  `).all(userId, startDate, endDate) as Array<{ date: string; totalTokens: number; requestCount: number }>;
+};
+
+export const get_consumption_by_date = (userId: string, date: string) => {
+  return db.prepare(`
+    SELECT
+      logical_model AS logicalModel,
+      COUNT(id) AS requestCount,
+      COALESCE(SUM(input_tokens), 0) AS inputTokens,
+      COALESCE(SUM(output_tokens), 0) AS outputTokens,
+      COALESCE(SUM(total_tokens), 0) AS totalTokens
+    FROM api_requests
+    WHERE requester_user_id = ?
+      AND SUBSTR(created_at, 1, 10) = ?
+    GROUP BY logical_model
+    ORDER BY totalTokens DESC
+  `).all(userId, date) as Array<{ logicalModel: string; requestCount: number; inputTokens: number; outputTokens: number; totalTokens: number }>;
+};
+
+export const get_consumption_recent = (userId: string, days: number = 30, limit: number = 500) => {
+  const sinceDate = new Date();
+  sinceDate.setDate(sinceDate.getDate() - days);
+  const since = sinceDate.toISOString().slice(0, 10);
+  return db.prepare(`
+    SELECT
+      id AS requestId,
+      logical_model AS logicalModel,
+      provider,
+      real_model AS realModel,
+      MIN(input_tokens, 2147483647) AS inputTokens,
+      MIN(output_tokens, 2147483647) AS outputTokens,
+      MIN(total_tokens, 2147483647) AS totalTokens,
+      created_at AS createdAt
+    FROM api_requests
+    WHERE requester_user_id = ?
+      AND created_at >= ?
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(userId, since, limit) as Array<{
+    requestId: string;
+    logicalModel: string;
+    provider: string;
+    realModel: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    createdAt: string;
+  }>;
+};
+
 export const get_admin_usage_summary = () => {
   const summary = db.prepare(`
     SELECT
@@ -1612,6 +1675,12 @@ export const record_chat_settlement = (params: {
   fixedPricePer1kOutput: number;
   responseBody?: unknown;
 }) => {
+  const MAX_TOKENS = 2_147_483_647;
+  const clamp = (n: number) => Math.min(Math.max(Math.round(n) || 0, 0), MAX_TOKENS);
+  params.inputTokens = clamp(params.inputTokens);
+  params.outputTokens = clamp(params.outputTokens);
+  params.totalTokens = clamp(params.totalTokens);
+
   const inputCost = Math.ceil((params.inputTokens * params.fixedPricePer1kInput) / 1000);
   const outputCost = Math.ceil((params.outputTokens * params.fixedPricePer1kOutput) / 1000);
   const consumerCost = inputCost + outputCost;
