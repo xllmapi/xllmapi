@@ -59,6 +59,11 @@ const UsagePage = lazy(() => import("@/pages/admin/UsagePage").then((m) => ({ de
 const SettingsPage = lazy(() => import("@/pages/admin/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const ProvidersPage = lazy(() => import("@/pages/admin/ProvidersPage").then((m) => ({ default: m.ProvidersPage })));
 const AdminNotificationsPage = lazy(() => import("@/pages/admin/AdminNotificationsPage").then((m) => ({ default: m.AdminNotificationsPage })));
+const NodesPage = lazy(() => import("@/pages/app/NodesPage").then((m) => ({ default: m.NodesPage })));
+const NodePreferencesPage = lazy(() => import("@/pages/app/NodePreferencesPage").then((m) => ({ default: m.NodePreferencesPage })));
+const MarketPage = lazy(() => import("@/pages/MarketPage").then((m) => ({ default: m.MarketPage })));
+const MarketDetailPage = lazy(() => import("@/pages/MarketDetailPage").then((m) => ({ default: m.MarketDetailPage })));
+const UserProfilePage = lazy(() => import("@/pages/UserProfilePage").then((m) => ({ default: m.UserProfilePage })));
 
 function PageLoader() {
   return <div className="flex items-center justify-center min-h-[200px] text-text-tertiary text-sm">Loading…</div>;
@@ -80,6 +85,9 @@ export function App() {
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/mnetwork" element={<ModelsPage />} />
           <Route path="/mnetwork/:logicalModel" element={<ModelDetailPage />} />
+          <Route path="/market" element={<MarketPage />} />
+          <Route path="/market/:offeringId" element={<MarketDetailPage />} />
+          <Route path="/u/:handle" element={<UserProfilePage />} />
 
           <Route path="/chat" element={<ChatPage />} />
 
@@ -97,6 +105,8 @@ export function App() {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="security" element={<SecurityPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="nodes" element={<NodesPage />} />
+            <Route path="node-preferences" element={<NodePreferencesPage />} />
           </Route>
 
           <Route
