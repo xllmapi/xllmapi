@@ -246,9 +246,10 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const body = await read_json<{ title: string; body: string; type?: string; targetUserId?: string }>(req);
-    if (!body.title || !body.body) {
-      const response = json(400, { error: { message: "title and body are required", requestId } });
+    const body = await read_json<{ title: string; body?: string; content?: string; type?: string; targetUserId?: string }>(req);
+    const notifContent = body.body ?? body.content ?? "";
+    if (!body.title || !notifContent) {
+      const response = json(400, { error: { message: "title and content are required", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -256,7 +257,7 @@ export async function handleAdminRoutes(
     const result = await platformService.createNotification({
       id: randomUUID(),
       title: body.title,
-      body: body.body,
+      body: notifContent,
       type: body.type ?? "announcement",
       targetUserId: body.targetUserId ?? null,
       createdBy: auth.userId

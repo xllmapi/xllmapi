@@ -1958,7 +1958,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      INSERT INTO notifications (id, title, body, type, target_user_id, created_by)
+      INSERT INTO notifications (id, title, content, type, target_user_id, created_by)
       VALUES ($1, $2, $3, $4, $5, $6)
     `, [params.id, params.title, params.body, params.type, params.targetUserId ?? null, params.createdBy]);
     return { id: params.id };
@@ -1970,7 +1970,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     const result = await currentPool.query(`
       SELECT
         n.*,
-        COUNT(nr.id)::text AS "readCount"
+        COUNT(nr.user_id)::text AS "readCount"
       FROM notifications n
       LEFT JOIN notification_reads nr ON nr.notification_id = n.id
       GROUP BY n.id
@@ -1985,7 +1985,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     const result = await currentPool.query(`
       SELECT
         n.*,
-        CASE WHEN nr.id IS NOT NULL THEN TRUE ELSE FALSE END AS "isRead"
+        CASE WHEN nr.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS "isRead"
       FROM notifications n
       LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = $1
       WHERE n.target_user_id IS NULL OR n.target_user_id = $1
@@ -1998,10 +1998,10 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      INSERT INTO notification_reads (id, notification_id, user_id)
-      VALUES ($1, $2, $3)
+      INSERT INTO notification_reads (notification_id, user_id)
+      VALUES ($1, $2)
       ON CONFLICT DO NOTHING
-    `, [randomUUID(), notificationId, userId]);
+    `, [notificationId, userId]);
     return { ok: true };
   },
 
