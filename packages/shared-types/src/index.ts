@@ -99,6 +99,7 @@ export interface PublicMarketModel {
   providerCount: number;
   ownerCount: number;
   enabledOfferingCount: number;
+  credentialCount: number;
   pricingModes: PricingMode[];
   minInputPrice: number | null;
   minOutputPrice: number | null;

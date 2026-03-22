@@ -14,14 +14,24 @@ type ProviderPreset = {
 };
 
 const PROVIDER_PRESETS: ProviderPreset[] = [
+  // DeepSeek
   {
     id: "deepseek",
-    label: "DeepSeek (OpenAI-compatible)",
+    label: "DeepSeek",
     providerType: "openai_compatible",
     baseUrl: "https://api.deepseek.com",
     logicalModel: "deepseek-chat",
     realModel: "deepseek-chat"
   },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    providerType: "openai_compatible",
+    baseUrl: "https://api.deepseek.com",
+    logicalModel: "deepseek-reasoner",
+    realModel: "deepseek-reasoner"
+  },
+  // OpenAI
   {
     id: "openai",
     label: "OpenAI",
@@ -31,6 +41,15 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     realModel: "gpt-4o-mini"
   },
   {
+    id: "openai",
+    label: "OpenAI",
+    providerType: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    logicalModel: "gpt-4o",
+    realModel: "gpt-4o"
+  },
+  // Anthropic
+  {
     id: "anthropic",
     label: "Anthropic",
     providerType: "anthropic",
@@ -38,11 +57,28 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     logicalModel: "claude-sonnet-4-20250514",
     realModel: "claude-sonnet-4-20250514"
   },
+  // MiniMax (China: api.minimaxi.com, Global: api.minimax.io)
   {
     id: "minimax",
-    label: "MiniMax (OpenAI-compatible)",
+    label: "MiniMax",
     providerType: "openai_compatible",
-    baseUrl: "https://api.minimax.io/v1",
+    baseUrl: "https://api.minimaxi.com/v1",
+    logicalModel: "MiniMax-M2.7",
+    realModel: "MiniMax-M2.7"
+  },
+  {
+    id: "minimax",
+    label: "MiniMax",
+    providerType: "openai_compatible",
+    baseUrl: "https://api.minimaxi.com/v1",
+    logicalModel: "MiniMax-M2.5",
+    realModel: "MiniMax-M2.5"
+  },
+  {
+    id: "minimax",
+    label: "MiniMax",
+    providerType: "openai_compatible",
+    baseUrl: "https://api.minimaxi.com/v1",
     logicalModel: "MiniMax-Text-01",
     realModel: "MiniMax-Text-01"
   }

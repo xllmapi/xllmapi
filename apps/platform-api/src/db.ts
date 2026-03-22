@@ -1314,6 +1314,7 @@ export const list_active_models = (): LogicalModelRow[] => {
       o.logical_model AS name,
       COUNT(*) AS offeringCount,
       SUM(CASE WHEN o.enabled = 1 THEN 1 ELSE 0 END) AS enabledOfferingCount,
+      COUNT(DISTINCT o.credential_id) AS credentialCount,
       COUNT(DISTINCT o.owner_user_id) AS ownerCount,
       GROUP_CONCAT(DISTINCT o.owner_user_id) AS owners,
       MIN(o.fixed_price_per_1k_input) AS minInputPricePer1k,
@@ -1332,6 +1333,7 @@ export const list_active_models = (): LogicalModelRow[] => {
     name: string;
     offeringCount: number;
     enabledOfferingCount: number;
+    credentialCount: number;
     ownerCount: number;
     owners: string;
     minInputPricePer1k: number;
@@ -1359,6 +1361,7 @@ export const list_active_models = (): LogicalModelRow[] => {
       providerCount: row.providers ? row.providers.split(",").length : 0,
       ownerCount: row.ownerCount,
       enabledOfferingCount: row.enabledOfferingCount,
+      credentialCount: row.credentialCount,
       pricingModes: (row.pricingModes ? row.pricingModes.split(",") : []) as PricingMode[],
       minInputPrice: row.minInputPricePer1k ?? null,
       minOutputPrice: row.minOutputPricePer1k ?? null,

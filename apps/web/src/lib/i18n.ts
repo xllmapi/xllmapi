@@ -110,6 +110,9 @@ const messages: Record<string, Record<string, string>> = {
     "network.useDiscovered": "使用发现的模型",
     "network.customModel": "自定义模型名称",
     "network.addCustomModel": "添加",
+    "network.step.validating": "验证 Key…",
+    "network.step.creating": "创建模型节点…",
+    "network.step.done": "接入成功 ✓",
 
     // Invitations
     "invitations.title": "邀请注册",
@@ -344,6 +347,9 @@ const messages: Record<string, Record<string, string>> = {
     "network.useDiscovered": "Use discovered models",
     "network.customModel": "Custom model name",
     "network.addCustomModel": "Add",
+    "network.step.validating": "Validating key…",
+    "network.step.creating": "Creating model nodes…",
+    "network.step.done": "Connected ✓",
 
     // Invitations
     "invitations.title": "Invitations",

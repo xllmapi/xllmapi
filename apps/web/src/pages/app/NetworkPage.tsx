@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiJson, getApiKey } from "@/lib/api";
 import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
@@ -63,10 +63,11 @@ function formatRuntime(createdAt: string): string {
   return `${mins}m`;
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+function formatTokens(v: number | string): string {
+  const n = Number(v) || 0;
+  if (n >= 999_950) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+  return String(Math.round(n));
 }
 
 export function NetworkPage() {
@@ -80,6 +81,7 @@ export function NetworkPage() {
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [apiKey, setApiKey] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [publishStep, setPublishStep] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [togglingId, setTogglingId] = useState("");
@@ -88,7 +90,9 @@ export function NetworkPage() {
   const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [discoveryDone, setDiscoveryDone] = useState(false);
+  const [discoveryFailed, setDiscoveryFailed] = useState(false);
   const [customModelInput, setCustomModelInput] = useState("");
+  const discoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const myKey = getApiKey() ?? "";
 
@@ -113,26 +117,82 @@ export function NetworkPage() {
     void loadData();
   }, [loadData]);
 
-  // Group catalog by providerType
-  const providers = Array.from(new Set(catalog.map((p) => p.providerType)));
-  const providerModels = catalog.filter((p) => p.providerType === selectedProvider);
-  const providerName = providerModels[0]?.name?.split(" ")[0] ?? providerModels[0]?.label?.split(" ")[0] ?? selectedProvider;
-
-  // Merge preset models + discovered models into a unified selectable list
-  const selectableModels: { id: string; label: string; realModel: string; source: "preset" | "discovered" | "custom" }[] = [];
-
-  // Preset models first
-  for (const pm of providerModels) {
-    selectableModels.push({ id: `preset:${pm.id}`, label: pm.logicalModel, realModel: pm.realModel, source: "preset" });
+  // Unique providers from catalog (group by id)
+  const providerMap = new Map<string, ProviderPreset>();
+  for (const p of catalog) {
+    if (!providerMap.has(p.id)) providerMap.set(p.id, p);
   }
+  const providers = Array.from(providerMap.keys());
+  const providerModels = catalog.filter((p) => p.id === selectedProvider);
+  const firstPreset = providerModels[0];
+  const providerLabel = firstPreset?.label ?? firstPreset?.name ?? selectedProvider;
 
-  // Then discovered models (exclude ones already in presets)
-  if (discoveryDone) {
-    const presetRealModels = new Set(providerModels.map((p) => p.realModel));
-    for (const dm of discoveredModels) {
-      if (!presetRealModels.has(dm.id)) {
-        selectableModels.push({ id: `discovered:${dm.id}`, label: dm.id, realModel: dm.id, source: "discovered" });
+  // Auto-discover models when provider + API key are both set
+  const doDiscover = useCallback(async (preset: ProviderPreset, key: string) => {
+    setDiscovering(true);
+    setDiscoveryFailed(false);
+    try {
+      const result = await apiJson<{ ok: boolean; data: DiscoveredModel[]; message?: string }>(
+        "/v1/provider-models",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            providerType: preset.providerType,
+            baseUrl: preset.baseUrl,
+            apiKey: key,
+          }),
+        },
+      );
+      if (result.ok !== false && result.data?.length > 0) {
+        setDiscoveredModels(result.data);
+        setDiscoveryDone(true);
+        setDiscoveryFailed(false);
+      } else {
+        setDiscoveryFailed(true);
+        setDiscoveryDone(true);
       }
+    } catch {
+      setDiscoveryFailed(true);
+      setDiscoveryDone(true);
+    } finally {
+      setDiscovering(false);
+    }
+  }, []);
+
+  // Trigger auto-discover with debounce when apiKey changes
+  useEffect(() => {
+    if (discoverTimerRef.current) clearTimeout(discoverTimerRef.current);
+    setDiscoveredModels([]);
+    setDiscoveryDone(false);
+    setDiscoveryFailed(false);
+    setSelectedModels(new Set());
+
+    if (!selectedProvider || !apiKey.trim() || apiKey.trim().length < 8) return;
+
+    const preset = catalog.find((p) => p.id === selectedProvider);
+    if (!preset) return;
+
+    discoverTimerRef.current = setTimeout(() => {
+      void doDiscover(preset, apiKey.trim());
+    }, 600);
+
+    return () => {
+      if (discoverTimerRef.current) clearTimeout(discoverTimerRef.current);
+    };
+  }, [selectedProvider, apiKey, catalog, doDiscover]);
+
+  // Build selectable model list: discovered models first, then preset fallback
+  const selectableModels: { id: string; label: string; realModel: string; source: "discovered" | "preset" }[] = [];
+
+  if (discoveryDone && !discoveryFailed && discoveredModels.length > 0) {
+    // Show discovered models
+    for (const dm of discoveredModels) {
+      selectableModels.push({ id: `discovered:${dm.id}`, label: dm.id, realModel: dm.id, source: "discovered" });
+    }
+  } else {
+    // Fallback to presets
+    for (const pm of providerModels) {
+      selectableModels.push({ id: `preset:${pm.logicalModel}`, label: pm.logicalModel, realModel: pm.realModel, source: "preset" });
     }
   }
 
@@ -145,52 +205,17 @@ export function NetworkPage() {
     });
   };
 
-  const resetForm = () => {
-    setSelectedProvider("");
-    setSelectedModels(new Set());
-    setApiKey("");
-    setDiscoveredModels([]);
-    setDiscoveryDone(false);
-    setCustomModelInput("");
-  };
-
-  const handleDiscover = async () => {
-    if (!selectedProvider || !apiKey.trim()) return;
-    setDiscovering(true);
-    setError("");
-
-    const firstPreset = providerModels[0];
-    try {
-      const result = await apiJson<{ ok: boolean; data: DiscoveredModel[]; message?: string }>(
-        "/v1/provider-models",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            providerType: firstPreset?.providerType ?? selectedProvider,
-            baseUrl: firstPreset?.baseUrl ?? "",
-            apiKey: apiKey.trim(),
-          }),
-        },
-      );
-      setDiscoveredModels(result.data ?? []);
-      setDiscoveryDone(true);
-    } catch (err: unknown) {
-      setError(extractError(err));
-    } finally {
-      setDiscovering(false);
-    }
-  };
-
   const addCustomModel = () => {
     const name = customModelInput.trim();
     if (!name) return;
-    // Add as discovered model
     setDiscoveredModels((prev) => {
       if (prev.some((m) => m.id === name)) return prev;
       return [...prev, { id: name }];
     });
-    setDiscoveryDone(true);
-    // Auto-select it
+    if (!discoveryDone || discoveryFailed) {
+      setDiscoveryDone(true);
+      setDiscoveryFailed(false);
+    }
     setSelectedModels((prev) => new Set([...prev, `discovered:${name}`]));
     setCustomModelInput("");
   };
@@ -201,7 +226,6 @@ export function NetworkPage() {
     setSuccess("");
     if (!selectedProvider || selectedModels.size === 0 || !apiKey.trim()) return;
 
-    // Resolve selected models to {logicalModel, realModel, baseUrl, providerType}
     const modelsToSubmit: { logicalModel: string; realModel: string }[] = [];
     for (const id of selectedModels) {
       const item = selectableModels.find((m) => m.id === id);
@@ -211,40 +235,64 @@ export function NetworkPage() {
     }
     if (modelsToSubmit.length === 0) return;
 
-    const firstPreset = providerModels[0];
     setPublishing(true);
+    setPublishStep(t("network.step.validating"));
     try {
-      const credResult = await apiJson<{ data: { id: string } }>(
-        "/v1/provider-credentials",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            providerId: firstPreset?.id,
-            providerType: firstPreset?.providerType ?? selectedProvider,
-            baseUrl: firstPreset?.baseUrl ?? "",
-            apiKey: apiKey.trim(),
-          }),
-        },
-      );
-
-      for (const model of modelsToSubmit) {
-        await apiJson("/v1/offerings", {
-          method: "POST",
-          body: JSON.stringify({
-            logicalModel: model.logicalModel,
-            credentialId: credResult.data.id,
-            realModel: model.realModel,
-          }),
-        });
+      let credResult: { data: { id: string } };
+      try {
+        credResult = await apiJson<{ data: { id: string } }>(
+          "/v1/provider-credentials",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              providerId: firstPreset?.id,
+              providerType: firstPreset?.providerType ?? selectedProvider,
+              baseUrl: firstPreset?.baseUrl ?? "",
+              apiKey: apiKey.trim(),
+            }),
+          },
+        );
+      } catch (err: unknown) {
+        setError(extractError(err));
+        setPublishing(false);
+        setPublishStep("");
+        return;
       }
 
-      setSuccess(t("network.submitted"));
-      resetForm();
-      await loadData();
+      setPublishStep(t("network.step.creating"));
+      let created = 0;
+      for (const model of modelsToSubmit) {
+        try {
+          await apiJson("/v1/offerings", {
+            method: "POST",
+            body: JSON.stringify({
+              logicalModel: model.logicalModel,
+              credentialId: credResult.data.id,
+              realModel: model.realModel,
+            }),
+          });
+          created++;
+        } catch (err: unknown) {
+          setError((prev) => prev ? `${prev}\n${model.logicalModel}: ${extractError(err)}` : `${model.logicalModel}: ${extractError(err)}`);
+        }
+      }
+
+      if (created > 0) {
+        setPublishStep(t("network.step.done"));
+        setSuccess(`${t("network.submitted")} (${created} ${created === 1 ? "model" : "models"})`);
+        setSelectedModels(new Set());
+        setApiKey("");
+        setDiscoveredModels([]);
+        setDiscoveryDone(false);
+        setDiscoveryFailed(false);
+        setCustomModelInput("");
+        await loadData();
+      }
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
       setPublishing(false);
+      setTimeout(() => setPublishStep(""), 3000);
     }
   };
 
@@ -313,16 +361,18 @@ export function NetworkPage() {
                 setSelectedModels(new Set());
                 setDiscoveredModels([]);
                 setDiscoveryDone(false);
+                setDiscoveryFailed(false);
+                setApiKey("");
               }}
               className="w-full rounded-[var(--radius-input)] border border-line px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
               style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
             >
               <option value="">{t("network.chooseProvider")}</option>
-              {providers.map((pt) => {
-                const sample = catalog.find((p) => p.providerType === pt);
+              {providers.map((providerId) => {
+                const sample = providerMap.get(providerId);
                 return (
-                  <option key={pt} value={pt}>
-                    {sample?.name?.split(" ")[0] ?? sample?.label?.split(" ")[0] ?? pt}
+                  <option key={providerId} value={providerId}>
+                    {sample?.label ?? sample?.name ?? providerId}
                   </option>
                 );
               })}
@@ -340,30 +390,29 @@ export function NetworkPage() {
             />
           )}
 
-          {/* Row 3: Discover models button */}
-          {selectedProvider && apiKey.trim() && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => void handleDiscover()}
-                disabled={discovering}
-                className="rounded-[var(--radius-btn)] border border-accent/30 text-accent px-4 py-2 text-xs font-medium hover:bg-accent/10 transition-colors disabled:opacity-50 cursor-pointer"
-              >
-                {discovering ? t("network.discovering") : t("network.discoverModels")}
-              </button>
-              {discoveryDone && (
-                <span className="text-text-tertiary text-xs">
-                  {discoveredModels.length} {t("network.discoveredModels").toLowerCase()}
-                </span>
+          {/* Discovery status indicator */}
+          {selectedProvider && apiKey.trim().length >= 8 && (
+            <div className="flex items-center gap-2 text-xs text-text-tertiary">
+              {discovering && (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
+                  <span>{t("network.discovering")}</span>
+                </>
+              )}
+              {discoveryDone && !discoveryFailed && discoveredModels.length > 0 && (
+                <span className="text-success">{discoveredModels.length} {t("network.discoveredModels").toLowerCase()}</span>
+              )}
+              {discoveryDone && discoveryFailed && (
+                <span className="text-text-tertiary">{t("network.noModelsFound")}</span>
               )}
             </div>
           )}
 
-          {/* Row 4: Model selection */}
-          {selectedProvider && selectableModels.length > 0 && (
+          {/* Row 3: Model selection */}
+          {selectedProvider && selectableModels.length > 0 && !discovering && (
             <div>
               <label className="text-text-secondary text-xs block mb-2">
-                {t("network.selectModels")} ({providerName})
+                {t("network.selectModels")} ({providerLabel})
               </label>
               <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto">
                 {selectableModels.map((sm) => (
@@ -386,9 +435,6 @@ export function NetworkPage() {
                       {sm.source === "discovered" && (
                         <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">API</span>
                       )}
-                      {sm.source === "preset" && (
-                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-panel-strong text-text-tertiary font-medium">preset</span>
-                      )}
                     </div>
                   </label>
                 ))}
@@ -396,7 +442,7 @@ export function NetworkPage() {
             </div>
           )}
 
-          {/* Row 5: Custom model input */}
+          {/* Row 4: Custom model input */}
           {selectedProvider && (
             <div className="flex items-center gap-2">
               <input
@@ -419,13 +465,27 @@ export function NetworkPage() {
             </div>
           )}
 
-          <FormButton
-            type="submit"
-            disabled={publishing || !selectedProvider || selectedModels.size === 0 || !apiKey.trim()}
-            className="self-start"
-          >
-            {publishing ? t("network.submitting") : t("network.submit")}
-          </FormButton>
+          <div className="flex items-center gap-3">
+            <FormButton
+              type="submit"
+              disabled={publishing || !selectedProvider || selectedModels.size === 0 || !apiKey.trim()}
+              className="shrink-0"
+            >
+              {publishing ? t("network.submitting") : t("network.submit")}
+            </FormButton>
+            {publishStep && (
+              <span className={`text-xs font-medium ${publishStep === t("network.step.done") ? "text-success" : "text-text-secondary"}`}>
+                {publishStep === t("network.step.done") ? (
+                  <>{publishStep}</>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
+                    {publishStep}
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
         </form>
       </div>
 
@@ -448,7 +508,6 @@ export function NetworkPage() {
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
-                  {/* Left: model info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2.5 mb-2">
                       <span className="font-mono text-sm font-medium text-text-primary">{o.logicalModel}</span>
@@ -462,8 +521,6 @@ export function NetworkPage() {
                       )}
                     </div>
                   </div>
-
-                  {/* Right: toggle */}
                   <button
                     onClick={() => void toggleOffering(o)}
                     disabled={togglingId === o.id}
@@ -476,8 +533,6 @@ export function NetworkPage() {
                     {togglingId === o.id ? "…" : enabled ? t("network.stop") : t("network.start")}
                   </button>
                 </div>
-
-                {/* Token usage stats */}
                 <div className="mt-3 pt-3 border-t border-line flex gap-6 text-xs">
                   <div>
                     <span className="text-text-tertiary">{t("network.requests")}</span>
@@ -497,7 +552,7 @@ export function NetworkPage() {
                   </div>
                   <div>
                     <span className="text-text-tertiary">{t("network.earned")}</span>
-                    <span className="ml-1.5 text-accent font-medium">{(usage?.supplierReward ?? 0).toFixed(4)}</span>
+                    <span className="ml-1.5 text-accent font-medium">{Number(usage?.supplierReward ?? 0).toFixed(4)}</span>
                   </div>
                 </div>
               </div>

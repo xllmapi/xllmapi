@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -16,6 +17,64 @@ interface ChatMessageProps {
   onRetry?: () => void;
 }
 
+/** Split content into {thinking, answer}. Handles streaming (unclosed tag). */
+function parseThinking(content: string): { thinking: string; answer: string; isThinking: boolean } {
+  const openTag = "<think>";
+  const closeTag = "</think>";
+
+  const openIdx = content.indexOf(openTag);
+  if (openIdx === -1) return { thinking: "", answer: content, isThinking: false };
+
+  const afterOpen = openIdx + openTag.length;
+  const closeIdx = content.indexOf(closeTag, afterOpen);
+
+  if (closeIdx === -1) {
+    // Still streaming the thinking part — tag not closed yet
+    return { thinking: content.slice(afterOpen), answer: "", isThinking: true };
+  }
+
+  const thinking = content.slice(afterOpen, closeIdx).trim();
+  const answer = (content.slice(0, openIdx) + content.slice(closeIdx + closeTag.length)).trim();
+  return { thinking, answer, isThinking: false };
+}
+
+function ThinkingBlock({ thinking, isThinking }: { thinking: string; isThinking: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const showExpanded = expanded || isThinking;
+
+  if (!thinking) return null;
+
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={() => setExpanded((p) => !p)}
+        className="flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer bg-transparent border-none p-0"
+      >
+        <span
+          className="inline-block transition-transform duration-200"
+          style={{ transform: showExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+        >
+          ▶
+        </span>
+        {isThinking ? (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 border-2 border-text-tertiary/40 border-t-text-tertiary rounded-full animate-spin" />
+            思考中…
+          </span>
+        ) : (
+          <span>思考过程</span>
+        )}
+      </button>
+      {showExpanded && (
+        <div className="mt-2 pl-3 border-l-2 border-text-tertiary/20 text-text-tertiary text-xs leading-relaxed max-h-[300px] overflow-y-auto">
+          <div className="whitespace-pre-wrap">{thinking}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ChatMessage({ message, model, meta, isError, onRetry }: ChatMessageProps) {
   const { t } = useLocale();
 
@@ -32,8 +91,10 @@ export function ChatMessage({ message, model, meta, isError, onRetry }: ChatMess
     );
   }
 
-  // Assistant message
+  // Assistant message — split thinking from answer
   const hasError = isError || message.content.startsWith("Error:");
+  const { thinking, answer, isThinking } = parseThinking(message.content);
+  const displayContent = thinking ? answer : message.content;
 
   return (
     <div className="flex gap-3 mb-4">
@@ -62,25 +123,31 @@ export function ChatMessage({ message, model, meta, isError, onRetry }: ChatMess
           </div>
         ) : (
           <>
-            <div className="chat-prose">
-              <Markdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={{
-                  code: ({ className, children }) => (
-                    <CodeBlock className={className}>{children}</CodeBlock>
-                  ),
-                  pre: ({ children }) => <>{children}</>,
-                }}
-              >
-                {message.content || "…"}
-              </Markdown>
-            </div>
+            {/* Thinking block (collapsible) */}
+            {thinking && <ThinkingBlock thinking={thinking} isThinking={isThinking} />}
+
+            {/* Answer content */}
+            {(displayContent || (!thinking && !isThinking)) && (
+              <div className="chat-prose">
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={{
+                    code: ({ className, children }) => (
+                      <CodeBlock className={className}>{children}</CodeBlock>
+                    ),
+                    pre: ({ children }) => <>{children}</>,
+                  }}
+                >
+                  {displayContent || "…"}
+                </Markdown>
+              </div>
+            )}
             <div className="flex items-center gap-2 mt-1">
               <MessageMeta createdAt={message.createdAt} meta={meta} />
               {message.content && (
                 <CopyButton
-                  text={message.content}
+                  text={answer || message.content}
                   label={t("chat.copyMessage")}
                   copiedLabel="✓"
                   className="!px-2 !py-0.5 !text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"

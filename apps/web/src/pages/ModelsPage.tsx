@@ -8,6 +8,7 @@ interface NetworkModel {
   logicalModel: string;
   providerCount?: number;
   enabledOfferingCount?: number;
+  credentialCount?: number;
   ownerCount?: number;
   status?: string;
   providers?: string[];
@@ -39,7 +40,7 @@ export function ModelsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const totalNodes = models.reduce((sum, m) => sum + (m.enabledOfferingCount ?? 0), 0);
+  const totalNodes = models.reduce((sum, m) => sum + (m.ownerCount ?? 0), 0);
   const totalProviders = new Set(models.flatMap((m) => m.providers ?? [])).size;
 
   return (
@@ -100,7 +101,7 @@ export function ModelsPage() {
                 <div className="flex items-center gap-4 text-xs text-text-secondary">
                   <span className="flex items-center gap-1">
                     <Cpu className="w-3 h-3 text-text-tertiary" />
-                    {m.enabledOfferingCount ?? 0} {t("models.nodes")}
+                    {m.ownerCount ?? 0} {t("models.nodes")}
                   </span>
                   <span className="flex items-center gap-1">
                     <Users className="w-3 h-3 text-text-tertiary" />

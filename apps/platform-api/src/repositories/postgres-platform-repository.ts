@@ -752,6 +752,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       name: string;
       offeringCount: string;
       enabledOfferingCount: string;
+      credentialCount: string;
       ownerCount: string;
       owners: string[] | null;
       minInputPricePer1k: number | null;
@@ -763,6 +764,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.logical_model AS name,
         COUNT(*)::text AS "offeringCount",
         SUM(CASE WHEN o.enabled THEN 1 ELSE 0 END)::text AS "enabledOfferingCount",
+        COUNT(DISTINCT o.credential_id)::text AS "credentialCount",
         COUNT(DISTINCT o.owner_user_id)::text AS "ownerCount",
         ARRAY_AGG(DISTINCT o.owner_user_id) AS owners,
         MIN(o.fixed_price_per_1k_input) AS "minInputPricePer1k",
@@ -798,6 +800,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         providerCount: (row.providers ?? []).length,
         ownerCount: Number(row.ownerCount),
         enabledOfferingCount: Number(row.enabledOfferingCount),
+        credentialCount: Number(row.credentialCount),
         pricingModes: ((row.pricingModes ?? []) as PricingMode[]),
         minInputPrice: row.minInputPricePer1k === null ? null : Number(row.minInputPricePer1k),
         minOutputPrice: row.minOutputPricePer1k === null ? null : Number(row.minOutputPricePer1k),

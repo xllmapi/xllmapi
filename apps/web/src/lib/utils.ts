@@ -9,10 +9,11 @@ export function formatNumber(n: number): string {
   return n.toLocaleString();
 }
 
-export function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+export function formatTokens(v: number | string): string {
+  const n = Number(v) || 0;
+  if (n >= 999_950) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+  return String(Math.round(n));
 }
 
 export function escapeHtml(str: string): string {
