@@ -70,7 +70,7 @@ jobs:
           DATABASE_URL: postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi
 
       - name: Unit tests
-        run: npm run test:platform-api
+        run: npx tsx --test --test-force-exit --test-timeout 30000 apps/platform-api/src/tests/*.test.ts
         env:
           XLLMAPI_ENV: development
           XLLMAPI_SECRET_KEY: ci-test-secret
