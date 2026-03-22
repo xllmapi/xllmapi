@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/hooks/useLocale";
@@ -19,13 +19,20 @@ export function Header() {
     navigate("/");
   };
 
-  // Fetch unread notification count
-  useEffect(() => {
+  // Fetch unread notification count + listen for updates
+  const refreshUnread = useCallback(() => {
     if (!isLoggedIn) return;
     apiJson<{ data: { count: number } }>("/v1/notifications/unread-count")
       .then((r) => setUnreadCount(r.data?.count ?? 0))
       .catch(() => {});
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    refreshUnread();
+    const handler = () => refreshUnread();
+    window.addEventListener("notifications-changed", handler);
+    return () => window.removeEventListener("notifications-changed", handler);
+  }, [refreshUnread]);
 
   // Close on outside click
   useEffect(() => {

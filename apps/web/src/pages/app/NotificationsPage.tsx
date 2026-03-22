@@ -28,6 +28,7 @@ export function NotificationsPage() {
   const markRead = async (id: string) => {
     await apiJson(`/v1/notifications/${encodeURIComponent(id)}/read`, { method: "POST" }).catch(() => {});
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
+    window.dispatchEvent(new Event("notifications-changed"));
   };
 
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
@@ -41,6 +42,7 @@ export function NotificationsPage() {
             onClick={async () => {
               await Promise.all(notifications.filter((n) => !n.isRead).map((n) => apiJson(`/v1/notifications/${encodeURIComponent(n.id)}/read`, { method: "POST" }).catch(() => {})));
               setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+              window.dispatchEvent(new Event("notifications-changed"));
             }}
             className="text-xs text-text-tertiary hover:text-accent cursor-pointer bg-transparent border border-line rounded-[var(--radius-btn)] px-3 py-1.5 transition-colors"
           >
