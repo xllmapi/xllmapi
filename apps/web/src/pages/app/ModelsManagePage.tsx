@@ -1622,7 +1622,7 @@ node dist/main.js start \\
           const renderOfferingCard = (o: Offering, isInactive: boolean) => {
             const usage = getUsageForOffering(o.id);
             const enabled = isEnabled(o);
-            const isL3 = o.executionMode === "local";
+            const isL3 = o.executionMode === "node" || o.executionMode === "local";
             const nodeForOffering = isL3 ? nodes.find(() => true) : undefined;
             const status = getOfferingStatus(o, nodes);
             const sc = statusConfig[status];
