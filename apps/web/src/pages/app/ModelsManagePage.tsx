@@ -258,8 +258,8 @@ function PoolGroupedSection({
 
             {/* Expanded cards */}
             {expanded && (
-              <div className={`rounded-[var(--radius-card)] border border-line overflow-hidden ${!isActive ? "opacity-60" : ""}`}>
-                {items.map((entry, idx) => {
+              <div className="flex flex-col gap-3 mt-1">
+                {items.map((entry) => {
                   const displayName = entry.name || entry.logicalModel;
                   const handle = entry.ownerHandle ? `@${entry.ownerHandle}` : entry.ownerDisplayName ?? "";
                   const inputPrice = entry.fixedPricePer1kInput ?? 0;
@@ -270,52 +270,71 @@ function PoolGroupedSection({
                   return (
                     <div
                       key={entry.offeringId}
-                      className={`bg-panel px-5 py-3.5 ${idx > 0 ? "border-t border-line" : ""}`}
+                      className={`rounded-[var(--radius-card)] border bg-panel p-5 transition-colors ${
+                        !isActive ? "border-line opacity-60" : "border-accent/20"
+                      }`}
                     >
-                      {/* Row 1: status dot + name + handle + price */}
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {isActive ? (
-                            <span className="relative flex h-2 w-2 shrink-0">
-                              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                            </span>
-                          ) : (
-                            <span className="relative flex h-2 w-2 shrink-0">
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-text-tertiary/40" />
-                            </span>
-                          )}
-                          <span className="font-mono text-sm font-medium text-text-primary truncate">{displayName}</span>
+                      {/* Row 1: Model name */}
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <span className="font-mono text-sm font-bold text-text-primary">{displayName}</span>
+                      </div>
+
+                      {/* Row 2: Status badges */}
+                      <div className="flex items-center gap-2 mb-2">
+                        {isActive ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400">
+                            {"\uD83D\uDFE2"} {t("modelsMgmt.status.running")}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-secondary">
+                            {"\u26AB"} {t("modelsMgmt.status.offline")}
+                          </span>
+                        )}
+                        {isPlatform ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">{"\u2601\uFE0F"} {t("modelsMgmt.platformHosted")}</span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium">{"\uD83D\uDDA5\uFE0F"} {t("modelsMgmt.distributed")}</span>
+                        )}
+                        {isVerified && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{"\u2705"}{t("modelsMgmt.verified")}</span>
+                        )}
+                      </div>
+
+                      {/* Row 3: Supplier + price */}
+                      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-secondary mb-3">
+                        <span>
+                          {t("modelsMgmt.supplier")}:{" "}
                           {entry.ownerHandle ? (
                             <Link
                               to={`/u/${entry.ownerHandle}`}
-                              className="text-xs text-accent hover:text-accent/80 no-underline shrink-0"
+                              className="text-accent hover:text-accent/80 no-underline"
                             >
-                              {handle}
+                              @{entry.ownerHandle}
                             </Link>
                           ) : handle ? (
-                            <span className="text-xs text-text-tertiary shrink-0">{handle}</span>
-                          ) : null}
-                        </div>
-                        <span className="text-xs text-text-secondary font-mono shrink-0 whitespace-nowrap">
-                          {inputPrice}/{outputPrice} xt/1K
+                            <span className="text-text-tertiary">{handle}</span>
+                          ) : (
+                            <span className="text-text-tertiary">-</span>
+                          )}
+                        </span>
+                        <span>
+                          {t("modelsMgmt.price")}: <span className="font-mono text-text-primary">{inputPrice}/{outputPrice} xt/1K</span>
                         </span>
                       </div>
 
-                      {/* Row 2: mode badge + verified badge + remove button */}
-                      <div className="flex items-center justify-between gap-3 mt-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-text-tertiary">
-                            {isPlatform ? `\u2601\uFE0F ${t("modelsMgmt.platformHosted")}` : `\uD83D\uDDA5\uFE0F ${t("modelsMgmt.distributed")}`}
-                          </span>
-                          {isVerified && (
-                            <span className="text-xs text-emerald-500">{`\u2705${t("modelsMgmt.verified")}`}</span>
-                          )}
-                        </div>
+                      {/* Buttons */}
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          disabled
+                          title={t("modelsMgmt.pauseUnavailable")}
+                          className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium border border-amber-500/30 text-amber-500 opacity-50 cursor-not-allowed bg-transparent transition-colors"
+                        >
+                          {t("modelsMgmt.pause")}
+                        </button>
                         <button
                           onClick={() => void handleLeavePool(entry.offeringId)}
                           disabled={leavingId === entry.offeringId}
-                          className="rounded-[var(--radius-btn)] border border-danger/30 text-danger px-3 py-1 text-xs font-medium hover:bg-danger/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
+                          className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
                         >
                           {leavingId === entry.offeringId ? "..." : t("modelsMgmt.remove")}
                         </button>

@@ -385,6 +385,10 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.platformHosted": "平台托管",
     "modelsMgmt.distributed": "分布式",
     "modelsMgmt.verified": "已验证",
+    "modelsMgmt.supplier": "供应者",
+    "modelsMgmt.price": "价格",
+    "modelsMgmt.pause": "停止",
+    "modelsMgmt.pauseUnavailable": "暂不可用",
     "modelsMgmt.publishToNetwork": "发布到网络",
     "modelsMgmt.myAddedNodes": "我添加的节点",
 
@@ -842,6 +846,10 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.platformHosted": "Platform Hosted",
     "modelsMgmt.distributed": "Distributed",
     "modelsMgmt.verified": "Verified",
+    "modelsMgmt.supplier": "Supplier",
+    "modelsMgmt.price": "Price",
+    "modelsMgmt.pause": "Pause",
+    "modelsMgmt.pauseUnavailable": "Not available yet",
     "modelsMgmt.publishToNetwork": "Publish to Network",
     "modelsMgmt.myAddedNodes": "My Added Nodes",
 
