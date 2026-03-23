@@ -261,7 +261,6 @@ function PoolGroupedSection({
               <div className="flex flex-col gap-3 mt-1">
                 {items.map((entry) => {
                   const displayName = entry.name || entry.logicalModel;
-                  const handle = entry.ownerHandle ? `@${entry.ownerHandle}` : entry.ownerDisplayName ?? "";
                   const inputPrice = entry.fixedPricePer1kInput ?? 0;
                   const outputPrice = entry.fixedPricePer1kOutput ?? 0;
                   const isPlatform = entry.executionMode === "platform" || !entry.executionMode || entry.executionMode === "key";
@@ -309,12 +308,10 @@ function PoolGroupedSection({
                               to={`/u/${entry.ownerHandle}`}
                               className="text-accent hover:text-accent/80 no-underline"
                             >
-                              @{entry.ownerHandle}
+                              {entry.ownerDisplayName || entry.ownerHandle}
                             </Link>
-                          ) : handle ? (
-                            <span className="text-text-tertiary">{handle}</span>
                           ) : (
-                            <span className="text-text-tertiary">-</span>
+                            <span className="text-text-tertiary">{entry.ownerDisplayName || "-"}</span>
                           )}
                         </span>
                         <span>
@@ -409,15 +406,19 @@ function UsingTab() {
         </div>
       )}
 
+      {/* Link to model network — always visible at top */}
+      <div className="mb-4">
+        <Link
+          to="/mnetwork"
+          className="text-sm text-accent hover:text-accent/80 transition-colors no-underline"
+        >
+          {t("modelsMgmt.goToMNetwork")} →
+        </Link>
+      </div>
+
       {pool.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6 text-center mb-6">
-          <p className="text-text-tertiary text-sm mb-2">{t("modelsMgmt.emptyUsageList")}</p>
-          <Link
-            to="/mnetwork"
-            className="text-sm text-accent hover:text-accent/80 transition-colors no-underline"
-          >
-            {t("modelsMgmt.goToMNetwork")} &rarr;
-          </Link>
+          <p className="text-text-tertiary text-sm">{t("modelsMgmt.emptyUsageList")}</p>
         </div>
       ) : (
         <>
@@ -462,14 +463,6 @@ function UsingTab() {
               </>
             );
           })()}
-          <div className="mb-6">
-            <Link
-              to="/mnetwork"
-              className="text-sm text-accent hover:text-accent/80 transition-colors no-underline"
-            >
-              {t("modelsMgmt.goToMNetwork")} &rarr;
-            </Link>
-          </div>
         </>
       )}
     </div>
