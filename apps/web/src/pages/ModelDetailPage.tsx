@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { apiJson } from "@/lib/api";
+import { formatTokens } from "@/lib/utils";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
 
@@ -22,13 +23,6 @@ interface ModelStats {
   totalOutputTokens: number;
   uniqueUsers: number;
   last7dTrend: number[];
-}
-
-function formatTokens(v: number | string): string {
-  const n = Number(v) || 0;
-  if (n >= 999_950) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(Math.round(n));
 }
 
 /** SVG bar chart for 7-day trend */
@@ -197,8 +191,9 @@ export function ModelDetailPage() {
               {model.status ?? "available"}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-text-tertiary">
-            {model.providers?.map((p) => <span key={p} className="bg-accent/6 border border-accent/10 rounded-full px-2 py-0.5">{p}</span>)}
+          <div className="flex items-center gap-3 text-xs text-text-secondary">
+            <span>{model.ownerCount ?? 0} {t("models.nodes")}</span>
+            <span>{model.ownerCount ?? 0} {t("models.suppliers")}</span>
           </div>
         </div>
 
@@ -214,9 +209,9 @@ export function ModelDetailPage() {
           </div>
           <div className="rounded-[var(--radius-card)] border border-line bg-panel p-4 text-center">
             <div className="text-xl font-bold text-text-primary">
-              {model.minInputPrice != null ? `${model.minInputPrice}/${model.minOutputPrice}` : "—"}
+              {model.minInputPrice != null ? <>{formatTokens(model.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(model.minOutputPrice ?? 0)}</> : "—"}
             </div>
-            <div className="text-[10px] text-text-tertiary mt-1">{t("models.price")}</div>
+            <div className="text-[10px] text-text-tertiary mt-1">{t("models.avgPrice7d")}</div>
           </div>
         </div>
 
@@ -329,7 +324,7 @@ export function ModelDetailPage() {
                         )}
                       </div>
                       <span className="text-xs font-mono text-text-tertiary">
-                        {o.fixedPricePer1kInput}/{o.fixedPricePer1kOutput} {t("modelDetail.pricePer1k")}
+                        {formatTokens(o.fixedPricePer1kInput)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(o.fixedPricePer1kOutput)}
                       </span>
                     </div>
 
