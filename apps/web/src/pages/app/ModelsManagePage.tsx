@@ -74,6 +74,15 @@ interface PoolEntry {
   lastSeen?: string;
 }
 
+interface PlatformModel {
+  logicalModel: string;
+  providerCount?: number;
+  ownerCount?: number;
+  status?: string;
+  minInputPrice?: number | null;
+  minOutputPrice?: number | null;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────
 
 function formatRuntime(createdAt: string): string {
@@ -211,14 +220,19 @@ export function ModelsManagePage() {
 function UsingTab() {
   const { t } = useLocale();
   const [pool, setPool] = useState<PoolEntry[]>([]);
+  const [platformModels, setPlatformModels] = useState<PlatformModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [leavingId, setLeavingId] = useState("");
 
   const loadData = useCallback(async () => {
     try {
-      const poolRes = await apiJson<{ data: PoolEntry[] }>("/v1/me/connection-pool").catch(() => ({ data: [] as PoolEntry[] }));
+      const [poolRes, modelsRes] = await Promise.all([
+        apiJson<{ data: PoolEntry[] }>("/v1/me/connection-pool").catch(() => ({ data: [] as PoolEntry[] })),
+        apiJson<{ data: PlatformModel[] }>("/v1/network/models").catch(() => ({ data: [] as PlatformModel[] })),
+      ]);
       setPool(poolRes.data ?? []);
+      setPlatformModels(modelsRes.data ?? []);
     } catch {
       // ignore
     } finally {
@@ -251,14 +265,15 @@ function UsingTab() {
         </div>
       )}
 
+      {/* User added nodes section */}
       {pool.length === 0 ? (
-        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-8 text-center">
-          <p className="text-text-tertiary text-sm mb-4">{t("modelsMgmt.noUsing")}</p>
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6 text-center mb-6">
+          <p className="text-text-tertiary text-sm mb-2">{t("modelsMgmt.noAddedNodes")}</p>
           <Link
             to="/market"
-            className="inline-block rounded-[var(--radius-btn)] border border-accent/30 text-accent px-4 py-2 text-sm font-medium hover:bg-accent/10 transition-colors no-underline"
+            className="text-sm text-accent hover:text-accent/80 transition-colors no-underline"
           >
-            {t("modelsMgmt.goMarket")}
+            {t("modelsMgmt.goToMarket")} →
           </Link>
         </div>
       ) : (
@@ -344,13 +359,50 @@ function UsingTab() {
               </>
             );
           })()}
-          <div className="mt-4">
+          <div className="mb-6">
             <Link
               to="/market"
               className="text-sm text-accent hover:text-accent/80 transition-colors no-underline"
             >
               {t("modelsMgmt.goMarket")}
             </Link>
+          </div>
+        </>
+      )}
+
+      {/* Platform Models Section */}
+      {platformModels.length > 0 && (
+        <>
+          <div className="border-t border-line my-6" />
+          <div className="rounded-[var(--radius-card)] bg-zinc-800/30 p-5">
+            <h3 className="text-sm font-semibold text-text-primary mb-1">
+              {t("modelsMgmt.platformModels")}
+              <span className="ml-2 text-xs font-normal text-text-tertiary">({t("modelsMgmt.defaultAvailable")})</span>
+            </h3>
+            <div className="flex flex-col gap-2 mt-4">
+              {platformModels.map((m) => {
+                const nodeCount = m.providerCount ?? m.ownerCount ?? 0;
+                const hasOnline = m.status === "online" || nodeCount > 0;
+                const avgPrice = (m.minInputPrice != null && m.minOutputPrice != null)
+                  ? ((m.minInputPrice + m.minOutputPrice) / 2).toFixed(2)
+                  : null;
+                return (
+                  <div key={m.logicalModel} className="flex items-center justify-between gap-4 rounded-lg px-4 py-3 bg-panel/40">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`inline-flex h-2 w-2 rounded-full shrink-0 ${hasOnline ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
+                      <span className="font-mono text-sm font-medium text-text-primary truncate">{m.logicalModel}</span>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0 text-xs text-text-tertiary">
+                      <span>{nodeCount}{t("modelsMgmt.nodesAvailable")}</span>
+                      {avgPrice && (
+                        <span>{t("modelsMgmt.avgPrice")} {avgPrice}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-text-tertiary mt-4">{t("modelsMgmt.platformModelsInfo")}</p>
           </div>
         </>
       )}

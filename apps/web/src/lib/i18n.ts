@@ -361,6 +361,14 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.status.stopped": "已停止",
     "modelsMgmt.lastOnline": "上次在线",
     "modelsMgmt.publishToNetwork": "发布到网络",
+    "modelsMgmt.myAddedNodes": "我添加的节点",
+    "modelsMgmt.platformModels": "平台模型",
+    "modelsMgmt.defaultAvailable": "默认可用",
+    "modelsMgmt.nodesAvailable": "个节点可用",
+    "modelsMgmt.avgPrice": "均价",
+    "modelsMgmt.platformModelsInfo": "平台模型对所有用户默认可用，发请求时自动选择最优节点",
+    "modelsMgmt.noAddedNodes": "还没有添加节点",
+    "modelsMgmt.goToMarket": "去模型市场浏览和添加",
 
     // Nodes page
     "nodes.title": "节点管理",
@@ -811,6 +819,14 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.status.stopped": "Stopped",
     "modelsMgmt.lastOnline": "Last online",
     "modelsMgmt.publishToNetwork": "Publish to Network",
+    "modelsMgmt.myAddedNodes": "My Added Nodes",
+    "modelsMgmt.platformModels": "Platform Models",
+    "modelsMgmt.defaultAvailable": "Available by Default",
+    "modelsMgmt.nodesAvailable": "nodes available",
+    "modelsMgmt.avgPrice": "Avg price",
+    "modelsMgmt.platformModelsInfo": "Platform models are available to all users by default. Optimal node selected automatically.",
+    "modelsMgmt.noAddedNodes": "No nodes added yet",
+    "modelsMgmt.goToMarket": "Browse and add from market",
 
     // Nodes page
     "nodes.title": "Node Management",
