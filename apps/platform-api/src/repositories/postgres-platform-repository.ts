@@ -2207,7 +2207,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     const currentPool = getPool();
     const caps = params.capabilities ? JSON.stringify(params.capabilities) : '[]';
     await currentPool.query(`
-      INSERT INTO nodes (id, user_id, token_id, ip_address, user_agent, capabilities, status, last_heartbeat_at, created_at, updated_at)
+      INSERT INTO nodes (id, user_id, token_id, ip_address, user_agent, capabilities, status, last_heartbeat_at, connected_at, created_at)
       VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'online', NOW(), NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET
         ip_address = EXCLUDED.ip_address,
@@ -2215,7 +2215,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         capabilities = EXCLUDED.capabilities,
         status = 'online',
         last_heartbeat_at = NOW(),
-        updated_at = NOW()
+        connected_at = NOW()
     `, [params.nodeId, params.userId, params.tokenId, params.ipAddress ?? null, params.userAgent ?? null, caps]);
   },
 
@@ -2223,7 +2223,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      UPDATE nodes SET status = $2, last_heartbeat_at = COALESCE($3::timestamptz, NOW()), updated_at = NOW()
+      UPDATE nodes SET status = $2, last_heartbeat_at = COALESCE($3::timestamptz, NOW())
       WHERE id = $1
     `, [params.nodeId, params.status, params.lastHeartbeatAt ?? null]);
   },
@@ -2232,7 +2232,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      UPDATE nodes SET capabilities = $2::jsonb, updated_at = NOW()
+      UPDATE nodes SET capabilities = $2::jsonb
       WHERE id = $1
     `, [params.nodeId, JSON.stringify(params.capabilities)]);
   },
@@ -2250,10 +2250,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         capabilities,
         status,
         last_heartbeat_at AS "lastHeartbeatAt",
-        total_requests AS "totalRequests",
-        failed_requests AS "failedRequests",
+        total_requests_served AS "totalRequests",
+        total_success_count AS "totalSuccess",
         created_at AS "createdAt",
-        updated_at AS "updatedAt"
+        connected_at AS "connectedAt"
       FROM nodes
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -2274,10 +2274,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         capabilities,
         status,
         last_heartbeat_at AS "lastHeartbeatAt",
-        total_requests AS "totalRequests",
-        failed_requests AS "failedRequests",
+        total_requests_served AS "totalRequests",
+        total_success_count AS "totalSuccess",
         created_at AS "createdAt",
-        updated_at AS "updatedAt"
+        connected_at AS "connectedAt"
       FROM nodes
       WHERE id = $1
       LIMIT 1
@@ -2297,8 +2297,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         capabilities,
         status,
         last_heartbeat_at AS "lastHeartbeatAt",
-        total_requests AS "totalRequests",
-        failed_requests AS "failedRequests"
+        total_requests_served AS "totalRequests",
+        total_success_count AS "totalSuccess"
       FROM nodes
       WHERE status = 'online'
       ORDER BY last_heartbeat_at DESC
@@ -2310,7 +2310,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      UPDATE nodes SET status = 'offline', updated_at = NOW() WHERE id = $1
+      UPDATE nodes SET status = 'offline' WHERE id = $1
     `, [nodeId]);
   },
 
@@ -2319,11 +2319,11 @@ export const postgresPlatformRepository: PlatformRepository = {
     const currentPool = getPool();
     if (params.success) {
       await currentPool.query(`
-        UPDATE nodes SET total_requests = total_requests + 1, updated_at = NOW() WHERE id = $1
+        UPDATE nodes SET total_requests_served = total_requests_served + 1, total_success_count = total_success_count + 1 WHERE id = $1
       `, [params.nodeId]);
     } else {
       await currentPool.query(`
-        UPDATE nodes SET total_requests = total_requests + 1, failed_requests = failed_requests + 1, updated_at = NOW() WHERE id = $1
+        UPDATE nodes SET total_requests_served = total_requests_served + 1 WHERE id = $1
       `, [params.nodeId]);
     }
   },
