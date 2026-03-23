@@ -381,6 +381,10 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.status.pendingReview": "待审核",
     "modelsMgmt.status.stopped": "已停止",
     "modelsMgmt.lastOnline": "上次在线",
+    "modelsMgmt.nodes": "个节点",
+    "modelsMgmt.platformHosted": "平台托管",
+    "modelsMgmt.distributed": "分布式",
+    "modelsMgmt.verified": "已验证",
     "modelsMgmt.publishToNetwork": "发布到网络",
     "modelsMgmt.myAddedNodes": "我添加的节点",
 
@@ -834,6 +838,10 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.status.pendingReview": "Pending Review",
     "modelsMgmt.status.stopped": "Stopped",
     "modelsMgmt.lastOnline": "Last online",
+    "modelsMgmt.nodes": "nodes",
+    "modelsMgmt.platformHosted": "Platform Hosted",
+    "modelsMgmt.distributed": "Distributed",
+    "modelsMgmt.verified": "Verified",
     "modelsMgmt.publishToNetwork": "Publish to Network",
     "modelsMgmt.myAddedNodes": "My Added Nodes",
 

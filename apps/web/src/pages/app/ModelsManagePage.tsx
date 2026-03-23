@@ -7,6 +7,7 @@ import { FormButton } from "@/components/ui/FormButton";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { Badge } from "@/components/ui/Badge";
 import { Link } from "react-router-dom";
+import { invalidateUserModels } from "@/hooks/useUserModels";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -65,13 +66,18 @@ interface ConnectedNode {
 }
 
 interface PoolEntry {
-  id: string;
   offeringId: string;
   logicalModel: string;
-  supplierName: string;
+  realModel?: string;
+  name?: string;
+  ownerDisplayName?: string;
+  ownerHandle?: string;
+  executionMode?: string;
+  fixedPricePer1kInput?: number;
+  fixedPricePer1kOutput?: number;
+  enabled?: boolean;
+  reviewStatus?: string;
   joinedAt: string;
-  nodeOnline?: boolean;
-  lastSeen?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -158,9 +164,7 @@ function isOfferingActive(o: Offering, nodes: ConnectedNode[]): boolean {
 }
 
 function isPoolEntryActive(entry: PoolEntry): boolean {
-  // If API provides nodeOnline, use it; otherwise treat as active
-  if (entry.nodeOnline !== undefined) return entry.nodeOnline;
-  return true;
+  return (entry.enabled !== false) && (entry.reviewStatus === "approved" || !entry.reviewStatus);
 }
 
 // ── Main component ──────────────────────────────────────────────
@@ -208,17 +212,142 @@ export function ModelsManagePage() {
 
 // ── Tab 1: Using ────────────────────────────────────────────────
 
+function groupByModel(entries: PoolEntry[]): Map<string, PoolEntry[]> {
+  const map = new Map<string, PoolEntry[]>();
+  for (const entry of entries) {
+    const key = entry.logicalModel;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(entry);
+  }
+  return map;
+}
+
+function PoolGroupedSection({
+  entries,
+  expandedGroups,
+  toggleGroup,
+  leavingId,
+  handleLeavePool,
+  isActive,
+  t,
+}: {
+  entries: PoolEntry[];
+  expandedGroups: Set<string>;
+  toggleGroup: (model: string) => void;
+  leavingId: string;
+  handleLeavePool: (id: string) => Promise<void>;
+  isActive: boolean;
+  t: (key: string) => string;
+}) {
+  const groups = groupByModel(entries);
+  return (
+    <div className="flex flex-col gap-4">
+      {Array.from(groups.entries()).map(([model, items]) => {
+        const expanded = expandedGroups.has(model);
+        return (
+          <div key={model}>
+            {/* Group header */}
+            <button
+              onClick={() => toggleGroup(model)}
+              className="flex items-center gap-2 w-full text-left bg-transparent border-none cursor-pointer py-1.5 px-0"
+            >
+              <span className="text-text-secondary text-sm select-none">{expanded ? "\u25BC" : "\u25B6"}</span>
+              <span className="font-mono text-sm font-semibold text-text-primary">{model}</span>
+              <span className="text-xs text-text-tertiary">({items.length} {t("modelsMgmt.nodes")})</span>
+            </button>
+
+            {/* Expanded cards */}
+            {expanded && (
+              <div className={`rounded-[var(--radius-card)] border border-line overflow-hidden ${!isActive ? "opacity-60" : ""}`}>
+                {items.map((entry, idx) => {
+                  const displayName = entry.name || entry.logicalModel;
+                  const handle = entry.ownerHandle ? `@${entry.ownerHandle}` : entry.ownerDisplayName ?? "";
+                  const inputPrice = entry.fixedPricePer1kInput ?? 0;
+                  const outputPrice = entry.fixedPricePer1kOutput ?? 0;
+                  const isPlatform = entry.executionMode === "platform" || !entry.executionMode || entry.executionMode === "key";
+                  const isVerified = isPlatform && entry.reviewStatus === "approved";
+
+                  return (
+                    <div
+                      key={entry.offeringId}
+                      className={`bg-panel px-5 py-3.5 ${idx > 0 ? "border-t border-line" : ""}`}
+                    >
+                      {/* Row 1: status dot + name + handle + price */}
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {isActive ? (
+                            <span className="relative flex h-2 w-2 shrink-0">
+                              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                            </span>
+                          ) : (
+                            <span className="relative flex h-2 w-2 shrink-0">
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-text-tertiary/40" />
+                            </span>
+                          )}
+                          <span className="font-mono text-sm font-medium text-text-primary truncate">{displayName}</span>
+                          {entry.ownerHandle ? (
+                            <Link
+                              to={`/u/${entry.ownerHandle}`}
+                              className="text-xs text-accent hover:text-accent/80 no-underline shrink-0"
+                            >
+                              {handle}
+                            </Link>
+                          ) : handle ? (
+                            <span className="text-xs text-text-tertiary shrink-0">{handle}</span>
+                          ) : null}
+                        </div>
+                        <span className="text-xs text-text-secondary font-mono shrink-0 whitespace-nowrap">
+                          {inputPrice}/{outputPrice} xt/1K
+                        </span>
+                      </div>
+
+                      {/* Row 2: mode badge + verified badge + remove button */}
+                      <div className="flex items-center justify-between gap-3 mt-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-text-tertiary">
+                            {isPlatform ? `\u2601\uFE0F ${t("modelsMgmt.platformHosted")}` : `\uD83D\uDDA5\uFE0F ${t("modelsMgmt.distributed")}`}
+                          </span>
+                          {isVerified && (
+                            <span className="text-xs text-emerald-500">{`\u2705${t("modelsMgmt.verified")}`}</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => void handleLeavePool(entry.offeringId)}
+                          disabled={leavingId === entry.offeringId}
+                          className="rounded-[var(--radius-btn)] border border-danger/30 text-danger px-3 py-1 text-xs font-medium hover:bg-danger/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
+                        >
+                          {leavingId === entry.offeringId ? "..." : t("modelsMgmt.remove")}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function UsingTab() {
   const { t } = useLocale();
   const [pool, setPool] = useState<PoolEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [leavingId, setLeavingId] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     try {
       const poolRes = await apiJson<{ data: PoolEntry[] }>("/v1/me/connection-pool").catch(() => ({ data: [] as PoolEntry[] }));
-      setPool(poolRes.data ?? []);
+      const entries = poolRes.data ?? [];
+      setPool(entries);
+      // Default all groups expanded
+      const allModels = new Set(entries.map((e) => e.logicalModel));
+      setExpandedGroups(allModels);
     } catch {
       // ignore
     } finally {
@@ -228,11 +357,12 @@ function UsingTab() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
-  const handleLeavePool = async (id: string) => {
-    setLeavingId(id);
+  const handleLeavePool = async (offeringId: string) => {
+    setLeavingId(offeringId);
     setError("");
     try {
-      await apiJson(`/v1/me/connection-pool/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await apiJson(`/v1/me/connection-pool/${encodeURIComponent(offeringId)}`, { method: "DELETE" });
+      invalidateUserModels();
       await loadData();
     } catch (err: unknown) {
       setError(extractError(err));
@@ -240,6 +370,15 @@ function UsingTab() {
       setLeavingId("");
     }
   };
+
+  const toggleGroup = useCallback((model: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(model)) next.delete(model);
+      else next.add(model);
+      return next;
+    });
+  }, []);
 
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
@@ -251,7 +390,6 @@ function UsingTab() {
         </div>
       )}
 
-      {/* User's usage list */}
       {pool.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6 text-center mb-6">
           <p className="text-text-tertiary text-sm mb-2">{t("modelsMgmt.emptyUsageList")}</p>
@@ -259,7 +397,7 @@ function UsingTab() {
             to="/mnetwork"
             className="text-sm text-accent hover:text-accent/80 transition-colors no-underline"
           >
-            {t("modelsMgmt.goToMNetwork")} →
+            {t("modelsMgmt.goToMNetwork")} &rarr;
           </Link>
         </div>
       ) : (
@@ -269,77 +407,37 @@ function UsingTab() {
             const inactive = pool.filter((e) => !isPoolEntryActive(e));
             return (
               <>
-                {/* Active section */}
                 {active.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-text-primary mb-3">
                       {t("modelsMgmt.active")} ({active.length})
                     </h3>
-                    <div className="flex flex-col gap-3">
-                      {active.map((entry) => (
-                        <div key={entry.id} className="flex items-center justify-between gap-4 rounded-[var(--radius-card)] border border-line bg-panel px-5 py-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2.5 mb-1">
-                              <span className="relative flex h-2 w-2 shrink-0">
-                                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />
-                                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                              </span>
-                              <span className="font-mono text-sm font-medium text-text-primary">{entry.logicalModel}</span>
-                            </div>
-                            <span className="text-xs text-text-tertiary">{entry.supplierName}</span>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className="text-xs text-text-tertiary">{new Date(entry.joinedAt).toLocaleDateString()}</span>
-                            <button
-                              onClick={() => void handleLeavePool(entry.id)}
-                              disabled={leavingId === entry.id}
-                              className="rounded-[var(--radius-btn)] border border-danger/30 text-danger px-3 py-1 text-xs font-medium hover:bg-danger/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
-                            >
-                              {leavingId === entry.id ? "..." : t("modelsMgmt.remove")}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <PoolGroupedSection
+                      entries={active}
+                      expandedGroups={expandedGroups}
+                      toggleGroup={toggleGroup}
+                      leavingId={leavingId}
+                      handleLeavePool={handleLeavePool}
+                      isActive={true}
+                      t={t}
+                    />
                   </div>
                 )}
 
-                {/* Inactive section */}
                 {inactive.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-text-secondary mb-3">
                       {t("modelsMgmt.inactive")} ({inactive.length})
                     </h3>
-                    <div className="flex flex-col gap-3">
-                      {inactive.map((entry) => (
-                        <div key={entry.id} className="flex items-center justify-between gap-4 rounded-[var(--radius-card)] border border-line bg-panel px-5 py-4 opacity-60">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2.5 mb-1">
-                              <span className="relative flex h-2 w-2 shrink-0">
-                                <span className="relative inline-flex h-2 w-2 rounded-full bg-text-tertiary/40" />
-                              </span>
-                              <span className="font-mono text-sm font-medium text-text-primary">{entry.logicalModel}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-text-tertiary">{entry.supplierName}</span>
-                              {entry.lastSeen && (
-                                <span className="text-xs text-text-tertiary">{t("modelsMgmt.lastOnline")}: {formatRelativeTime(entry.lastSeen)}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className="text-xs text-text-tertiary">{new Date(entry.joinedAt).toLocaleDateString()}</span>
-                            <button
-                              onClick={() => void handleLeavePool(entry.id)}
-                              disabled={leavingId === entry.id}
-                              className="rounded-[var(--radius-btn)] border border-danger/30 text-danger px-3 py-1 text-xs font-medium hover:bg-danger/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
-                            >
-                              {leavingId === entry.id ? "..." : t("modelsMgmt.remove")}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <PoolGroupedSection
+                      entries={inactive}
+                      expandedGroups={expandedGroups}
+                      toggleGroup={toggleGroup}
+                      leavingId={leavingId}
+                      handleLeavePool={handleLeavePool}
+                      isActive={false}
+                      t={t}
+                    />
                   </div>
                 )}
               </>
@@ -350,12 +448,11 @@ function UsingTab() {
               to="/mnetwork"
               className="text-sm text-accent hover:text-accent/80 transition-colors no-underline"
             >
-              {t("modelsMgmt.goToMNetwork")} →
+              {t("modelsMgmt.goToMNetwork")} &rarr;
             </Link>
           </div>
         </>
       )}
-
     </div>
   );
 }
