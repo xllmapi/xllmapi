@@ -1489,6 +1489,12 @@ export const postgresPlatformRepository: PlatformRepository = {
         return { ok: false, code: "risk_inactive_credential", message: "activate the linked credential before enabling this offering" };
       }
     }
+    const newEnabled = params.enabled === undefined ? current.enabled : Boolean(params.enabled);
+    const wasEnabled = Boolean(current.enabled);
+    const priceChanged = (params.fixedPricePer1kInput != null && params.fixedPricePer1kInput !== current.fixedPricePer1kInput)
+      || (params.fixedPricePer1kOutput != null && params.fixedPricePer1kOutput !== current.fixedPricePer1kOutput);
+    const stateChanged = newEnabled !== wasEnabled || priceChanged;
+
     await currentPool.query(`
       UPDATE offerings
       SET pricing_mode = $1,
@@ -1500,10 +1506,42 @@ export const postgresPlatformRepository: PlatformRepository = {
       params.pricingMode ?? current.pricingMode,
       params.fixedPricePer1kInput ?? current.fixedPricePer1kInput,
       params.fixedPricePer1kOutput ?? current.fixedPricePer1kOutput,
-      params.enabled === undefined ? current.enabled : Boolean(params.enabled),
+      newEnabled,
       params.ownerUserId,
       params.offeringId
     ]);
+
+    // When offering state changes, auto-pause all consumers' usage of this offering
+    // Consumer needs to manually review and resume
+    if (stateChanged) {
+      await currentPool.query(`
+        UPDATE offering_favorites SET paused = true
+        WHERE offering_id = $1 AND paused = false
+      `, [params.offeringId]);
+
+      // Notify affected consumers
+      const reason = !newEnabled ? "stopped" : priceChanged ? "price_changed" : "restarted";
+      const title = !newEnabled
+        ? `模型节点 ${current.logicalModel} 已被供应者停止`
+        : priceChanged
+          ? `模型节点 ${current.logicalModel} 价格已变更`
+          : `模型节点 ${current.logicalModel} 已被供应者重新启动`;
+      const content = `该节点已自动移至你的不活跃列表，请确认后手动恢复。`;
+
+      const affected = await currentPool.query(
+        `SELECT user_id FROM offering_favorites WHERE offering_id = $1`,
+        [params.offeringId]
+      );
+      for (const row of affected.rows) {
+        const notifId = `notif_${randomUUID()}`;
+        await currentPool.query(`
+          INSERT INTO notifications (id, type, title, content, target_user_id, created_by, created_at)
+          VALUES ($1, 'system', $2, $3, $4, $5, NOW())
+          ON CONFLICT DO NOTHING
+        `, [notifId, title, content, row.user_id, params.ownerUserId]);
+      }
+    }
+
     return { ok: true, data: await getOfferingById(params.ownerUserId, params.offeringId) };
   },
 
