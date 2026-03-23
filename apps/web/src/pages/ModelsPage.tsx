@@ -247,8 +247,11 @@ function MarketTabContent() {
     setMLoading(true);
     const params = new URLSearchParams({ sort: mSort, limit: "50" });
     if (mSearch.trim()) params.set("q", mSearch.trim());
-    apiJson<{ data: MarketOffering[] }>(`/v1/market/offerings?${params}`)
-      .then((r) => setOfferings(r.data ?? []))
+    apiJson<{ data: { data: MarketOffering[]; total: number } | MarketOffering[] }>(`/v1/market/offerings?${params}`)
+      .then((r) => {
+        const items = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
+        setOfferings(items);
+      })
       .catch(() => {})
       .finally(() => setMLoading(false));
   }, [mSort, mSearch]);
