@@ -1826,7 +1826,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         COUNT(*)::int AS requests,
         COALESCE(SUM(ar.total_tokens), 0)::bigint AS tokens,
         COUNT(DISTINCT ar.requester_user_id)::int AS users,
-        COALESCE(AVG(o.fixed_price_per_1k_input + o.fixed_price_per_1k_output), 0)::int AS "avgPrice"
+        COALESCE(AVG(o.fixed_price_per_1k_input), 0)::int AS "avgPrice"
       FROM api_requests ar
       LEFT JOIN offerings o ON o.id = ar.chosen_offering_id
       WHERE ar.created_at > NOW() - INTERVAL '${Math.min(Math.max(days, 1), 90)} days'
