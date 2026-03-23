@@ -135,9 +135,9 @@ export function ModelDetailPage() {
   useEffect(() => {
     if (!logicalModel) return;
     setJoinChecking(true);
-    apiJson<{ data: { joined: boolean } }>(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`)
+    apiJson<{ data: { inPool: boolean } }>(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`)
       .then((res) => {
-        setJoined(res.data?.joined ?? false);
+        setJoined(res.data?.inPool ?? false);
       })
       .catch(() => {
         // If 404 or error, assume not joined
