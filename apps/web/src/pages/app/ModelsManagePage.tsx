@@ -1279,7 +1279,7 @@ xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
                   </div>
                   <div>
                     <span className="text-text-tertiary">{t("network.earned")}</span>
-                    <span className="ml-1.5 text-accent font-medium">{Number(usage?.supplierReward ?? 0).toFixed(4)}</span>
+                    <span className="ml-1.5 text-accent font-medium">{formatTokens(usage?.supplierReward ?? 0)} xt</span>
                   </div>
                 </div>
               </div>
