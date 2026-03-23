@@ -60,9 +60,6 @@ export function Header() {
           <Link to="/mnetwork" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.models")}
           </Link>
-          <Link to="/market" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
-            {t("nav.market")}
-          </Link>
           <Link to="/docs" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.docs")}
           </Link>

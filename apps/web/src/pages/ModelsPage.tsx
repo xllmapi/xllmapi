@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
@@ -220,6 +220,99 @@ function HeatBar({ value, max }: { value: number; max: number }) {
   );
 }
 
+/** Market tab — offerings listing (embedded from MarketPage) */
+function MarketTabContent() {
+  const { t } = useLocale();
+  const navigate = useNavigate();
+
+  interface MarketOffering {
+    id: string;
+    logicalModel: string;
+    supplierName: string;
+    type: "official" | "distributed";
+    online: boolean;
+    votes: number;
+    inputPricePer1k: number;
+    outputPricePer1k: number;
+  }
+
+  const [offerings, setOfferings] = useState<MarketOffering[]>([]);
+  const [mLoading, setMLoading] = useState(true);
+  const [mSort, setMSort] = useState("hot");
+  const [mSearch, setMSearch] = useState("");
+
+  useEffect(() => {
+    setMLoading(true);
+    const params = new URLSearchParams({ sort: mSort, limit: "50" });
+    if (mSearch.trim()) params.set("q", mSearch.trim());
+    apiJson<{ data: MarketOffering[] }>(`/v1/market/offerings?${params}`)
+      .then((r) => setOfferings(r.data ?? []))
+      .catch(() => {})
+      .finally(() => setMLoading(false));
+  }, [mSort, mSearch]);
+
+  return (
+    <>
+      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-1">
+            {["hot", "newest", "cheapest"].map((key) => (
+              <button key={key} onClick={() => setMSort(key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${
+                  mSort === key ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"
+                }`}>
+                {t(`market.sort.${key}`)}
+              </button>
+            ))}
+          </div>
+          <input type="text" value={mSearch} onChange={(e) => setMSearch(e.target.value)} placeholder={t("market.search")}
+            className="rounded-[var(--radius-input)] border border-line px-3 py-1.5 text-sm text-text-primary w-44 focus:outline-none focus:border-accent transition-colors font-mono"
+            style={{ backgroundColor: "rgba(16,21,34,0.6)" }} />
+        </div>
+      </section>
+      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-16">
+        {mLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="rounded-[var(--radius-card)] border border-line bg-panel p-5 animate-pulse">
+                <div className="h-4 bg-line rounded w-2/3 mb-3" />
+                <div className="h-3 bg-line rounded w-1/2" />
+              </div>
+            ))}
+          </div>
+        ) : offerings.length === 0 ? (
+          <div className="text-center text-text-tertiary py-20">{t("market.empty")}</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {offerings.map((o) => (
+              <div key={o.id} onClick={() => navigate(`/market/${encodeURIComponent(o.id)}`)}
+                className="rounded-[var(--radius-card)] border border-line bg-panel p-5 transition-colors hover:border-accent/25 cursor-pointer">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">{o.logicalModel}</span>
+                  <span className={`relative flex h-2 w-2 shrink-0`}>
+                    {o.online && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />}
+                    <span className={`relative inline-flex h-2 w-2 rounded-full ${o.online ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs text-text-secondary truncate">{o.supplierName}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                    o.type === "official" ? "bg-accent/10 text-accent" : "bg-purple-500/10 text-purple-400"
+                  }`}>{o.type === "official" ? t("market.badge.official") : t("market.badge.distributed")}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-tertiary">
+                  <span>{o.votes} {t("market.votes")}</span>
+                  <span className="font-mono">{o.inputPricePer1k}/{o.outputPricePer1k} /1K</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
 type SortKey = "requests" | "tokens" | "price";
 
 export function ModelsPage() {
@@ -233,6 +326,9 @@ export function ModelsPage() {
   const [search, setSearch] = useState("");
   const { t } = useLocale();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get("tab") ?? "overview") as "overview" | "market" | "ranking";
+  const setTab = (tab: string) => setSearchParams(tab === "overview" ? {} : { tab });
 
   useEffect(() => {
     Promise.all([
@@ -283,6 +379,28 @@ export function ModelsPage() {
           ))}
         </div>
       </section>
+
+      {/* Tab bar */}
+      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-6">
+        <div className="flex items-center bg-panel-strong rounded-lg p-1 w-fit">
+          {(["overview", "market", "ranking"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setTab(tab)}
+              className={`px-4 py-2 text-sm rounded-md transition-colors cursor-pointer ${
+                activeTab === tab
+                  ? "bg-bg-1 text-text-primary shadow-sm font-medium"
+                  : "text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              {t(`models.tab.${tab}`)}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* === Overview tab === */}
+      {activeTab === "overview" && (<>
 
       {/* Sort + Search */}
       <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-4">
@@ -402,6 +520,53 @@ export function ModelsPage() {
             />
         </div>
       </section>
+      </>)}
+
+      {/* === Market tab === */}
+      {activeTab === "market" && (
+        <MarketTabContent />
+      )}
+
+      {/* === Ranking tab === */}
+      {activeTab === "ranking" && (
+        <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-16">
+          <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6">
+            <h2 className="text-sm font-semibold text-text-secondary mb-4">{t("models.tab.ranking")}</h2>
+            {stats.length === 0 ? (
+              <p className="text-text-tertiary text-sm text-center py-8">{t("common.empty")}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line">
+                      <th className="text-left px-3 py-2 text-xs text-text-secondary font-medium">#</th>
+                      <th className="text-left px-3 py-2 text-xs text-text-secondary font-medium">{t("overview.model")}</th>
+                      <th className="text-right px-3 py-2 text-xs text-text-secondary font-medium">{t("models.requests")}</th>
+                      <th className="text-right px-3 py-2 text-xs text-text-secondary font-medium">xtokens</th>
+                      <th className="px-3 py-2 text-xs text-text-secondary font-medium w-32"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...stats].sort((a, b) => b.totalTokens - a.totalTokens).map((s, i) => (
+                      <tr key={s.logicalModel} className="border-b border-line/30 hover:bg-accent-bg/20">
+                        <td className="px-3 py-2.5 text-text-tertiary">{i + 1}</td>
+                        <td className="px-3 py-2.5 font-mono text-text-primary">{s.logicalModel}</td>
+                        <td className="px-3 py-2.5 text-right">{s.totalRequests}</td>
+                        <td className="px-3 py-2.5 text-right">{formatTokens(s.totalTokens)}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="h-1.5 rounded-full bg-line overflow-hidden">
+                            <div className="h-full rounded-full bg-accent/60" style={{ width: `${Math.min((s.totalTokens / Math.max(stats[0]?.totalTokens ?? 1, 1)) * 100, 100)}%` }} />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <Footer />
     </div>
