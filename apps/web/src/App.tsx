@@ -34,6 +34,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 import { lazy, Suspense } from "react";
+import { Navigate } from "react-router-dom";
 import { ChatProvider } from "@/hooks/useChatContext";
 
 // Eager: landing + auth (first paint)
@@ -46,7 +47,6 @@ const ChatPage = lazy(() => import("@/pages/chat/ChatPage").then((m) => ({ defau
 const ModelsPage = lazy(() => import("@/pages/ModelsPage").then((m) => ({ default: m.ModelsPage })));
 const ModelDetailPage = lazy(() => import("@/pages/ModelDetailPage").then((m) => ({ default: m.ModelDetailPage })));
 const OverviewPage = lazy(() => import("@/pages/app/OverviewPage").then((m) => ({ default: m.OverviewPage })));
-const NetworkPage = lazy(() => import("@/pages/app/NetworkPage").then((m) => ({ default: m.NetworkPage })));
 const InvitationsPage = lazy(() => import("@/pages/app/InvitationsPage").then((m) => ({ default: m.InvitationsPage })));
 const ProfilePage = lazy(() => import("@/pages/app/ProfilePage").then((m) => ({ default: m.ProfilePage })));
 const SecurityPage = lazy(() => import("@/pages/app/SecurityPage").then((m) => ({ default: m.SecurityPage })));
@@ -59,8 +59,7 @@ const UsagePage = lazy(() => import("@/pages/admin/UsagePage").then((m) => ({ de
 const SettingsPage = lazy(() => import("@/pages/admin/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const ProvidersPage = lazy(() => import("@/pages/admin/ProvidersPage").then((m) => ({ default: m.ProvidersPage })));
 const AdminNotificationsPage = lazy(() => import("@/pages/admin/AdminNotificationsPage").then((m) => ({ default: m.AdminNotificationsPage })));
-const NodesPage = lazy(() => import("@/pages/app/NodesPage").then((m) => ({ default: m.NodesPage })));
-const NodePreferencesPage = lazy(() => import("@/pages/app/NodePreferencesPage").then((m) => ({ default: m.NodePreferencesPage })));
+const ModelsManagePage = lazy(() => import("@/pages/app/ModelsManagePage").then((m) => ({ default: m.ModelsManagePage })));
 const MarketPage = lazy(() => import("@/pages/MarketPage").then((m) => ({ default: m.MarketPage })));
 const MarketDetailPage = lazy(() => import("@/pages/MarketDetailPage").then((m) => ({ default: m.MarketDetailPage })));
 const UserProfilePage = lazy(() => import("@/pages/UserProfilePage").then((m) => ({ default: m.UserProfilePage })));
@@ -100,13 +99,13 @@ export function App() {
             }
           >
             <Route index element={<OverviewPage />} />
-            <Route path="network" element={<NetworkPage />} />
+            <Route path="models" element={<ModelsManagePage />} />
+            <Route path="network" element={<Navigate to="/app/models" replace />} />
+            <Route path="nodes" element={<Navigate to="/app/models" replace />} />
             <Route path="invitations" element={<InvitationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="security" element={<SecurityPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="nodes" element={<NodesPage />} />
-            <Route path="node-preferences" element={<NodePreferencesPage />} />
           </Route>
 
           <Route

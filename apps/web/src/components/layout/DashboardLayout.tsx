@@ -37,12 +37,10 @@ export function DashboardLayout() {
       {/* Mobile tab bar */}
       <nav className="md:hidden flex gap-1 overflow-x-auto pb-4 -mx-2 px-2">
         <SidebarLink to="/app" label={t("sidebar.overview")} end />
-        <SidebarLink to="/app/network" label={t("sidebar.network")} />
-        <SidebarLink to="/app/nodes" label={t("sidebar.nodes")} />
+        <SidebarLink to="/app/models" label={t("sidebar.models")} />
         <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />
         <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
         <SidebarLink to="/app/security" label={t("sidebar.security")} />
-        <SidebarLink to="/app/node-preferences" label={t("sidebar.nodePrefs")} />
       </nav>
 
       <div className="flex gap-6">
@@ -53,8 +51,7 @@ export function DashboardLayout() {
               {t("sidebar.platform")}
             </p>
             <SidebarLink to="/app" label={t("sidebar.overview")} end />
-            <SidebarLink to="/app/network" label={t("sidebar.network")} />
-            <SidebarLink to="/app/nodes" label={t("sidebar.nodes")} />
+            <SidebarLink to="/app/models" label={t("sidebar.models")} />
             <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />
 
             <p className="text-text-tertiary text-[10px] font-semibold uppercase tracking-wider px-3 py-2 mt-4">
@@ -62,7 +59,6 @@ export function DashboardLayout() {
             </p>
             <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
             <SidebarLink to="/app/security" label={t("sidebar.security")} />
-            <SidebarLink to="/app/node-preferences" label={t("sidebar.nodePrefs")} />
           </nav>
         </aside>
         <main className="flex-1 min-w-0">

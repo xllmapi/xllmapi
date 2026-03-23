@@ -327,8 +327,30 @@ const messages: Record<string, Record<string, string>> = {
     "nav.market": "市场",
 
     // Sidebar additions
+    "sidebar.models": "模型管理",
     "sidebar.nodes": "节点管理",
     "sidebar.nodePrefs": "节点偏好",
+
+    // Models management page
+    "modelsMgmt.title": "模型管理",
+    "modelsMgmt.using": "使用的节点",
+    "modelsMgmt.providing": "提供的节点",
+    "modelsMgmt.noUsing": "暂未收藏任何模型服务",
+    "modelsMgmt.goMarket": "去市场添加 →",
+    "modelsMgmt.remove": "移除",
+    "modelsMgmt.myOfferings": "我的模型节点",
+    "modelsMgmt.addNew": "+ 接入新模型",
+    "modelsMgmt.chooseMode": "选择接入方式",
+    "modelsMgmt.modeKey": "平台托管",
+    "modelsMgmt.modeKeyDesc": "上传 Provider API Key，由平台代理调用",
+    "modelsMgmt.modeNode": "本地节点",
+    "modelsMgmt.modeNodeDesc": "在本地运行节点程序，直接提供模型服务",
+    "modelsMgmt.cancel": "取消",
+    "modelsMgmt.back": "← 返回",
+    "modelsMgmt.close": "关闭",
+    "modelsMgmt.badgeHosted": "平台托管",
+    "modelsMgmt.badgeLocal": "本地节点",
+    "modelsMgmt.nodeTokens": "节点令牌管理",
 
     // Nodes page
     "nodes.title": "节点管理",
@@ -745,8 +767,30 @@ const messages: Record<string, Record<string, string>> = {
     "nav.market": "Market",
 
     // Sidebar additions
+    "sidebar.models": "Models",
     "sidebar.nodes": "Nodes",
     "sidebar.nodePrefs": "Node Prefs",
+
+    // Models management page
+    "modelsMgmt.title": "Model Management",
+    "modelsMgmt.using": "Using",
+    "modelsMgmt.providing": "Providing",
+    "modelsMgmt.noUsing": "No favorited models yet",
+    "modelsMgmt.goMarket": "Browse market →",
+    "modelsMgmt.remove": "Remove",
+    "modelsMgmt.myOfferings": "My Model Nodes",
+    "modelsMgmt.addNew": "+ Add Model",
+    "modelsMgmt.chooseMode": "Choose how to add",
+    "modelsMgmt.modeKey": "Platform Hosted",
+    "modelsMgmt.modeKeyDesc": "Upload a Provider API Key, requests proxied by platform",
+    "modelsMgmt.modeNode": "Local Node",
+    "modelsMgmt.modeNodeDesc": "Run a local node to serve models directly",
+    "modelsMgmt.cancel": "Cancel",
+    "modelsMgmt.back": "← Back",
+    "modelsMgmt.close": "Close",
+    "modelsMgmt.badgeHosted": "Hosted",
+    "modelsMgmt.badgeLocal": "Local",
+    "modelsMgmt.nodeTokens": "Node Token Management",
 
     // Nodes page
     "nodes.title": "Node Management",
