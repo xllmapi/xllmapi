@@ -2812,6 +2812,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.review_status AS "reviewStatus",
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency",
+        o.public_node_id AS "publicNodeId",
         o.created_at AS "createdAt",
         u.display_name AS "ownerDisplayName",
         u.handle AS "ownerHandle",
