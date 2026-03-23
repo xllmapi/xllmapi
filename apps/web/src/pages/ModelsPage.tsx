@@ -94,17 +94,24 @@ function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; m
   const sortedModels = activeSeries.map((s) => s.model);
   const seriesData = activeSeries.map((s) => s.values);
 
-  // Stacked cumulative sums
+  // For price: overlay (not stacked). For others: stacked cumulative sums.
+  const isOverlay = metric === "price";
   const stacked: number[][] = seriesData.map(() => new Array(filledData.length).fill(0) as number[]);
   for (let day = 0; day < filledData.length; day++) {
     let cum = 0;
     for (let s = 0; s < sortedModels.length; s++) {
-      cum += seriesData[s]![day]!;
-      stacked[s]![day] = cum;
+      if (isOverlay) {
+        stacked[s]![day] = seriesData[s]![day]!;
+      } else {
+        cum += seriesData[s]![day]!;
+        stacked[s]![day] = cum;
+      }
     }
   }
 
-  const maxVal = Math.max(...(stacked[sortedModels.length - 1] ?? [0]), 1);
+  const maxVal = isOverlay
+    ? Math.max(...seriesData.flat(), 1)
+    : Math.max(...(stacked[sortedModels.length - 1] ?? [0]), 1);
 
   const x = (i: number) => PX + (i / Math.max(filledData.length - 1, 1)) * chartW;
   const y = (v: number) => PY + chartH - (v / maxVal) * chartH;
