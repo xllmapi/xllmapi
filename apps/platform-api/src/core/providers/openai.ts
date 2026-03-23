@@ -22,7 +22,8 @@ export async function streamOpenAI(params: {
   signal?: AbortSignal;
   onDelta: (text: string) => void;
 }): Promise<StreamResult> {
-  const url = `${params.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const base = params.baseUrl.replace(/\/+$/, "");
+  const url = base.endsWith("/v1") ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
 
   const body: Record<string, unknown> = {
     model: params.model,
@@ -37,7 +38,8 @@ export async function streamOpenAI(params: {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${params.apiKey}`
+      authorization: `Bearer ${params.apiKey}`,
+      "user-agent": "xllmapi/0.1.0 (compatible; claude-code/1.0)"
     },
     body: JSON.stringify(body),
     signal: params.signal
@@ -106,7 +108,8 @@ export async function callOpenAI(params: {
   maxTokens?: number;
   signal?: AbortSignal;
 }): Promise<StreamResult> {
-  const url = `${params.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const base2 = params.baseUrl.replace(/\/+$/, "");
+  const url2 = base2.endsWith("/v1") ? `${base2}/chat/completions` : `${base2}/v1/chat/completions`;
 
   const body: Record<string, unknown> = {
     model: params.model,
@@ -116,11 +119,12 @@ export async function callOpenAI(params: {
   if (params.temperature !== undefined) body.temperature = params.temperature;
   if (params.maxTokens !== undefined) body.max_tokens = params.maxTokens;
 
-  const response = await fetch(url, {
+  const response = await fetch(url2, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${params.apiKey}`
+      authorization: `Bearer ${params.apiKey}`,
+      "user-agent": "xllmapi/0.1.0 (compatible; claude-code/1.0)"
     },
     body: JSON.stringify(body),
     signal: params.signal

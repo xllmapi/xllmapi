@@ -59,6 +59,31 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     logicalModel: "claude-sonnet-4-20250514",
     realModel: "claude-sonnet-4-20250514"
   },
+  // Kimi / Moonshot
+  {
+    id: "kimi",
+    label: "Kimi / Moonshot",
+    providerType: "openai_compatible",
+    baseUrl: "https://api.moonshot.ai/v1",
+    logicalModel: "moonshot-v1-8k",
+    realModel: "moonshot-v1-8k"
+  },
+  {
+    id: "kimi",
+    label: "Kimi / Moonshot",
+    providerType: "openai_compatible",
+    baseUrl: "https://api.moonshot.ai/v1",
+    logicalModel: "moonshot-v1-32k",
+    realModel: "moonshot-v1-32k"
+  },
+  {
+    id: "kimi-coding",
+    label: "Kimi Coding",
+    providerType: "openai_compatible",
+    baseUrl: "https://api.kimi.com/coding/v1",
+    logicalModel: "kimi-for-coding",
+    realModel: "kimi-for-coding"
+  },
   // MiniMax (China: api.minimaxi.com, Global: api.minimax.io)
   {
     id: "minimax",
@@ -144,11 +169,13 @@ const validate_provider_connectivity_ = async (params: {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const defaultModel = params.providerType === "openai_compatible" ? "deepseek-chat" : "gpt-4o-mini";
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const chatUrl = baseUrl.endsWith("/v1") ? `${baseUrl}/chat/completions` : `${baseUrl}/chat/completions`;
+    const response = await fetch(chatUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${params.apiKey}`,
-        "content-type": "application/json"
+        "content-type": "application/json",
+        "user-agent": "xllmapi/0.1.0 (compatible; claude-code/1.0)"
       },
       body: JSON.stringify({
         model: params.testModel || defaultModel,
