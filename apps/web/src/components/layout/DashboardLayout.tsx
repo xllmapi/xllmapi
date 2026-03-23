@@ -59,13 +59,12 @@ export function DashboardLayout() {
             <SidebarLink to="/app/models/connected" label={t("sidebar.connected")} />
             <SidebarLink to="/app/models/provided" label={t("sidebar.provided")} />
 
-            <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />
-
             <p className="text-text-tertiary text-[10px] font-semibold uppercase tracking-wider px-3 py-2 mt-4">
               {t("sidebar.account")}
             </p>
             <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
             <SidebarLink to="/app/security" label={t("sidebar.security")} />
+            <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />
           </nav>
         </aside>
         <main className="flex-1 min-w-0">
