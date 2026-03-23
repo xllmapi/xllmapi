@@ -2468,7 +2468,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      INSERT INTO user_connection_pool (user_id, offering_id, joined_at)
+      INSERT INTO offering_favorites (user_id, offering_id, created_at)
       VALUES ($1, $2, NOW())
       ON CONFLICT (user_id, offering_id) DO NOTHING
     `, [params.userId, params.offeringId]);
@@ -2478,7 +2478,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      DELETE FROM user_connection_pool WHERE user_id = $1 AND offering_id = $2
+      DELETE FROM offering_favorites WHERE user_id = $1 AND offering_id = $2
     `, [params.userId, params.offeringId]);
   },
 
@@ -2487,18 +2487,25 @@ export const postgresPlatformRepository: PlatformRepository = {
     const currentPool = getPool();
     const result = await currentPool.query(`
       SELECT
-        cp.offering_id AS "offeringId",
-        cp.joined_at AS "joinedAt",
+        f.offering_id AS "offeringId",
+        f.created_at AS "joinedAt",
         o.logical_model AS "logicalModel",
         o.real_model AS "realModel",
+        o.name AS "name",
         o.owner_user_id AS "ownerUserId",
         o.execution_mode AS "executionMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
-        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput"
-      FROM user_connection_pool cp
-      JOIN offerings o ON o.id = cp.offering_id
-      WHERE cp.user_id = $1
-      ORDER BY cp.joined_at DESC
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.enabled,
+        o.review_status AS "reviewStatus",
+        u.display_name AS "ownerDisplayName",
+        u.handle AS "ownerHandle"
+      FROM offering_favorites f
+      JOIN offerings o ON o.id = f.offering_id
+      JOIN users u ON u.id = o.owner_user_id
+      WHERE f.user_id = $1
+        AND o.owner_user_id NOT LIKE '%_demo'
+      ORDER BY f.created_at DESC
     `, [userId]);
     return result.rows;
   },
