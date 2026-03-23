@@ -79,6 +79,8 @@ interface PoolEntry {
   executionMode?: string;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  dailyTokenLimit?: number;
+  maxConcurrency?: number;
   enabled?: boolean;
   reviewStatus?: string;
   paused?: boolean;
@@ -189,157 +191,139 @@ export function ModelsManagePage() {
 
 // ── Tab 1: Using ────────────────────────────────────────────────
 
-function groupByModel(entries: PoolEntry[]): Map<string, PoolEntry[]> {
-  const map = new Map<string, PoolEntry[]>();
-  for (const entry of entries) {
-    const key = entry.logicalModel;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(entry);
-  }
-  return map;
-}
-
-function PoolGroupedSection({
-  entries,
-  expandedGroups,
-  toggleGroup,
+function PoolCard({
+  entry,
+  isActive,
+  expanded,
+  onToggleExpand,
   leavingId,
   handleLeavePool,
   togglingPauseId,
   handleTogglePause,
-  isActive,
   t,
 }: {
-  entries: PoolEntry[];
-  expandedGroups: Set<string>;
-  toggleGroup: (model: string) => void;
+  entry: PoolEntry;
+  isActive: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
   leavingId: string;
   handleLeavePool: (id: string) => Promise<void>;
   togglingPauseId: string;
   handleTogglePause: (id: string, paused: boolean) => Promise<void>;
-  isActive: boolean;
   t: (key: string) => string;
 }) {
-  const groups = groupByModel(entries);
+  const displayName = entry.name || entry.logicalModel;
+  const inputPrice = entry.fixedPricePer1kInput ?? 0;
+  const outputPrice = entry.fixedPricePer1kOutput ?? 0;
+  const isPlatform = entry.executionMode === "platform" || !entry.executionMode || entry.executionMode === "key";
+  const isVerified = isPlatform && entry.reviewStatus === "approved";
+
   return (
-    <div className="flex flex-col gap-4">
-      {Array.from(groups.entries()).map(([model, items]) => {
-        const expanded = expandedGroups.has(model);
-        return (
-          <div key={model}>
-            {/* Group header */}
+    <div
+      className={`rounded-[var(--radius-card)] border bg-panel transition-colors cursor-pointer ${
+        !isActive ? "border-line opacity-60" : "border-accent/20"
+      }`}
+      onClick={onToggleExpand}
+    >
+      {/* Collapsed single-line row */}
+      <div className="flex items-center gap-2.5 px-4 py-2.5 min-w-0">
+        <span className="font-mono font-medium text-sm text-text-primary truncate shrink-0">{displayName}</span>
+
+        {/* Status badge */}
+        {entry.enabled !== false && entry.reviewStatus === "approved" ? (
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
+            {"\uD83D\uDFE2"} {t("modelsMgmt.status.running")}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-secondary shrink-0">
+            {"\u26AB"} {t("modelsMgmt.status.offline")}
+          </span>
+        )}
+
+        {/* Type badge */}
+        {isPlatform ? (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium shrink-0">{"\u2601\uFE0F"} {t("modelsMgmt.platformHosted")}</span>
+        ) : (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium shrink-0">{"\uD83D\uDDA5\uFE0F"} {t("modelsMgmt.distributed")}</span>
+        )}
+
+        {/* Verification badge */}
+        {isVerified && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium shrink-0">{"\u2705"} {t("modelsMgmt.verified")}</span>
+        )}
+
+        {/* Supplier name */}
+        <span className="text-xs text-text-secondary truncate">{entry.ownerDisplayName || entry.ownerHandle || "-"}</span>
+
+        {/* Price */}
+        <span className="font-mono text-xs text-text-tertiary shrink-0">{formatTokens(inputPrice)}/{formatTokens(outputPrice)}</span>
+
+        {/* Buttons — ml-auto, stop propagation */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
+          {isActive ? (
             <button
-              onClick={() => toggleGroup(model)}
-              className="flex items-center gap-2 w-full text-left bg-transparent border-none cursor-pointer py-1.5 px-0"
+              onClick={(e) => { e.stopPropagation(); void handleTogglePause(entry.offeringId, false); }}
+              disabled={togglingPauseId === entry.offeringId}
+              className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
             >
-              <span className="text-text-secondary text-sm select-none">{expanded ? "\u25BC" : "\u25B6"}</span>
-              <span className="font-mono text-sm font-semibold text-text-primary">{model}</span>
-              <span className="text-xs text-text-tertiary">({items.length} {t("modelsMgmt.nodes")})</span>
+              {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.disconnect")}
             </button>
+          ) : (
+            <>
+              {entry.enabled !== false && entry.reviewStatus === "approved" && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); void handleTogglePause(entry.offeringId, true); }}
+                  disabled={togglingPauseId === entry.offeringId}
+                  className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
+                >
+                  {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.connect")}
+                </button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); void handleLeavePool(entry.offeringId); }}
+                disabled={leavingId === entry.offeringId}
+                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
+              >
+                {leavingId === entry.offeringId ? "..." : t("modelsMgmt.delete")}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
-            {/* Expanded cards */}
-            {expanded && (
-              <div className="flex flex-col gap-3 mt-1">
-                {items.map((entry) => {
-                  const displayName = entry.name || entry.logicalModel;
-                  const inputPrice = entry.fixedPricePer1kInput ?? 0;
-                  const outputPrice = entry.fixedPricePer1kOutput ?? 0;
-                  const isPlatform = entry.executionMode === "platform" || !entry.executionMode || entry.executionMode === "key";
-                  const isVerified = isPlatform && entry.reviewStatus === "approved";
-
-                  return (
-                    <div
-                      key={entry.offeringId}
-                      className={`rounded-[var(--radius-card)] border bg-panel p-5 transition-colors ${
-                        !isActive ? "border-line opacity-60" : "border-accent/20"
-                      }`}
-                    >
-                      {/* Row 1: Model name + buttons (same line) */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="font-mono text-sm font-bold text-text-primary truncate">{displayName}</span>
-                          {/* Node real status: based on offering enabled+approved, not connection state */}
-                          {entry.enabled !== false && entry.reviewStatus === "approved" ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
-                              {"\uD83D\uDFE2"} {t("modelsMgmt.status.running")}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-secondary shrink-0">
-                              {"\u26AB"} {t("modelsMgmt.status.offline")}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {isActive ? (
-                            <button
-                              onClick={() => void handleTogglePause(entry.offeringId, false)}
-                              disabled={togglingPauseId === entry.offeringId}
-                              className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
-                            >
-                              {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.disconnect")}
-                            </button>
-                          ) : (
-                            <>
-                              {entry.enabled !== false && entry.reviewStatus === "approved" && (
-                                <button
-                                  onClick={() => void handleTogglePause(entry.offeringId, true)}
-                                  disabled={togglingPauseId === entry.offeringId}
-                                  className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
-                                >
-                                  {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.connect")}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => void handleLeavePool(entry.offeringId)}
-                                disabled={leavingId === entry.offeringId}
-                                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
-                              >
-                                {leavingId === entry.offeringId ? "..." : t("modelsMgmt.delete")}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Row 2: Badges */}
-                      <div className="flex items-center gap-2 mb-2">
-                        {isPlatform ? (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">{"\u2601\uFE0F"} {t("modelsMgmt.platformHosted")}</span>
-                        ) : (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium">{"\uD83D\uDDA5\uFE0F"} {t("modelsMgmt.distributed")}</span>
-                        )}
-                        {isVerified && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{"\u2705"}{t("modelsMgmt.verified")}</span>
-                        )}
-                      </div>
-
-                      {/* Row 3: Supplier + price */}
-                      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-secondary">
-                        <span>
-                          {t("modelsMgmt.supplier")}:{" "}
-                          {entry.ownerHandle ? (
-                            <Link
-                              to={`/u/${entry.ownerHandle}`}
-                              className="text-accent hover:text-accent/80 no-underline"
-                            >
-                              {entry.ownerDisplayName || entry.ownerHandle}
-                            </Link>
-                          ) : (
-                            <span className="text-text-tertiary">{entry.ownerDisplayName || "-"}</span>
-                          )}
-                        </span>
-                        <span>
-                          {t("modelsMgmt.price")}: <span className="font-mono text-text-primary">{formatTokens(inputPrice)}/{formatTokens(outputPrice)}</span>
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+      {/* Expanded details */}
+      {expanded && (
+        <div className="border-t border-line px-4 py-3 text-xs text-text-secondary flex flex-col gap-1.5">
+          {/* Line 1: Supplier + uptime + join date */}
+          <div className="flex flex-wrap gap-x-4">
+            <span>
+              {t("modelsMgmt.supplier")}:{" "}
+              {entry.ownerHandle ? (
+                <Link
+                  to={`/u/${entry.ownerHandle}`}
+                  className="text-accent hover:text-accent/80 no-underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {entry.ownerDisplayName || entry.ownerHandle}
+                </Link>
+              ) : (
+                <span className="text-text-tertiary">{entry.ownerDisplayName || "-"}</span>
+              )}
+              {entry.ownerHandle && <span className="text-text-tertiary ml-1">(@{entry.ownerHandle})</span>}
+            </span>
+            <span>{t("modelsMgmt.uptime")}: {formatRuntime(entry.joinedAt)}</span>
+            <span>{t("modelsMgmt.joinDate")}: {new Date(entry.joinedAt).toLocaleDateString()}</span>
           </div>
-        );
-      })}
+          {/* Line 2: Price spelled out */}
+          <div>
+            {t("modelsMgmt.perKTokens")}: {t("modelsMgmt.xtokensIn")} {formatTokens(inputPrice)} {t("modelsMgmt.xtokens")} / {t("modelsMgmt.xtokensOut")} {formatTokens(outputPrice)} {t("modelsMgmt.xtokens")}
+          </div>
+          {/* Line 3: Limits */}
+          <div>
+            {t("modelsMgmt.dailyLimit")}: {entry.dailyTokenLimit ? `${formatTokens(entry.dailyTokenLimit)} tokens` : "-"} · {t("modelsMgmt.maxConc")}: {entry.maxConcurrency ?? "-"}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -350,16 +334,13 @@ function UsingTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [leavingId, setLeavingId] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       const poolRes = await apiJson<{ data: PoolEntry[] }>("/v1/me/connection-pool").catch(() => ({ data: [] as PoolEntry[] }));
       const entries = poolRes.data ?? [];
       setPool(entries);
-      // Default all groups expanded
-      const allModels = new Set(entries.map((e) => e.logicalModel));
-      setExpandedGroups(allModels);
     } catch {
       // ignore
     } finally {
@@ -401,16 +382,10 @@ function UsingTab() {
     }
   };
 
-  const toggleGroup = useCallback((model: string) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(model)) next.delete(model);
-      else next.add(model);
-      return next;
-    });
-  }, []);
-
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
+
+  const active = pool.filter(isPoolEntryActive);
+  const inactive = pool.filter((e) => !isPoolEntryActive(e));
 
   return (
     <div>
@@ -436,51 +411,53 @@ function UsingTab() {
         </div>
       ) : (
         <>
-          {(() => {
-            const active = pool.filter(isPoolEntryActive);
-            const inactive = pool.filter((e) => !isPoolEntryActive(e));
-            return (
-              <>
-                {active.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-sm font-semibold text-text-primary mb-3">
-                      {t("modelsMgmt.connected")} ({active.length})
-                    </h3>
-                    <PoolGroupedSection
-                      entries={active}
-                      expandedGroups={expandedGroups}
-                      toggleGroup={toggleGroup}
-                      leavingId={leavingId}
-                      handleLeavePool={handleLeavePool}
-                      togglingPauseId={togglingPauseId}
-                      handleTogglePause={handleTogglePause}
-                      isActive={true}
-                      t={t}
-                    />
-                  </div>
-                )}
+          {active.length > 0 && (
+            <section className="mb-6">
+              <h3 className="text-sm font-semibold text-text-primary mb-3">
+                {t("modelsMgmt.connected")} ({active.length})
+              </h3>
+              <div className="flex flex-col gap-2">
+                {active.map((entry) => (
+                  <PoolCard
+                    key={entry.offeringId}
+                    entry={entry}
+                    isActive={true}
+                    expanded={expandedId === entry.offeringId}
+                    onToggleExpand={() => setExpandedId(expandedId === entry.offeringId ? null : entry.offeringId)}
+                    leavingId={leavingId}
+                    handleLeavePool={handleLeavePool}
+                    togglingPauseId={togglingPauseId}
+                    handleTogglePause={handleTogglePause}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
-                {inactive.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-sm font-semibold text-text-secondary mb-3">
-                      {t("modelsMgmt.history")} ({inactive.length})
-                    </h3>
-                    <PoolGroupedSection
-                      entries={inactive}
-                      expandedGroups={expandedGroups}
-                      toggleGroup={toggleGroup}
-                      leavingId={leavingId}
-                      handleLeavePool={handleLeavePool}
-                      togglingPauseId={togglingPauseId}
-                      handleTogglePause={handleTogglePause}
-                      isActive={false}
-                      t={t}
-                    />
-                  </div>
-                )}
-              </>
-            );
-          })()}
+          {inactive.length > 0 && (
+            <section className="mb-6">
+              <h3 className="text-sm font-semibold text-text-secondary mb-3">
+                {t("modelsMgmt.history")} ({inactive.length})
+              </h3>
+              <div className="flex flex-col gap-2">
+                {inactive.map((entry) => (
+                  <PoolCard
+                    key={entry.offeringId}
+                    entry={entry}
+                    isActive={false}
+                    expanded={expandedId === entry.offeringId}
+                    onToggleExpand={() => setExpandedId(expandedId === entry.offeringId ? null : entry.offeringId)}
+                    leavingId={leavingId}
+                    handleLeavePool={handleLeavePool}
+                    togglingPauseId={togglingPauseId}
+                    handleTogglePause={handleTogglePause}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

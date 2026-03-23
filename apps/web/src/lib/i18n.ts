@@ -403,6 +403,14 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.myAddedNodes": "我添加的节点",
     "modelsMgmt.configure": "配置",
     "modelsMgmt.configDisabled": "请先停止节点",
+    "modelsMgmt.perKTokens": "每 1K tokens",
+    "modelsMgmt.xtokensIn": "input",
+    "modelsMgmt.xtokensOut": "output",
+    "modelsMgmt.xtokens": "xtokens",
+    "modelsMgmt.dailyLimit": "每日上限",
+    "modelsMgmt.maxConc": "最大并发",
+    "modelsMgmt.joinDate": "加入",
+    "modelsMgmt.uptime": "连续运行",
 
     // Node config modal
     "nodeConfig.title": "节点配置",
@@ -889,6 +897,14 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.myAddedNodes": "My Added Nodes",
     "modelsMgmt.configure": "Configure",
     "modelsMgmt.configDisabled": "Stop node first",
+    "modelsMgmt.perKTokens": "Per 1K tokens",
+    "modelsMgmt.xtokensIn": "input",
+    "modelsMgmt.xtokensOut": "output",
+    "modelsMgmt.xtokens": "xtokens",
+    "modelsMgmt.dailyLimit": "Daily limit",
+    "modelsMgmt.maxConc": "Max concurrency",
+    "modelsMgmt.joinDate": "Joined",
+    "modelsMgmt.uptime": "Uptime",
 
     // Node config modal
     "nodeConfig.title": "Node Configuration",
