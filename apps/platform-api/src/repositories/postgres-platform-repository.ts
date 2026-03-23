@@ -1427,6 +1427,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         enabled,
         review_status AS "reviewStatus",
         created_at AS "createdAt",
+        execution_mode AS "executionMode",
+        node_id AS "nodeId",
         daily_token_limit AS "dailyTokenLimit",
         max_concurrency AS "maxConcurrency"
       FROM offerings
