@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { formatTokens } from "@/lib/utils";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
+import { invalidateUserModels } from "@/hooks/useUserModels";
 
 interface NetworkModel {
   logicalModel: string;
@@ -61,33 +62,30 @@ function BarChart7d({ data }: { data: number[] }) {
   );
 }
 
-interface Offering {
+interface SupplierOffering {
   id: string;
-  name?: string;
   logicalModel: string;
-  realModel?: string;
   ownerDisplayName?: string;
   ownerHandle?: string;
   executionMode?: string;
-  nodeId?: string;
-  enabled?: boolean;
-  reviewStatus?: string;
   fixedPricePer1kInput: number;
   fixedPricePer1kOutput: number;
-  upvotes?: number;
-  downvotes?: number;
-  favoriteCount?: number;
+  createdAt?: string;
 }
 
-/** Horizontal progress bar */
-function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  return (
-    <div className="h-2 rounded-full bg-line overflow-hidden flex-1">
-      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
-    </div>
-  );
+function formatRuntime(createdAt: string): string {
+  const created = new Date(createdAt).getTime();
+  const now = Date.now();
+  const diffMs = now - created;
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days}d`;
+  if (hours > 0) return `${hours}h`;
+  const mins = Math.floor(diffMs / (1000 * 60));
+  return `${mins}m`;
 }
+
+type SupplierSort = "price" | "longest";
 
 export function ModelDetailPage() {
   const { logicalModel } = useParams<{ logicalModel: string }>();
@@ -96,11 +94,17 @@ export function ModelDetailPage() {
   const [model, setModel] = useState<NetworkModel | null>(null);
   const [stats, setStats] = useState<ModelStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [offerings, setOfferings] = useState<Offering[]>([]);
-  const [offeringsLoading, setOfferingsLoading] = useState(true);
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-  const [togglingFav, setTogglingFav] = useState<Set<string>>(new Set());
+  const [suppliers, setSuppliers] = useState<SupplierOffering[]>([]);
+  const [suppliersLoading, setSuppliersLoading] = useState(true);
+  const [joined, setJoined] = useState(false);
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [joinChecking, setJoinChecking] = useState(true);
+  const [supplierSort, setSupplierSort] = useState<SupplierSort>("price");
 
+  // Check if model is platform type
+  const isPlatformModel = model?.providers && model.providers.length > 0;
+
+  // Fetch model + stats
   useEffect(() => {
     Promise.all([
       apiJson<{ data: NetworkModel[] }>("/v1/network/models"),
@@ -113,34 +117,64 @@ export function ModelDetailPage() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, [logicalModel]);
 
-  // Fetch offerings for this model
+  // Fetch suppliers for this model
   useEffect(() => {
     if (!logicalModel) return;
-    setOfferingsLoading(true);
+    setSuppliersLoading(true);
     const params = new URLSearchParams({ logicalModel, limit: "100" });
-    Promise.all([
-      apiJson<{ data: { data: Offering[]; total: number } }>(`/v1/market/offerings?${params}`).catch(() => ({ data: { data: [] as Offering[], total: 0 } })),
-      apiJson<{ data: { offeringId: string }[] }>("/v1/user/favorites").catch(() => ({ data: [] as { offeringId: string }[] })),
-    ]).then(([offRes, favRes]) => {
-      const offerings = Array.isArray(offRes.data) ? offRes.data : (offRes.data?.data ?? []);
-      setOfferings(offerings);
-      setFavoriteIds(new Set((favRes.data ?? []).map((f) => f.offeringId)));
-    }).finally(() => setOfferingsLoading(false));
+    apiJson<{ data: { data: SupplierOffering[]; total: number } | SupplierOffering[] }>(`/v1/market/offerings?${params}`)
+      .then((res) => {
+        const items = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+        setSuppliers(items.slice(0, 10));
+      })
+      .catch(() => {})
+      .finally(() => setSuppliersLoading(false));
   }, [logicalModel]);
 
-  const toggleFavorite = useCallback(async (offeringId: string) => {
-    setTogglingFav((prev) => new Set(prev).add(offeringId));
+  // Check if user has joined this model
+  useEffect(() => {
+    if (!logicalModel) return;
+    setJoinChecking(true);
+    apiJson<{ data: { joined: boolean } }>(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`)
+      .then((res) => {
+        setJoined(res.data?.joined ?? false);
+      })
+      .catch(() => {
+        // If 404 or error, assume not joined
+        setJoined(false);
+      })
+      .finally(() => setJoinChecking(false));
+  }, [logicalModel]);
+
+  const handleJoinLeave = useCallback(async () => {
+    if (!logicalModel || joinLoading) return;
+    setJoinLoading(true);
     try {
-      if (favoriteIds.has(offeringId)) {
-        await apiJson(`/v1/offerings/${offeringId}/favorite`, { method: "DELETE" });
-        setFavoriteIds((prev) => { const next = new Set(prev); next.delete(offeringId); return next; });
+      if (joined) {
+        await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`, { method: "DELETE" });
+        setJoined(false);
       } else {
-        await apiJson(`/v1/offerings/${offeringId}/favorite`, { method: "POST" });
-        setFavoriteIds((prev) => new Set(prev).add(offeringId));
+        await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`, { method: "POST" });
+        setJoined(true);
       }
-    } catch { /* ignore */ }
-    setTogglingFav((prev) => { const next = new Set(prev); next.delete(offeringId); return next; });
-  }, [favoriteIds]);
+      invalidateUserModels();
+    } catch {
+      // ignore
+    } finally {
+      setJoinLoading(false);
+    }
+  }, [logicalModel, joined, joinLoading]);
+
+  // Sort suppliers
+  const sortedSuppliers = [...suppliers].sort((a, b) => {
+    if (supplierSort === "price") {
+      return (a.fixedPricePer1kInput ?? 9999) - (b.fixedPricePer1kInput ?? 9999);
+    }
+    // longest = oldest createdAt first
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Date.now();
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : Date.now();
+    return aTime - bTime;
+  });
 
   if (loading) {
     return (
@@ -149,9 +183,6 @@ export function ModelDetailPage() {
           <div className="animate-pulse">
             <div className="h-6 bg-line rounded w-1/3 mb-4" />
             <div className="h-4 bg-line rounded w-1/2 mb-8" />
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-line rounded-lg" />)}
-            </div>
             <div className="h-24 bg-line rounded-lg" />
           </div>
         </div>
@@ -171,47 +202,67 @@ export function ModelDetailPage() {
   }
 
   const totalTokens = stats?.totalTokens ?? 0;
-  const inputTokens = stats?.totalInputTokens ?? 0;
-  const outputTokens = stats?.totalOutputTokens ?? 0;
 
   return (
     <div className="min-h-screen flex flex-col pt-14">
       <div className="mx-auto max-w-2xl px-6 pt-8 pb-24 flex-1 w-full">
-        {/* Back */}
-        <button onClick={() => navigate("/mnetwork")}
-          className="text-xs text-text-tertiary hover:text-accent transition-colors cursor-pointer mb-6 bg-transparent border-none p-0">
-          {t("models.back")}
-        </button>
+        {/* Top row: back + join button */}
+        <div className="flex items-center justify-between mb-6">
+          <button onClick={() => navigate("/mnetwork")}
+            className="text-xs text-text-tertiary hover:text-accent transition-colors cursor-pointer bg-transparent border-none p-0">
+            {t("models.back")}
+          </button>
+
+          {!joinChecking && (
+            <button
+              onClick={handleJoinLeave}
+              disabled={joinLoading}
+              className={`rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer border ${
+                joined
+                  ? "border-accent/40 bg-accent/10 text-accent"
+                  : "border-accent/30 text-accent hover:bg-accent/10 bg-transparent"
+              } ${joinLoading ? "opacity-50" : ""}`}
+            >
+              {joinLoading ? "..." : joined ? `${t("modelDetail.joined")} \u2713` : t("modelDetail.joinList")}
+            </button>
+          )}
+        </div>
 
         {/* Header */}
-        <div className="mb-8">
+        <div className={`mb-8 rounded-[var(--radius-card)] p-5 border ${isPlatformModel ? "border-blue-500/20 bg-blue-500/5" : "border-purple-500/20 bg-purple-500/5"}`}>
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-bold font-mono tracking-tight">{model.logicalModel}</h1>
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${model.status === "available" ? "border-emerald-400/30 text-emerald-400" : "border-amber-400/30 text-amber-400"}`}>
-              {model.status ?? "available"}
+              {model.status === "available" ? "\uD83D\uDFE2" : "\uD83D\uDFE1"} {model.status ?? "available"}
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-text-secondary">
             <span>{model.ownerCount ?? 0} {t("models.nodes")}</span>
-            <span>{model.ownerCount ?? 0} {t("models.suppliers")}</span>
+            <span className="text-text-tertiary/40">&middot;</span>
+            <span>{(model.featuredSuppliers ?? []).length || (model.ownerCount ?? 0)} {t("models.suppliers")}</span>
           </div>
         </div>
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="rounded-[var(--radius-card)] border border-line bg-panel p-4 text-center">
-            <div className="text-xl font-bold text-text-primary">{stats?.totalRequests ?? 0}</div>
-            <div className="text-[10px] text-text-tertiary mt-1">{t("models.detail.requests30d")}</div>
-          </div>
-          <div className="rounded-[var(--radius-card)] border border-line bg-panel p-4 text-center">
-            <div className="text-xl font-bold text-text-primary">{formatTokens(totalTokens)}</div>
-            <div className="text-[10px] text-text-tertiary mt-1">xtokens</div>
-          </div>
-          <div className="rounded-[var(--radius-card)] border border-line bg-panel p-4 text-center">
-            <div className="text-xl font-bold text-text-primary">
-              {model.minInputPrice != null ? <>{formatTokens(model.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(model.minOutputPrice ?? 0)}</> : "—"}
+        {/* Model Info */}
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 mb-6">
+          <h3 className="text-xs font-semibold text-text-secondary mb-4">{t("modelDetail.modelInfo")}</h3>
+          <div className="flex flex-col gap-2.5 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-text-tertiary text-xs">{t("models.avgPrice7d")}</span>
+              <span className="font-mono text-text-primary">
+                {model.minInputPrice != null
+                  ? <>{formatTokens(model.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(model.minOutputPrice ?? 0)} <span className="text-text-tertiary text-[10px]">per 1K tokens: input xtokens / output xtokens</span></>
+                  : "\u2014"}
+              </span>
             </div>
-            <div className="text-[10px] text-text-tertiary mt-1">{t("models.avgPrice7d")}</div>
+            <div className="flex items-center justify-between">
+              <span className="text-text-tertiary text-xs">{t("models.requests")}</span>
+              <span className="font-mono text-text-primary">{stats?.totalRequests ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-text-tertiary text-xs">Total Tokens</span>
+              <span className="font-mono text-text-primary">{formatTokens(totalTokens)}</span>
+            </div>
           </div>
         </div>
 
@@ -223,126 +274,57 @@ export function ModelDetailPage() {
           </div>
         )}
 
-        {/* Token breakdown */}
-        {totalTokens > 0 && (
-          <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 mb-6">
-            <h3 className="text-xs font-semibold text-text-secondary mb-4">{t("models.tokenBreakdown")}</h3>
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-text-tertiary w-14">Input</span>
-                <ProgressBar value={inputTokens} max={totalTokens} color="var(--color-accent)" />
-                <span className="text-xs text-text-secondary w-20 text-right">
-                  {formatTokens(inputTokens)} ({totalTokens > 0 ? Math.round((inputTokens / totalTokens) * 100) : 0}%)
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-text-tertiary w-14">Output</span>
-                <ProgressBar value={outputTokens} max={totalTokens} color="rgba(139,227,218,0.5)" />
-                <span className="text-xs text-text-secondary w-20 text-right">
-                  {formatTokens(outputTokens)} ({totalTokens > 0 ? Math.round((outputTokens / totalTokens) * 100) : 0}%)
-                </span>
-              </div>
+        {/* Suppliers */}
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-semibold text-text-secondary">
+              {t("modelDetail.suppliers")} ({suppliers.length})
+            </h3>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setSupplierSort("price")}
+                className={`px-2.5 py-1 text-[11px] rounded-full transition-colors cursor-pointer border ${
+                  supplierSort === "price" ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"
+                }`}
+              >
+                {t("modelDetail.sortLowest")}
+              </button>
+              <button
+                onClick={() => setSupplierSort("longest")}
+                className={`px-2.5 py-1 text-[11px] rounded-full transition-colors cursor-pointer border ${
+                  supplierSort === "longest" ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"
+                }`}
+              >
+                {t("modelDetail.sortLongest")}
+              </button>
             </div>
           </div>
-        )}
 
-        {/* Suppliers + nodes */}
-        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 mb-6">
-          <h3 className="text-xs font-semibold text-text-secondary mb-3">{t("models.suppliers")}</h3>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {(model.featuredSuppliers ?? []).map((s) => (
-              <span key={s.handle} className="text-xs text-text-primary bg-accent/8 border border-accent/15 rounded-full px-3 py-1 font-mono">
-                {s.displayName}
-              </span>
-            ))}
-            {(!model.featuredSuppliers || model.featuredSuppliers.length === 0) && (
-              <span className="text-xs text-text-tertiary">—</span>
-            )}
-          </div>
-          <div className="flex gap-4 text-xs text-text-tertiary">
-            <span>{t("models.stat.nodes")}: {model.ownerCount ?? 0}</span>
-            <span>{t("models.stat.suppliers")}: {model.ownerCount ?? 0}</span>
-            {stats?.uniqueUsers != null && <span>{t("models.requests")}: {stats.uniqueUsers} users</span>}
-          </div>
-        </div>
-
-        {/* Offerings / Nodes list */}
-        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5">
-          <h3 className="text-xs font-semibold text-text-secondary mb-4">{t("modelDetail.offerings")}</h3>
-          {offeringsLoading ? (
-            <div className="grid grid-cols-1 gap-3">
+          {suppliersLoading ? (
+            <div className="flex flex-col gap-2">
               {[1, 2].map((i) => (
-                <div key={i} className="rounded-lg border border-line bg-panel-strong p-4 animate-pulse">
-                  <div className="h-4 bg-line rounded w-1/3 mb-2" />
-                  <div className="h-3 bg-line rounded w-1/2" />
-                </div>
+                <div key={i} className="h-8 bg-line rounded animate-pulse" />
               ))}
             </div>
-          ) : offerings.length === 0 ? (
+          ) : sortedSuppliers.length === 0 ? (
             <p className="text-text-tertiary text-sm text-center py-6">{t("modelDetail.noOfferings")}</p>
           ) : (
-            <div className="grid grid-cols-1 gap-3">
-              {offerings.map((o) => {
-                const isFav = favoriteIds.has(o.id);
-                const isToggling = togglingFav.has(o.id);
-                // Platform-hosted offerings are verified (known API + fixed model)
-                const isVerified = o.executionMode === "platform" && o.reviewStatus === "approved";
-                const isOnline = o.executionMode === "platform" || o.enabled !== false;
-                // Use model name as fallback when no custom name set
-                const displayName = o.name || o.logicalModel || o.realModel || t("modelDetail.noName");
-                return (
-                  <div key={o.id} className="rounded-lg border border-line bg-panel-strong p-4 transition-colors hover:border-accent/20">
-                    {/* Row 1: Name + Status */}
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">
-                        {displayName}
-                      </span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Online/offline */}
-                        <span className="flex items-center gap-1">
-                          <span className={`inline-block h-2 w-2 rounded-full ${isOnline ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
-                          <span className="text-[10px] text-text-tertiary">{isOnline ? t("modelDetail.online") : t("modelDetail.offline")}</span>
-                        </span>
-                        {/* Only show verification badge when verified */}
-                        {isVerified && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-400/10 text-emerald-400">
-                            {t("modelDetail.verified")}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Row 2: Supplier + price */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-xs text-text-secondary">
-                        {o.ownerHandle ? (
-                          <Link to={`/u/${o.ownerHandle}`} className="hover:text-accent transition-colors" onClick={(e) => e.stopPropagation()}>
-                            {o.ownerDisplayName || o.ownerHandle}
-                          </Link>
-                        ) : (
-                          <span>{o.ownerDisplayName || "—"}</span>
-                        )}
-                      </div>
-                      <span className="text-xs font-mono text-text-tertiary">
-                        {formatTokens(o.fixedPricePer1kInput)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(o.fixedPricePer1kOutput)}
-                      </span>
-                    </div>
-
-                    {/* Row 3: Add to list button */}
-                    <button
-                      onClick={() => toggleFavorite(o.id)}
-                      disabled={isToggling}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${
-                        isFav
-                          ? "border-accent/40 bg-accent/10 text-accent"
-                          : "border-line text-text-tertiary hover:text-text-secondary hover:border-accent/25"
-                      } ${isToggling ? "opacity-50" : ""}`}
-                    >
-                      {isFav ? t("modelDetail.added") : t("modelDetail.addToList")}
-                    </button>
-                  </div>
-                );
-              })}
+            <div className="flex flex-col gap-1.5">
+              {sortedSuppliers.map((s) => (
+                <div key={s.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-panel-strong transition-colors text-xs">
+                  <span className="text-text-primary font-medium truncate min-w-0">
+                    {s.ownerDisplayName || s.ownerHandle || "\u2014"}
+                  </span>
+                  <span className="text-text-tertiary/40">&middot;</span>
+                  <span className="font-mono text-text-secondary shrink-0">
+                    {formatTokens(s.fixedPricePer1kInput)}/{formatTokens(s.fixedPricePer1kOutput)}
+                  </span>
+                  <span className="text-text-tertiary/40">&middot;</span>
+                  <span className="text-text-tertiary shrink-0">
+                    {t("modelDetail.running")} {s.createdAt ? formatRuntime(s.createdAt) : "\u2014"}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -69,24 +69,6 @@ interface ConnectedNode {
   modelsCount: number;
 }
 
-interface PoolEntry {
-  offeringId: string;
-  logicalModel: string;
-  realModel?: string;
-  name?: string;
-  ownerDisplayName?: string;
-  ownerHandle?: string;
-  executionMode?: string;
-  fixedPricePer1kInput?: number;
-  fixedPricePer1kOutput?: number;
-  dailyTokenLimit?: number;
-  maxConcurrency?: number;
-  enabled?: boolean;
-  reviewStatus?: string;
-  paused?: boolean;
-  joinedAt: string;
-}
-
 // ── Helpers ──────────────────────────────────────────────────────
 
 function formatRuntime(createdAt: string): string {
@@ -170,10 +152,6 @@ function isOfferingActive(o: Offering, nodes: ConnectedNode[]): boolean {
   return enabled && o.reviewStatus === "approved" && (isPlatform || hasOnlineNode);
 }
 
-function isPoolEntryActive(entry: PoolEntry): boolean {
-  return !entry.paused && (entry.enabled !== false) && (entry.reviewStatus === "approved" || !entry.reviewStatus);
-}
-
 // ── Main component ──────────────────────────────────────────────
 
 export function ModelsManagePage() {
@@ -191,136 +169,80 @@ export function ModelsManagePage() {
 
 // ── Tab 1: Using ────────────────────────────────────────────────
 
-function PoolCard({
+interface PoolModelEntry {
+  logicalModel: string;
+  offeringCount: number;
+  minInputPrice: number;
+  minOutputPrice: number;
+  executionMode: string;
+}
+
+function GroupedPoolCard({
   entry,
-  isActive,
   expanded,
   onToggleExpand,
-  leavingId,
-  handleLeavePool,
-  togglingPauseId,
-  handleTogglePause,
+  disconnecting,
+  onDisconnect,
   t,
 }: {
-  entry: PoolEntry;
-  isActive: boolean;
+  entry: PoolModelEntry;
   expanded: boolean;
   onToggleExpand: () => void;
-  leavingId: string;
-  handleLeavePool: (id: string) => Promise<void>;
-  togglingPauseId: string;
-  handleTogglePause: (id: string, paused: boolean) => Promise<void>;
+  disconnecting: string;
+  onDisconnect: (model: string) => Promise<void>;
   t: (key: string) => string;
 }) {
-  const displayName = entry.name || entry.logicalModel;
-  const inputPrice = entry.fixedPricePer1kInput ?? 0;
-  const outputPrice = entry.fixedPricePer1kOutput ?? 0;
+  const inputPrice = entry.minInputPrice ?? 0;
+  const outputPrice = entry.minOutputPrice ?? 0;
   const isPlatform = entry.executionMode === "platform" || !entry.executionMode || entry.executionMode === "key";
-  const isVerified = isPlatform && entry.reviewStatus === "approved";
 
   return (
     <div
       className={`rounded-[var(--radius-card)] border bg-panel transition-colors cursor-pointer ${
-        !isActive ? "border-line opacity-60" : "border-accent/20"
+        isPlatform ? "border-blue-500/20 bg-blue-500/5" : "border-purple-500/20 bg-purple-500/5"
       }`}
       onClick={onToggleExpand}
     >
       {/* Collapsed single-line row */}
       <div className="flex items-center gap-2.5 px-4 py-2.5 min-w-0">
-        <span className="font-mono font-medium text-sm text-text-primary truncate shrink-0">{displayName}</span>
+        <span className="font-mono font-medium text-sm text-text-primary truncate shrink-0">{entry.logicalModel}</span>
 
         {/* Status badge */}
-        {entry.enabled !== false && entry.reviewStatus === "approved" ? (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
-            {"\uD83D\uDFE2"} {t("modelsMgmt.status.running")}
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-secondary shrink-0">
-            {"\u26AB"} {t("modelsMgmt.status.offline")}
-          </span>
-        )}
+        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
+          {"\uD83D\uDFE2"}{t("modelsMgmt.status.running")}
+        </span>
 
         {/* Type badge */}
         {isPlatform ? (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium shrink-0">{"\u2601\uFE0F"} {t("modelsMgmt.platformHosted")}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium shrink-0">{"\u2601\uFE0F"}</span>
         ) : (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium shrink-0">{"\uD83D\uDDA5\uFE0F"} {t("modelsMgmt.distributed")}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium shrink-0">{"\uD83D\uDDA5\uFE0F"}</span>
         )}
 
-        {/* Verification badge */}
-        {isVerified && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium shrink-0">{"\u2705"} {t("modelsMgmt.verified")}</span>
-        )}
-
-        {/* Supplier name */}
-        <span className="text-xs text-text-secondary truncate">{entry.ownerDisplayName || entry.ownerHandle || "-"}</span>
+        {/* Node count */}
+        <span className="text-xs text-text-secondary shrink-0">{entry.offeringCount}{t("modelsMgmt.nodes")}</span>
 
         {/* Price */}
         <span className="font-mono text-xs text-text-tertiary shrink-0">{formatTokens(inputPrice)}/{formatTokens(outputPrice)}</span>
 
-        {/* Buttons — ml-auto, stop propagation */}
+        {/* Disconnect button */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {isActive ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); void handleTogglePause(entry.offeringId, false); }}
-              disabled={togglingPauseId === entry.offeringId}
-              className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
-            >
-              {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.disconnect")}
-            </button>
-          ) : (
-            <>
-              {entry.enabled !== false && entry.reviewStatus === "approved" && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); void handleTogglePause(entry.offeringId, true); }}
-                  disabled={togglingPauseId === entry.offeringId}
-                  className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
-                >
-                  {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.connect")}
-                </button>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); void handleLeavePool(entry.offeringId); }}
-                disabled={leavingId === entry.offeringId}
-                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
-              >
-                {leavingId === entry.offeringId ? "..." : t("modelsMgmt.delete")}
-              </button>
-            </>
-          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); void onDisconnect(entry.logicalModel); }}
+            disabled={disconnecting === entry.logicalModel}
+            className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
+          >
+            {disconnecting === entry.logicalModel ? "..." : t("modelsMgmt.disconnect")}
+          </button>
         </div>
       </div>
 
       {/* Expanded details */}
       {expanded && (
         <div className="border-t border-line px-4 py-3 text-xs text-text-secondary flex flex-col gap-1.5">
-          {/* Line 1: Supplier + uptime + join date */}
-          <div className="flex flex-wrap gap-x-4">
-            <span>
-              {t("modelsMgmt.supplier")}:{" "}
-              {entry.ownerHandle ? (
-                <Link
-                  to={`/u/${entry.ownerHandle}`}
-                  className="text-accent hover:text-accent/80 no-underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {entry.ownerDisplayName || entry.ownerHandle}
-                </Link>
-              ) : (
-                <span className="text-text-tertiary">{entry.ownerDisplayName || "-"}</span>
-              )}
-              {entry.ownerHandle && <span className="text-text-tertiary ml-1">(@{entry.ownerHandle})</span>}
-            </span>
-            <span>{t("modelsMgmt.uptime")}: {formatRuntime(entry.joinedAt)}</span>
-            <span>{t("modelsMgmt.joinDate")}: {new Date(entry.joinedAt).toLocaleDateString()}</span>
-          </div>
-          {/* Line 2: Price spelled out */}
+          <div>{entry.offeringCount} {t("modelsMgmt.nodes")}{t("modelDetail.noOfferings") ? "" : ""}</div>
           <div>
             {t("modelsMgmt.perKTokens")}: {t("modelsMgmt.xtokensIn")} {formatTokens(inputPrice)} {t("modelsMgmt.xtokens")} / {t("modelsMgmt.xtokensOut")} {formatTokens(outputPrice)} {t("modelsMgmt.xtokens")}
-          </div>
-          {/* Line 3: Limits */}
-          <div>
-            {t("modelsMgmt.dailyLimit")}: {entry.dailyTokenLimit ? `${formatTokens(entry.dailyTokenLimit)} tokens` : "-"} · {t("modelsMgmt.maxConc")}: {entry.maxConcurrency ?? "-"}
           </div>
         </div>
       )}
@@ -330,17 +252,16 @@ function PoolCard({
 
 function UsingTab() {
   const { t } = useLocale();
-  const [pool, setPool] = useState<PoolEntry[]>([]);
+  const [models, setModels] = useState<PoolModelEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [leavingId, setLeavingId] = useState("");
+  const [disconnecting, setDisconnecting] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const poolRes = await apiJson<{ data: PoolEntry[] }>("/v1/me/connection-pool").catch(() => ({ data: [] as PoolEntry[] }));
-      const entries = poolRes.data ?? [];
-      setPool(entries);
+      const res = await apiJson<{ data: PoolModelEntry[] }>("/v1/me/connection-pool/grouped").catch(() => ({ data: [] as PoolModelEntry[] }));
+      setModels(res.data ?? []);
     } catch {
       // ignore
     } finally {
@@ -350,42 +271,21 @@ function UsingTab() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
-  const handleLeavePool = async (offeringId: string) => {
-    setLeavingId(offeringId);
+  const handleDisconnect = async (logicalModel: string) => {
+    setDisconnecting(logicalModel);
     setError("");
     try {
-      await apiJson(`/v1/me/connection-pool/${encodeURIComponent(offeringId)}`, { method: "DELETE" });
+      await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`, { method: "DELETE" });
       invalidateUserModels();
       await loadData();
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
-      setLeavingId("");
-    }
-  };
-
-  const [togglingPauseId, setTogglingPauseId] = useState("");
-  const handleTogglePause = async (offeringId: string, currentlyPaused: boolean) => {
-    setTogglingPauseId(offeringId);
-    setError("");
-    try {
-      await apiJson(`/v1/me/connection-pool/${encodeURIComponent(offeringId)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ paused: !currentlyPaused }),
-      });
-      invalidateUserModels();
-      await loadData();
-    } catch (err: unknown) {
-      setError(extractError(err));
-    } finally {
-      setTogglingPauseId("");
+      setDisconnecting("");
     }
   };
 
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
-
-  const active = pool.filter(isPoolEntryActive);
-  const inactive = pool.filter((e) => !isPoolEntryActive(e));
 
   return (
     <div>
@@ -405,60 +305,29 @@ function UsingTab() {
         </Link>
       </div>
 
-      {pool.length === 0 ? (
+      {models.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6 text-center mb-6">
           <p className="text-text-tertiary text-sm">{t("modelsMgmt.emptyUsageList")}</p>
         </div>
       ) : (
-        <>
-          {active.length > 0 && (
-            <section className="mb-6">
-              <h3 className="text-sm font-semibold text-text-primary mb-3">
-                {t("modelsMgmt.connected")} ({active.length})
-              </h3>
-              <div className="flex flex-col gap-2">
-                {active.map((entry) => (
-                  <PoolCard
-                    key={entry.offeringId}
-                    entry={entry}
-                    isActive={true}
-                    expanded={expandedId === entry.offeringId}
-                    onToggleExpand={() => setExpandedId(expandedId === entry.offeringId ? null : entry.offeringId)}
-                    leavingId={leavingId}
-                    handleLeavePool={handleLeavePool}
-                    togglingPauseId={togglingPauseId}
-                    handleTogglePause={handleTogglePause}
-                    t={t}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {inactive.length > 0 && (
-            <section className="mb-6">
-              <h3 className="text-sm font-semibold text-text-secondary mb-3">
-                {t("modelsMgmt.history")} ({inactive.length})
-              </h3>
-              <div className="flex flex-col gap-2">
-                {inactive.map((entry) => (
-                  <PoolCard
-                    key={entry.offeringId}
-                    entry={entry}
-                    isActive={false}
-                    expanded={expandedId === entry.offeringId}
-                    onToggleExpand={() => setExpandedId(expandedId === entry.offeringId ? null : entry.offeringId)}
-                    leavingId={leavingId}
-                    handleLeavePool={handleLeavePool}
-                    togglingPauseId={togglingPauseId}
-                    handleTogglePause={handleTogglePause}
-                    t={t}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-        </>
+        <section className="mb-6">
+          <h3 className="text-sm font-semibold text-text-primary mb-3">
+            {t("modelsMgmt.connected")} ({models.length})
+          </h3>
+          <div className="flex flex-col gap-2">
+            {models.map((entry) => (
+              <GroupedPoolCard
+                key={entry.logicalModel}
+                entry={entry}
+                expanded={expandedId === entry.logicalModel}
+                onToggleExpand={() => setExpandedId(expandedId === entry.logicalModel ? null : entry.logicalModel)}
+                disconnecting={disconnecting}
+                onDisconnect={handleDisconnect}
+                t={t}
+              />
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

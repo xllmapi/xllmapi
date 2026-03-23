@@ -419,7 +419,7 @@ export function ModelsPage() {
               return (
                 <div key={m.logicalModel}
                   onClick={() => navigate(`/mnetwork/${encodeURIComponent(m.logicalModel)}`)}
-                  className="rounded-[var(--radius-card)] border border-line bg-panel p-5 transition-colors hover:border-accent/25 cursor-pointer">
+                  className="rounded-[var(--radius-card)] border border-blue-500/20 bg-blue-500/5 p-5 transition-colors hover:border-blue-500/40 cursor-pointer">
 
                   {/* Name + status */}
                   <div className="flex items-center justify-between mb-3">
@@ -485,7 +485,7 @@ export function ModelsPage() {
               const isOnline = o.enabled !== false && o.reviewStatus === "approved";
               return (
                 <div key={o.id} onClick={() => navigate(`/market/${encodeURIComponent(o.id)}`)}
-                  className="rounded-[var(--radius-card)] border border-line bg-panel p-5 transition-colors hover:border-accent/25 cursor-pointer">
+                  className="rounded-[var(--radius-card)] border border-purple-500/20 bg-purple-500/5 p-5 transition-colors hover:border-purple-500/40 cursor-pointer">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs font-mono text-text-tertiary shrink-0">{o.id.slice(0, 7)}</span>
