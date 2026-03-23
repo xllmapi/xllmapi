@@ -12,6 +12,7 @@ interface UsageSummary {
   outputTokens: number;
   totalTokens: number;
   supplierReward?: number;
+  consumerCost?: number;
 }
 
 interface ConsumptionItem {
@@ -333,11 +334,11 @@ export function OverviewPage() {
         />
         <StatCard
           label={t("overview.supply")}
-          value={`${formatTokens(supplyUsage?.totalTokens ?? 0)} xtokens`}
+          value={`${formatTokens(supplyUsage?.supplierReward ?? 0)} xtokens`}
         />
         <StatCard
           label={t("overview.consumed")}
-          value={`${formatTokens(consumptionUsage?.totalTokens ?? 0)} xtokens`}
+          value={`${formatTokens(consumptionUsage?.consumerCost ?? 0)} xtokens`}
         />
         <StatCard
           label={t("overview.offerings")}
