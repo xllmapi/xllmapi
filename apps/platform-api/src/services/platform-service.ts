@@ -765,6 +765,9 @@ export const platformService = {
   async leaveModelPool(userId: string, logicalModel: string) {
     return platformRepository.leaveModelPool({ userId, logicalModel });
   },
+  async removeModelPool(userId: string, logicalModel: string) {
+    return platformRepository.removeModelPool({ userId, logicalModel });
+  },
   async isModelInPool(userId: string, logicalModel: string) {
     return platformRepository.isModelInPool({ userId, logicalModel });
   },
@@ -786,5 +789,13 @@ export const platformService = {
   },
   async listUserOfferings(handle: string) {
     return platformRepository.listUserOfferings(handle);
+  },
+
+  // User Model Config
+  async getUserModelConfig(userId: string, logicalModel: string) {
+    return platformRepository.getUserModelConfig({ userId, logicalModel });
+  },
+  async upsertUserModelConfig(userId: string, logicalModel: string, maxInputPrice: number | null, maxOutputPrice: number | null) {
+    return platformRepository.upsertUserModelConfig({ userId, logicalModel, maxInputPrice, maxOutputPrice });
   }
 };

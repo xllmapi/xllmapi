@@ -83,6 +83,15 @@ CREATE TABLE IF NOT EXISTS offering_comments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- User model config (per-model price limits)
+CREATE TABLE IF NOT EXISTS user_model_config (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  logical_model TEXT NOT NULL,
+  max_input_price INT,
+  max_output_price INT,
+  PRIMARY KEY (user_id, logical_model)
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_nodes_user_status ON nodes(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);

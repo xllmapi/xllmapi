@@ -387,8 +387,13 @@ export const sqlitePlatformRepository: PlatformRepository = {
   // --- Connection Pool model-level (stubs) ---
   joinModelPool() {},
   leaveModelPool() {},
+  removeModelPool() {},
   isModelInPool() { return false; },
   listConnectionPoolGrouped() { return []; },
+
+  // --- User Model Config (stubs) ---
+  getUserModelConfig() { return null; },
+  upsertUserModelConfig() {},
 
   // --- Market (stubs) ---
   listMarketOfferings() { return { data: [], total: 0 }; },

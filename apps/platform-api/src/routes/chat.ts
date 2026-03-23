@@ -35,18 +35,42 @@ async function findOfferingsIncludingNodes(
   includeNodes: boolean,
   userId?: string
 ): Promise<CandidateOffering[]> {
+  let offerings: CandidateOffering[];
+
   // If userId is available, check user's usage list
   if (userId) {
     // Check if user has ANY items in usage list (not just for this model)
     const allUserOfferings = await platformService.listConnectionPool(userId);
     if (allUserOfferings.length > 0) {
       // User has a usage list — only route to models in their list
-      const userOfferings = await platformService.findUserOfferingsForModel(userId, logicalModel);
-      return userOfferings; // May be empty — means this model is not in their list
+      offerings = await platformService.findUserOfferingsForModel(userId, logicalModel);
+    } else {
+      // No usage list at all — fallback to all offerings for backward compat
+      offerings = await getAllOfferings(logicalModel, includeNodes);
     }
-    // No usage list at all — fallback to all offerings for backward compat
+  } else {
+    offerings = await getAllOfferings(logicalModel, includeNodes);
   }
 
+  // Apply user's max price config if set
+  if (userId) {
+    const config = await platformService.getUserModelConfig(userId, logicalModel);
+    if (config) {
+      offerings = offerings.filter((o: CandidateOffering) => {
+        if (config.maxInputPrice != null && (o.fixedPricePer1kInput ?? 0) > config.maxInputPrice) return false;
+        if (config.maxOutputPrice != null && (o.fixedPricePer1kOutput ?? 0) > config.maxOutputPrice) return false;
+        return true;
+      });
+    }
+  }
+
+  return offerings;
+}
+
+async function getAllOfferings(
+  logicalModel: string,
+  includeNodes: boolean
+): Promise<CandidateOffering[]> {
   const platformOfferings = await platformService.findOfferingsForModel(logicalModel);
 
   if (!includeNodes) {

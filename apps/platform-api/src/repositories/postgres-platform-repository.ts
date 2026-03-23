@@ -2620,6 +2620,17 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
+      UPDATE offering_favorites SET paused = true
+      WHERE user_id = $1 AND offering_id IN (
+        SELECT id FROM offerings WHERE logical_model = $2
+      )
+    `, [params.userId, params.logicalModel]);
+  },
+
+  async removeModelPool(params: { userId: string; logicalModel: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
       DELETE FROM offering_favorites
       WHERE user_id = $1 AND offering_id IN (
         SELECT id FROM offerings WHERE logical_model = $2
@@ -2646,18 +2657,46 @@ export const postgresPlatformRepository: PlatformRepository = {
     const result = await currentPool.query(`
       SELECT
         o.logical_model AS "logicalModel",
-        COUNT(f.offering_id)::int AS "offeringCount",
+        COUNT(DISTINCT f.offering_id)::int AS "offeringCount",
         MIN(o.fixed_price_per_1k_input)::int AS "minInputPrice",
         MIN(o.fixed_price_per_1k_output)::int AS "minOutputPrice",
-        MAX(o.execution_mode) AS "executionMode"
+        MAX(o.execution_mode) AS "executionMode",
+        bool_and(f.paused) AS "paused",
+        COUNT(DISTINCT ar.id)::int AS "totalRequests",
+        COALESCE(SUM(ar.total_tokens), 0)::bigint AS "totalTokens"
       FROM offering_favorites f
       JOIN offerings o ON o.id = f.offering_id
-      WHERE f.user_id = $1 AND f.paused = false
+      LEFT JOIN api_requests ar ON ar.chosen_offering_id = f.offering_id AND ar.requester_user_id = $1
+      WHERE f.user_id = $1
         AND o.owner_user_id NOT LIKE '%_demo'
       GROUP BY o.logical_model
       ORDER BY o.logical_model
     `, [userId]);
     return result.rows;
+  },
+
+  // --- User Model Config ---
+
+  async getUserModelConfig(params: { userId: string; logicalModel: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT max_input_price AS "maxInputPrice", max_output_price AS "maxOutputPrice"
+      FROM user_model_config
+      WHERE user_id = $1 AND logical_model = $2
+    `, [params.userId, params.logicalModel]);
+    return result.rows[0] ?? null;
+  },
+
+  async upsertUserModelConfig(params: { userId: string; logicalModel: string; maxInputPrice: number | null; maxOutputPrice: number | null }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO user_model_config (user_id, logical_model, max_input_price, max_output_price)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (user_id, logical_model)
+      DO UPDATE SET max_input_price = $3, max_output_price = $4
+    `, [params.userId, params.logicalModel, params.maxInputPrice, params.maxOutputPrice]);
   },
 
   // --- Market ---

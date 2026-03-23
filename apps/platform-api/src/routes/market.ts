@@ -305,6 +305,65 @@ export async function handleMarketRoutes(
     }
   }
 
+  // ---- Connection Pool (model-level remove — true delete) ----
+
+  const modelPoolRemoveMatch = url.pathname.match(/^\/v1\/me\/connection-pool\/model\/([^/]+)\/remove$/);
+  if (modelPoolRemoveMatch && req.method === "POST") {
+    const logicalModel = decodeURIComponent(modelPoolRemoveMatch[1]);
+    const auth = await authenticate_session_only_(req);
+    if (!auth) {
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    await platformService.removeModelPool(auth.userId, logicalModel);
+    const response = json(200, { requestId, ok: true });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // ---- User Model Config ----
+
+  const modelConfigMatch = url.pathname.match(/^\/v1\/me\/model-config\/([^/]+)$/);
+  if (modelConfigMatch) {
+    const logicalModel = decodeURIComponent(modelConfigMatch[1]);
+
+    if (req.method === "GET") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      const data = await platformService.getUserModelConfig(auth.userId, logicalModel);
+      const response = json(200, { requestId, data: data ?? { maxInputPrice: null, maxOutputPrice: null } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    if (req.method === "PUT") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      const body = await read_json<{ maxInputPrice?: number | null; maxOutputPrice?: number | null }>(req);
+      const maxInputPrice = body.maxInputPrice ?? null;
+      const maxOutputPrice = body.maxOutputPrice ?? null;
+      await platformService.upsertUserModelConfig(auth.userId, logicalModel, maxInputPrice, maxOutputPrice);
+      const response = json(200, { requestId, ok: true });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+  }
+
   // ---- Connection Pool (grouped by model) ----
 
   if (req.method === "GET" && url.pathname === "/v1/me/connection-pool/grouped") {
