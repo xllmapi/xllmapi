@@ -60,13 +60,32 @@ interface NodeToken {
   token?: string;
 }
 
+interface NodeCapability {
+  realModel: string;
+  providerType: string;
+  maxConcurrency?: number;
+}
+
+interface NodeOffering {
+  id: string;
+  logicalModel: string;
+  realModel: string;
+  reviewStatus: string;
+  fixedPricePer1kInput?: number;
+  fixedPricePer1kOutput?: number;
+}
+
 interface ConnectedNode {
   id: string;
   tokenId: string;
   status: string;
   lastHeartbeat: string;
   ip: string;
+  ipAddress?: string;
+  connectedAt?: string;
   modelsCount: number;
+  capabilities?: NodeCapability[];
+  offerings?: NodeOffering[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -668,6 +687,188 @@ function ConfigModal({
   );
 }
 
+// ── Node Publish Modal ──────────────────────────────────────────
+
+function NodePublishModal({
+  nodeId,
+  realModel,
+  providerType,
+  onClose,
+  onPublished,
+  t,
+}: {
+  nodeId: string;
+  realModel: string;
+  providerType: string;
+  onClose: () => void;
+  onPublished: () => void;
+  t: (key: string) => string;
+}) {
+  const [logicalModel, setLogicalModel] = useState(realModel);
+  const [inputPrice, setInputPrice] = useState("500");
+  const [outputPrice, setOutputPrice] = useState("1000");
+  const [dailyLimit, setDailyLimit] = useState("1000000");
+  const [maxConc, setMaxConc] = useState("2");
+  const [publishing, setPublishing] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const start = Date.now();
+      const res = await apiJson<{ ok: boolean; message?: string; error?: { message: string } }>(
+        `/v1/nodes/${encodeURIComponent(nodeId)}/test`,
+        { method: "POST", body: JSON.stringify({ model: realModel }) },
+      );
+      const elapsed = Date.now() - start;
+      if (res.ok !== false) {
+        setTestResult({ ok: true, message: `${t("nodes.testSuccess")} (${elapsed}ms)` });
+      } else {
+        setTestResult({ ok: false, message: `${t("nodes.testFailed")}: ${res.error?.message ?? res.message ?? "unknown"}` });
+      }
+    } catch (err: unknown) {
+      setTestResult({ ok: false, message: `${t("nodes.testFailed")}: ${extractError(err)}` });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    setPublishing(true);
+    try {
+      await apiJson(`/v1/nodes/${encodeURIComponent(nodeId)}/offerings`, {
+        method: "POST",
+        body: JSON.stringify({
+          logicalModel: logicalModel.trim() || realModel,
+          realModel,
+          providerType,
+          fixedPricePer1kInput: Number(inputPrice) || 500,
+          fixedPricePer1kOutput: Number(outputPrice) || 1000,
+          dailyTokenLimit: Number(dailyLimit) || 1000000,
+          maxConcurrency: Number(maxConc) || 2,
+        }),
+      });
+      onPublished();
+      onClose();
+    } catch {
+      // error handled upstream
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="bg-panel border border-line rounded-[var(--radius-card)] p-6 w-full max-w-md shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-base font-semibold text-text-primary mb-1">{t("nodes.publishTitle")}</h3>
+        <p className="text-xs text-text-tertiary mb-5">
+          {t("nodes.realModel")}: <span className="font-mono text-text-secondary">{realModel}</span>
+        </p>
+
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="text-text-secondary text-xs block mb-1.5">{t("nodes.logicalModelLabel")}</label>
+            <input
+              type="text"
+              value={logicalModel}
+              onChange={(e) => setLogicalModel(e.target.value)}
+              className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+              style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.inputPrice")}</label>
+              <input
+                type="number"
+                value={inputPrice}
+                onChange={(e) => setInputPrice(e.target.value)}
+                className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+                style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+              />
+            </div>
+            <div>
+              <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.outputPrice")}</label>
+              <input
+                type="number"
+                value={outputPrice}
+                onChange={(e) => setOutputPrice(e.target.value)}
+                className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+                style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.dailyLimit")}</label>
+              <input
+                type="number"
+                value={dailyLimit}
+                onChange={(e) => setDailyLimit(e.target.value)}
+                className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+                style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+              />
+            </div>
+            <div>
+              <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.maxConcurrency")}</label>
+              <input
+                type="number"
+                value={maxConc}
+                onChange={(e) => setMaxConc(e.target.value)}
+                className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+                style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Test result */}
+        {testResult && (
+          <div className={`mt-4 rounded-[var(--radius-input)] px-3 py-2 text-xs font-medium ${
+            testResult.ok
+              ? "bg-success/10 border border-success/30 text-success"
+              : "bg-danger/10 border border-danger/30 text-danger"
+          }`}>
+            {testResult.ok ? "\u2705 " : "\u274C "}{testResult.message}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-6">
+          <button
+            onClick={() => void handleTest()}
+            disabled={testing}
+            className="rounded-[var(--radius-btn)] border border-line text-text-secondary px-4 py-1.5 text-xs font-medium hover:text-text-primary hover:border-accent/30 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
+          >
+            {testing ? "..." : t("nodes.testAvailability")}
+          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="rounded-[var(--radius-btn)] border border-line text-text-secondary px-4 py-1.5 text-xs font-medium hover:text-text-primary cursor-pointer bg-transparent transition-colors"
+            >
+              {t("nodeConfig.cancel")}
+            </button>
+            <button
+              onClick={() => void handlePublish()}
+              disabled={publishing}
+              className="rounded-[var(--radius-btn)] border border-accent/30 text-accent px-4 py-1.5 text-xs font-medium hover:bg-accent/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
+            >
+              {publishing ? "..." : t("nodes.publishToNetwork")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProvidingTab() {
   const { t } = useLocale();
   const myKey = getApiKey() ?? "";
@@ -727,6 +928,9 @@ function ProvidingTab() {
 
   // ── Config modal ──
   const [configOffering, setConfigOffering] = useState<Offering | null>(null);
+
+  // ── Node publish modal ──
+  const [publishTarget, setPublishTarget] = useState<{ nodeId: string; realModel: string; providerType: string } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -1572,14 +1776,14 @@ node dist/main.js start \\
         })()
       )}
 
-      {/* ── Node tokens section (collapsible, only if L3 nodes exist) ── */}
+      {/* ── Distributed Node Management ── */}
       {hasL3Nodes && (
         <div className="mt-8">
           <button
             onClick={() => setNodesSectionOpen(!nodesSectionOpen)}
             className="flex items-center gap-2 text-sm font-semibold text-text-primary cursor-pointer bg-transparent border-none mb-3"
           >
-            <span className={`transition-transform ${nodesSectionOpen ? "rotate-90" : ""}`}>▸</span>
+            <span className={`transition-transform ${nodesSectionOpen ? "rotate-90" : ""}`}>{"\u25B8"}</span>
             {t("modelsMgmt.nodeTokens")}
             <span className="text-xs text-text-tertiary font-normal ml-2">
               {onlineNodes.length} {t("nodes.online")} / {nodes.length} {t("nodes.total")}
@@ -1588,31 +1792,108 @@ node dist/main.js start \\
 
           {nodesSectionOpen && (
             <div className="flex flex-col gap-4">
-              {/* Connected Nodes */}
+              {/* Connected Node Cards */}
               {nodes.length > 0 && (
-                <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5">
+                <div>
                   <h3 className="text-sm font-semibold mb-3 text-text-primary">{t("nodes.connectedNodes")}</h3>
-                  <div className="flex flex-col gap-2">
-                    {nodes.map((node) => (
-                      <div key={node.id} className={`flex items-center justify-between gap-4 rounded-[var(--radius-input)] border px-4 py-3 ${
-                        node.status === "online" ? "border-accent/20" : "border-line opacity-70"
-                      }`}>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="relative flex h-2.5 w-2.5 shrink-0">
-                            {node.status === "online" && (
-                              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />
+                  <div className="flex flex-col gap-3">
+                    {nodes.map((node) => {
+                      const caps = node.capabilities ?? [];
+                      const nodeOfferings = node.offerings ?? [];
+                      const nodeIp = node.ipAddress ?? node.ip ?? "";
+                      const connectionTime = node.connectedAt ?? node.lastHeartbeat;
+
+                      return (
+                        <div
+                          key={node.id}
+                          className={`rounded-[var(--radius-card)] border bg-panel p-4 ${
+                            node.status === "online" ? "border-accent/20" : "border-line opacity-70"
+                          }`}
+                        >
+                          {/* Node header */}
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="relative flex h-2.5 w-2.5 shrink-0">
+                              {node.status === "online" && (
+                                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />
+                              )}
+                              <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${node.status === "online" ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
+                            </span>
+                            <span className="font-mono text-sm font-medium text-text-primary">
+                              {t("nodes.nodePrefix")} {node.id.slice(0, 8)}
+                            </span>
+                            <span className="text-text-tertiary text-xs">{"\u00B7"}</span>
+                            <span className="text-xs text-text-secondary">{nodeIp}</span>
+                            <span className="text-text-tertiary text-xs">{"\u00B7"}</span>
+                            <span className="text-xs text-text-tertiary">
+                              {t("nodes.connectionTime")}: {connectionTime ? formatRuntime(connectionTime) : "—"}
+                            </span>
+                          </div>
+
+                          {/* Discovered models (capabilities) */}
+                          {caps.length > 0 && (
+                            <div className="mb-3">
+                              <p className="text-xs font-medium text-text-secondary mb-1.5">{t("nodes.discoveredModels")}:</p>
+                              <div className="flex flex-col gap-1.5">
+                                {caps.map((cap) => {
+                                  const alreadyPublished = nodeOfferings.some(
+                                    (o) => o.realModel === cap.realModel,
+                                  );
+                                  return (
+                                    <div key={cap.realModel} className="flex items-center gap-2 pl-2">
+                                      <span className="text-text-tertiary text-xs">{"\u2022"}</span>
+                                      <span className="font-mono text-xs text-text-primary">{cap.realModel}</span>
+                                      <span className="text-[10px] text-text-tertiary">({cap.providerType})</span>
+                                      {!alreadyPublished && (
+                                        <button
+                                          onClick={() => setPublishTarget({ nodeId: node.id, realModel: cap.realModel, providerType: cap.providerType })}
+                                          className="rounded-[var(--radius-btn)] border border-accent/30 text-accent px-2.5 py-0.5 text-[10px] font-medium hover:bg-accent/10 cursor-pointer bg-transparent transition-colors ml-1"
+                                        >
+                                          {t("nodes.configAndPublish")}
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Published models (offerings from this node) */}
+                          <div>
+                            <p className="text-xs font-medium text-text-secondary mb-1.5">{t("nodes.publishedModels")}:</p>
+                            {nodeOfferings.length > 0 ? (
+                              <div className="flex flex-col gap-1.5">
+                                {nodeOfferings.map((o) => (
+                                  <div key={o.id} className="flex items-center gap-2 pl-2">
+                                    <span className="font-mono text-xs text-text-primary">{o.logicalModel}</span>
+                                    {o.reviewStatus === "pending" && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-medium text-amber-400">
+                                        {"\uD83D\uDFE1"}{t("nodes.pendingReview")}
+                                      </span>
+                                    )}
+                                    {o.reviewStatus === "approved" && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400">
+                                        {"\uD83D\uDFE2"}{t("modelsMgmt.status.running")}
+                                      </span>
+                                    )}
+                                    {o.reviewStatus === "rejected" && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-danger/10 border border-danger/20 font-medium text-danger">
+                                        {"\u274C"}{t("modelsMgmt.status.stopped")}
+                                      </span>
+                                    )}
+                                    <span className="font-mono text-[10px] text-text-tertiary">
+                                      in {formatTokens(o.fixedPricePer1kInput ?? 0)}/out {formatTokens(o.fixedPricePer1kOutput ?? 0)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-text-tertiary pl-2">({t("nodes.nonePublished")})</p>
                             )}
-                            <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${node.status === "online" ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
-                          </span>
-                          <span className="font-mono text-sm text-text-primary truncate">{node.id.slice(0, 12)}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-5 text-xs text-text-secondary shrink-0">
-                          <span>{node.ip}</span>
-                          <span>{node.modelsCount} {t("nodes.models")}</span>
-                          <span className="text-text-tertiary">{formatTimeAgo(node.lastHeartbeat)}</span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1671,6 +1952,18 @@ node dist/main.js start \\
           offering={configOffering}
           onClose={() => setConfigOffering(null)}
           onSave={(data) => handleConfigSave(configOffering.id, data)}
+          t={t}
+        />
+      )}
+
+      {/* Node publish modal */}
+      {publishTarget && (
+        <NodePublishModal
+          nodeId={publishTarget.nodeId}
+          realModel={publishTarget.realModel}
+          providerType={publishTarget.providerType}
+          onClose={() => setPublishTarget(null)}
+          onPublished={() => void loadData()}
           t={t}
         />
       )}
