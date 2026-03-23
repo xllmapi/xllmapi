@@ -51,7 +51,7 @@ export function ChatMain({
           onStop={onStop}
           streaming={streaming}
           model={model}
-          disabled={!model}
+          disabled={!model && messages.length === 0}
         />
       </div>
     </main>

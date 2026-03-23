@@ -32,15 +32,15 @@ export function ChatPage() {
     void store.createConversation();
   }, [store.createConversation, isLoggedIn, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Check if current conversation's model is still in user's list
+  // Only warn about model availability when no active conversation (new chat mode)
   useEffect(() => {
-    if (!store.model || !hasUserList) { setModelWarning(null); return; }
+    if (store.activeId || !store.model || !hasUserList) { setModelWarning(null); return; }
     if (!isModelAvailable(store.model)) {
       setModelWarning(store.model);
     } else {
       setModelWarning(null);
     }
-  }, [store.model, isModelAvailable, hasUserList]);
+  }, [store.model, store.activeId, isModelAvailable, hasUserList]);
 
   // Listen for MODEL_UNAVAILABLE errors from the store (backend rejection)
   useEffect(() => {
@@ -53,14 +53,15 @@ export function ChatPage() {
 
   const handleSend = useCallback(() => {
     if (!isLoggedIn) { navigate("/auth"); return; }
-    // Block sending if model not in user's list
-    if (hasUserList && store.model && !isModelAvailable(store.model)) {
+    // Only check model availability for NEW conversations (no activeId)
+    // Existing conversations use their own bound model
+    if (!store.activeId && hasUserList && store.model && !isModelAvailable(store.model)) {
       setModelWarning(store.model);
       return;
     }
     setModelWarning(null);
     void store.sendMessage(store.input);
-  }, [store.sendMessage, store.input, store.model, isLoggedIn, navigate, isModelAvailable, hasUserList]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [store.sendMessage, store.input, store.model, store.activeId, isLoggedIn, navigate, isModelAvailable, hasUserList]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePromptClick = useCallback((text: string) => {
     store.setInput(text);
@@ -116,7 +117,7 @@ export function ChatPage() {
         )}
         <ChatMain
           messages={store.messages}
-          model={store.model}
+          model={store.conversations.find((c) => c.id === store.activeId)?.model || store.conversations.find((c) => c.id === store.activeId)?.logicalModel || store.model}
           input={store.input}
           onInputChange={store.setInput}
           onSend={handleSend}
