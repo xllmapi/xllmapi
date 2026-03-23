@@ -490,7 +490,7 @@ export function ModelsPage() {
                     {m.minInputPrice != null ? (
                       <div className="flex items-center gap-2">
                         <span className="text-text-tertiary">{t("models.avgPrice7d")}</span>
-                        <span className="text-accent font-medium">{formatTokens(m.minInputPrice)} xt/1K</span>
+                        <span className="text-accent font-medium">{formatTokens(m.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(m.minOutputPrice ?? 0)}</span>
                       </div>
                     ) : (
                       <span className="text-text-tertiary">{t("models.noPrice")}</span>

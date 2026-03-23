@@ -792,25 +792,24 @@ export const postgresPlatformRepository: PlatformRepository = {
     `);
 
     // 7-day average settlement price per model
-    // 7-day real weighted average price: consumer_cost / total_tokens * 1000
+    // 7-day average offering price (fixed pricing, not weighted by usage)
     const avgPriceResult = await currentPool.query<{
       logicalModel: string;
-      avgPricePer1k: string;
+      avgInput: string;
+      avgOutput: string;
     }>(`
       SELECT
         ar.logical_model AS "logicalModel",
-        CASE WHEN SUM(ar.total_tokens) > 0
-          THEN ROUND(SUM(COALESCE(sr.consumer_cost, 0))::numeric / SUM(ar.total_tokens) * 1000)::text
-          ELSE '0'
-        END AS "avgPricePer1k"
+        ROUND(AVG(o.fixed_price_per_1k_input))::text AS "avgInput",
+        ROUND(AVG(o.fixed_price_per_1k_output))::text AS "avgOutput"
       FROM api_requests ar
-      LEFT JOIN settlement_records sr ON sr.request_id = ar.id
+      JOIN offerings o ON o.id = ar.chosen_offering_id
       WHERE ar.created_at > NOW() - INTERVAL '7 days'
       GROUP BY ar.logical_model
     `);
-    const avgPriceMap = new Map<string, number>();
+    const avgPriceMap = new Map<string, { avgInput: number; avgOutput: number }>();
     for (const r of avgPriceResult.rows) {
-      avgPriceMap.set(r.logicalModel, Number(r.avgPricePer1k));
+      avgPriceMap.set(r.logicalModel, { avgInput: Number(r.avgInput), avgOutput: Number(r.avgOutput) });
     }
 
     const models: PublicMarketModel[] = [];
@@ -836,8 +835,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         enabledOfferingCount: Number(row.enabledOfferingCount),
         credentialCount: Number(row.credentialCount),
         pricingModes: ((row.pricingModes ?? []) as PricingMode[]),
-        minInputPrice: avg7d ?? (row.minInputPricePer1k === null ? null : Number(row.minInputPricePer1k)),
-        minOutputPrice: row.minOutputPricePer1k === null ? null : Number(row.minOutputPricePer1k),
+        minInputPrice: avg7d?.avgInput ?? (row.minInputPricePer1k === null ? null : Number(row.minInputPricePer1k)),
+        minOutputPrice: avg7d?.avgOutput ?? (row.minOutputPricePer1k === null ? null : Number(row.minOutputPricePer1k)),
         status: Number(row.enabledOfferingCount) > 0 ? "available" : "limited",
         capabilities: ["chat"],
         compatibilities: ["openai", "anthropic"],
@@ -1828,13 +1827,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         COUNT(*)::int AS requests,
         COALESCE(SUM(ar.total_tokens), 0)::bigint AS tokens,
         COUNT(DISTINCT ar.requester_user_id)::int AS users,
-        CASE WHEN SUM(ar.total_tokens) > 0
-          THEN ROUND(SUM(COALESCE(sr.consumer_cost, 0))::numeric / SUM(ar.total_tokens) * 1000)::int
-          ELSE 0
-        END AS "avgPrice"
+        COALESCE(AVG(o.fixed_price_per_1k_input), 0)::int AS "avgPriceIn",
+        COALESCE(AVG(o.fixed_price_per_1k_output), 0)::int AS "avgPriceOut"
       FROM api_requests ar
       LEFT JOIN offerings o ON o.id = ar.chosen_offering_id
-      LEFT JOIN settlement_records sr ON sr.request_id = ar.id
       WHERE ar.created_at > NOW() - INTERVAL '${Math.min(Math.max(days, 1), 90)} days'
         AND ar.logical_model NOT LIKE 'community-%'
         AND ar.logical_model NOT LIKE 'e2e-%'
@@ -1851,7 +1847,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         requests: Number(row.requests),
         tokens: Number(row.tokens),
         users: Number(row.users),
-        avgPrice: Number(row.avgPrice),
+        avgPrice: Number(row.avgPriceIn),
       };
     }
 
