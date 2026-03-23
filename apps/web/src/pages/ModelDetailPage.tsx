@@ -290,15 +290,17 @@ export function ModelDetailPage() {
               {offerings.map((o) => {
                 const isFav = favoriteIds.has(o.id);
                 const isToggling = togglingFav.has(o.id);
-                const verificationStatus = o.reviewStatus === "approved"
-                  ? "verified" : o.reviewStatus === "pending" ? "pending" : "unverified";
+                // Platform-hosted offerings are verified (known API + fixed model)
+                const isVerified = o.executionMode === "platform" && o.reviewStatus === "approved";
                 const isOnline = o.executionMode === "platform" || o.enabled !== false;
+                // Use model name as fallback when no custom name set
+                const displayName = o.name || o.logicalModel || o.realModel || t("modelDetail.noName");
                 return (
                   <div key={o.id} className="rounded-lg border border-line bg-panel-strong p-4 transition-colors hover:border-accent/20">
                     {/* Row 1: Name + Status */}
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">
-                        {o.name || t("modelDetail.noName")}
+                        {displayName}
                       </span>
                       <div className="flex items-center gap-2 shrink-0">
                         {/* Online/offline */}
@@ -306,18 +308,12 @@ export function ModelDetailPage() {
                           <span className={`inline-block h-2 w-2 rounded-full ${isOnline ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
                           <span className="text-[10px] text-text-tertiary">{isOnline ? t("modelDetail.online") : t("modelDetail.offline")}</span>
                         </span>
-                        {/* Verification badge */}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                          verificationStatus === "verified"
-                            ? "bg-emerald-400/10 text-emerald-400"
-                            : verificationStatus === "pending"
-                              ? "bg-amber-400/10 text-amber-400"
-                              : "bg-text-tertiary/10 text-text-tertiary"
-                        }`}>
-                          {verificationStatus === "verified" ? t("modelDetail.verified")
-                            : verificationStatus === "pending" ? t("modelDetail.pending")
-                              : t("modelDetail.unverified")}
-                        </span>
+                        {/* Only show verification badge when verified */}
+                        {isVerified && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-400/10 text-emerald-400">
+                            {t("modelDetail.verified")}
+                          </span>
+                        )}
                       </div>
                     </div>
 
