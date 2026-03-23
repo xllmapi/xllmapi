@@ -269,6 +269,22 @@ export function useChatStore() {
         const errText = await response.text();
         let errMsg = "Error: " + response.status;
         try { errMsg = JSON.parse(errText).error?.message ?? errMsg; } catch { /* ignore */ }
+
+        // If model not available, don't pollute conversation history
+        const isModelUnavailable = errMsg.toLowerCase().includes("no offering") || errMsg.toLowerCase().includes("no model");
+        if (isModelUnavailable) {
+          // Roll back the temp messages we just added
+          const msgs = msgCacheRef.current[convId];
+          if (msgs) {
+            msgCacheRef.current[convId] = msgs.filter(
+              (m) => m.id !== userMsg.id && m.id !== assistantMsgId
+            );
+            syncDisplay(convId);
+          }
+          setError("MODEL_UNAVAILABLE:" + (model || "unknown"));
+          return;
+        }
+
         updateAssistant((msg) => ({ ...msg, content: errMsg }));
         setError(errMsg);
         return;
@@ -335,7 +351,7 @@ export function useChatStore() {
     messages,
     input, setInput,
     streaming,
-    error,
+    error, setError,
     metaMap,
     loadConversations,
     loadMessages,

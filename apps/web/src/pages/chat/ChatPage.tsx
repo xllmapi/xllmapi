@@ -42,6 +42,15 @@ export function ChatPage() {
     }
   }, [store.model, isModelAvailable, hasUserList]);
 
+  // Listen for MODEL_UNAVAILABLE errors from the store (backend rejection)
+  useEffect(() => {
+    if (store.error?.startsWith("MODEL_UNAVAILABLE:")) {
+      const modelName = store.error.split(":")[1] || store.model || "";
+      setModelWarning(modelName);
+      store.setError(null);
+    }
+  }, [store.error]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSend = useCallback(() => {
     if (!isLoggedIn) { navigate("/auth"); return; }
     // Block sending if model not in user's list
