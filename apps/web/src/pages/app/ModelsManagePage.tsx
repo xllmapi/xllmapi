@@ -187,10 +187,14 @@ interface ModelConfig {
 
 function PriceConfigInline({
   logicalModel,
+  defaultInputPrice,
+  defaultOutputPrice,
   onClose,
   t,
 }: {
   logicalModel: string;
+  defaultInputPrice?: number;
+  defaultOutputPrice?: number;
   onClose: () => void;
   t: (key: string) => string;
 }) {
@@ -202,12 +206,16 @@ function PriceConfigInline({
   useEffect(() => {
     apiJson<{ data: ModelConfig }>(`/v1/me/model-config/${encodeURIComponent(logicalModel)}`)
       .then((res) => {
-        setMaxIn(String(res.data?.maxInputPrice ?? ""));
-        setMaxOut(String(res.data?.maxOutputPrice ?? ""));
+        setMaxIn(String(res.data?.maxInputPrice ?? defaultInputPrice ?? ""));
+        setMaxOut(String(res.data?.maxOutputPrice ?? defaultOutputPrice ?? ""));
       })
-      .catch(() => {})
+      .catch(() => {
+        // Use defaults if no config exists
+        if (defaultInputPrice) setMaxIn(String(defaultInputPrice));
+        if (defaultOutputPrice) setMaxOut(String(defaultOutputPrice));
+      })
       .finally(() => setLoadingConfig(false));
-  }, [logicalModel]);
+  }, [logicalModel, defaultInputPrice, defaultOutputPrice]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -352,43 +360,50 @@ function GroupedPoolCard({
               </button>
             </>
           ) : (
-            <button
-              onClick={(e) => { e.stopPropagation(); void onDisconnect?.(entry.logicalModel); }}
-              disabled={actionLoading === entry.logicalModel}
-              className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
-            >
-              {actionLoading === entry.logicalModel ? "..." : t("modelsMgmt.disconnect")}
-            </button>
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowPriceConfig(!showPriceConfig); }}
+                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-line text-text-secondary hover:bg-accent/10 bg-transparent transition-colors"
+              >
+                {t("modelsMgmt.configPrice")}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); void onDisconnect?.(entry.logicalModel); }}
+                disabled={actionLoading === entry.logicalModel}
+                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
+              >
+                {actionLoading === entry.logicalModel ? "..." : t("modelsMgmt.disconnect")}
+              </button>
+            </>
           )}
         </div>
       </div>
 
       {/* Expanded details */}
-      {expanded && (
-        <div className="border-t border-line px-4 py-3 text-xs text-text-secondary flex flex-col gap-1.5">
-          <div>
-            {t("modelsMgmt.avg7dPrice")}: {formatTokens(inputPrice)} / {formatTokens(outputPrice)} <span className="text-text-tertiary">({t("modelsMgmt.perKTokens")}: input xtokens / output xtokens)</span>
-          </div>
-          <div>
-            {t("modelsMgmt.runningNodes")}: {entry.offeringCount} {t("modelsMgmt.nodes")}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span>{t("modelsMgmt.maxPrice")}:</span>
-            {showPriceConfig ? (
-              <PriceConfigInline
-                logicalModel={entry.logicalModel}
-                onClose={() => setShowPriceConfig(false)}
-                t={t}
-              />
-            ) : (
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowPriceConfig(true); }}
-                className="rounded px-2 py-0.5 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors"
-              >
-                {t("modelsMgmt.configPrice")}
-              </button>
-            )}
-          </div>
+      {/* Expanded details or price config */}
+      {(expanded || showPriceConfig) && (
+        <div className="border-t border-line px-4 py-3 text-xs text-text-secondary flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {showPriceConfig ? (
+            <PriceConfigInline
+              logicalModel={entry.logicalModel}
+              defaultInputPrice={Math.ceil(inputPrice * 1.05)}
+              defaultOutputPrice={Math.ceil(outputPrice * 1.05)}
+              onClose={() => setShowPriceConfig(false)}
+              t={t}
+            />
+          ) : (
+            <>
+              <div>
+                {t("modelsMgmt.avg7dPrice")}: <span className="font-mono">in {formatTokens(inputPrice)} / out {formatTokens(outputPrice)}</span> <span className="text-text-tertiary">(xtokens per 1K tokens)</span>
+              </div>
+              <div>
+                {t("modelsMgmt.runningNodes")}: {entry.offeringCount} {t("modelsMgmt.nodes")}
+              </div>
+              <div>
+                {t("modelsMgmt.maxPrice")}: <span className="font-mono">in {formatTokens(Math.ceil(inputPrice * 1.05))} / out {formatTokens(Math.ceil(outputPrice * 1.05))}</span> <span className="text-text-tertiary">(默认: 均价+5%)</span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

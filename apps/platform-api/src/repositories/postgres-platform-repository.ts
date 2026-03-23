@@ -2609,10 +2609,10 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      INSERT INTO offering_favorites (user_id, offering_id, created_at)
-      SELECT $1, id, NOW() FROM offerings
+      INSERT INTO offering_favorites (user_id, offering_id, created_at, paused)
+      SELECT $1, id, NOW(), false FROM offerings
       WHERE logical_model = $2 AND enabled = true AND review_status = 'approved' AND execution_mode = 'platform'
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (user_id, offering_id) DO UPDATE SET paused = false
     `, [params.userId, params.logicalModel]);
   },
 

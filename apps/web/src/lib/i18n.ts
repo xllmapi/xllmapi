@@ -429,7 +429,7 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.maxPrice": "最高可接受价格",
     "modelsMgmt.configPrice": "配置",
     "modelsMgmt.reconnect": "重新连接",
-    "modelsMgmt.historySection": "历史",
+    "modelsMgmt.historySection": "连接历史",
     "modelsMgmt.removeConfirm": "确定永久删除？",
 
     // Node config modal
@@ -943,7 +943,7 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.maxPrice": "Max acceptable price",
     "modelsMgmt.configPrice": "Configure",
     "modelsMgmt.reconnect": "Reconnect",
-    "modelsMgmt.historySection": "History",
+    "modelsMgmt.historySection": "Connection History",
     "modelsMgmt.removeConfirm": "Permanently delete?",
 
     // Node config modal
