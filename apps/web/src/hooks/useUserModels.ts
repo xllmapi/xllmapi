@@ -24,6 +24,7 @@ export interface UserOffering {
   executionMode?: string;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  paused?: boolean;
 }
 
 interface PoolResponse {
@@ -60,8 +61,10 @@ async function fetchUserModels(): Promise<{ models: string[]; offerings: UserOff
     const poolRes = await fetch(`${baseUrl}/v1/me/connection-pool`, { headers });
     if (poolRes.ok) {
       const poolData: PoolResponse = await poolRes.json();
-      const offerings = poolData.data ?? [];
-      if (offerings.length > 0) {
+      const allOfferings = poolData.data ?? [];
+      // Only include non-paused offerings for model list
+      const offerings = allOfferings.filter((o) => !o.paused);
+      if (allOfferings.length > 0) {
         const seen = new Set<string>();
         const models: string[] = [];
         for (const o of offerings) {

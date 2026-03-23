@@ -786,10 +786,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         ARRAY_AGG(DISTINCT c.provider_type) AS providers,
         ARRAY_AGG(DISTINCT o.pricing_mode) AS "pricingModes"
       FROM offerings o
-      JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
       WHERE o.enabled = TRUE
         AND o.review_status = 'approved'
-        AND c.status = 'active'
+        AND (c.status = 'active' OR o.credential_id IS NULL)
         AND o.owner_user_id NOT LIKE '%_demo'
       GROUP BY o.logical_model
       ORDER BY o.logical_model ASC
@@ -1237,9 +1237,11 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.logical_model AS "logicalModel",
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency"
+      , o.execution_mode AS "executionMode"
+      , o.node_id AS "nodeId"
       FROM offerings o
-      JOIN provider_credentials c ON c.id = o.credential_id
-      WHERE o.logical_model = $1 AND o.enabled = TRUE AND o.review_status = 'approved' AND c.status = 'active'
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      WHERE o.logical_model = $1 AND o.enabled = TRUE AND o.review_status = 'approved' AND (c.status = 'active' OR o.credential_id IS NULL)
       ORDER BY o.id ASC
     `, [logicalModel]);
 
@@ -2674,7 +2676,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     await currentPool.query(`
       INSERT INTO offering_favorites (user_id, offering_id, created_at, paused)
       SELECT $1, id, NOW(), false FROM offerings
-      WHERE logical_model = $2 AND enabled = true AND review_status = 'approved' AND execution_mode = 'platform'
+      WHERE logical_model = $2 AND enabled = true AND review_status = 'approved'
       ON CONFLICT (user_id, offering_id) DO UPDATE SET paused = false
     `, [params.userId, params.logicalModel]);
   },
