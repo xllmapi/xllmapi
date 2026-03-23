@@ -150,8 +150,8 @@ function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; m
         {yLabels.map((yl, i) => (
           <text key={i} x={PX - 6} y={yl.y + 4} textAnchor="end" className="fill-text-tertiary" fontSize="11">{yl.label}</text>
         ))}
-        {/* Areas (render bottom to top) */}
-        {areas.map((a) => (
+        {/* Areas (render bottom to top) — skip for price overlay */}
+        {!isOverlay && areas.map((a) => (
           <path key={a.model} d={a.d} fill={a.color} opacity="0.25" />
         ))}
         {/* Lines on top — only draw segments where this model has data */}
@@ -169,7 +169,7 @@ function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; m
           }
           if (current.length > 0) segments.push(current);
           return segments.map((seg, si) => (
-            <polyline key={`${model}-${si}`} points={seg.join(" ")} fill="none" stroke={getModelColor(model, s)} strokeWidth="2" opacity="0.8" />
+            <polyline key={`${model}-${si}`} points={seg.join(" ")} fill="none" stroke={getModelColor(model, s)} strokeWidth={isOverlay ? 2.5 : 2} opacity={isOverlay ? 1 : 0.8} />
           ));
         })}
         {/* X labels */}
