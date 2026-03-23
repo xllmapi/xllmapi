@@ -2512,7 +2512,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     const limit = params.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = [`o.enabled = true`, `o.review_status = 'approved'`];
+    const conditions: string[] = [`o.enabled = true`, `o.review_status = 'approved'`, `o.owner_user_id NOT LIKE '%_demo'`];
     const values: any[] = [];
     let paramIdx = 1;
 
