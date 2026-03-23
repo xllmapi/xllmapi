@@ -352,8 +352,8 @@ const messages: Record<string, Record<string, string>> = {
 
     // Sidebar additions
     "sidebar.models": "模型管理",
-    "sidebar.connected": "连接的",
-    "sidebar.provided": "接入的",
+    "sidebar.connected": "连接管理",
+    "sidebar.provided": "节点管理",
 
     // Models management page
     "modelsMgmt.title": "模型管理",
@@ -401,6 +401,18 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.pauseUnavailable": "暂不可用",
     "modelsMgmt.publishToNetwork": "发布到网络",
     "modelsMgmt.myAddedNodes": "我添加的节点",
+    "modelsMgmt.configure": "配置",
+    "modelsMgmt.configDisabled": "请先停止节点",
+
+    // Node config modal
+    "nodeConfig.title": "节点配置",
+    "nodeConfig.inputPrice": "Input 价格 (xt/1K)",
+    "nodeConfig.outputPrice": "Output 价格 (xt/1K)",
+    "nodeConfig.dailyLimit": "每日 Token 上限",
+    "nodeConfig.maxConcurrency": "最大并发数",
+    "nodeConfig.noLimit": "0 = 无限制",
+    "nodeConfig.save": "保存",
+    "nodeConfig.cancel": "取消",
 
     // Nodes page
     "nodes.title": "节点管理",
@@ -823,8 +835,8 @@ const messages: Record<string, Record<string, string>> = {
 
     // Sidebar additions
     "sidebar.models": "Models",
-    "sidebar.connected": "Connected",
-    "sidebar.provided": "Provided",
+    "sidebar.connected": "Connections",
+    "sidebar.provided": "Node Management",
 
     // Models management page
     "modelsMgmt.title": "Model Management",
@@ -872,6 +884,18 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.pauseUnavailable": "Not available yet",
     "modelsMgmt.publishToNetwork": "Publish to Network",
     "modelsMgmt.myAddedNodes": "My Added Nodes",
+    "modelsMgmt.configure": "Configure",
+    "modelsMgmt.configDisabled": "Stop node first",
+
+    // Node config modal
+    "nodeConfig.title": "Node Configuration",
+    "nodeConfig.inputPrice": "Input Price (xt/1K)",
+    "nodeConfig.outputPrice": "Output Price (xt/1K)",
+    "nodeConfig.dailyLimit": "Daily Token Limit",
+    "nodeConfig.maxConcurrency": "Max Concurrency",
+    "nodeConfig.noLimit": "0 = No limit",
+    "nodeConfig.save": "Save",
+    "nodeConfig.cancel": "Cancel",
 
     // Nodes page
     "nodes.title": "Node Management",

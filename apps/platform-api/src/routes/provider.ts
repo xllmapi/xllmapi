@@ -358,7 +358,9 @@ export async function handleProviderRoutes(
       pricingMode: body.pricingMode,
       fixedPricePer1kInput: body.fixedPricePer1kInput,
       fixedPricePer1kOutput: body.fixedPricePer1kOutput,
-      enabled: body.enabled
+      enabled: body.enabled,
+      dailyTokenLimit: body.dailyTokenLimit,
+      maxConcurrency: body.maxConcurrency
     });
 
     if (!offering.ok) {

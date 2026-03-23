@@ -38,6 +38,8 @@ type OfferingListRow = {
   fixedPricePer1kOutput: number;
   enabled: boolean;
   reviewStatus: "pending" | "approved" | "rejected";
+  dailyTokenLimit?: number;
+  maxConcurrency?: number;
 };
 
 type OfferingExecutionRow = CandidateOffering & {
@@ -81,7 +83,9 @@ const getOfferingById = async (ownerUserId: string, offeringId: string): Promise
       fixed_price_per_1k_output AS "fixedPricePer1kOutput",
       enabled,
       review_status AS "reviewStatus",
-      created_at AS "createdAt"
+      created_at AS "createdAt",
+      daily_token_limit AS "dailyTokenLimit",
+      max_concurrency AS "maxConcurrency"
     FROM offerings
     WHERE owner_user_id = $1 AND id = $2
     LIMIT 1
@@ -1230,7 +1234,9 @@ export const postgresPlatformRepository: PlatformRepository = {
         1200 AS "p95LatencyMs1h",
         0.01 AS "recentErrorRate10m",
         o.enabled AS enabled,
-        o.logical_model AS "logicalModel"
+        o.logical_model AS "logicalModel",
+        o.daily_token_limit AS "dailyTokenLimit",
+        o.max_concurrency AS "maxConcurrency"
       FROM offerings o
       JOIN provider_credentials c ON c.id = o.credential_id
       WHERE o.logical_model = $1 AND o.enabled = TRUE AND o.review_status = 'approved' AND c.status = 'active'
@@ -1255,6 +1261,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
         o.enabled,
+        o.daily_token_limit AS "dailyTokenLimit",
+        o.max_concurrency AS "maxConcurrency",
         c.provider_type AS "providerType",
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
@@ -1418,7 +1426,9 @@ export const postgresPlatformRepository: PlatformRepository = {
         fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         enabled,
         review_status AS "reviewStatus",
-        created_at AS "createdAt"
+        created_at AS "createdAt",
+        daily_token_limit AS "dailyTokenLimit",
+        max_concurrency AS "maxConcurrency"
       FROM offerings
       WHERE owner_user_id = $1
       ORDER BY created_at DESC
@@ -1501,13 +1511,17 @@ export const postgresPlatformRepository: PlatformRepository = {
       SET pricing_mode = $1,
           fixed_price_per_1k_input = $2,
           fixed_price_per_1k_output = $3,
-          enabled = $4
-      WHERE owner_user_id = $5 AND id = $6
+          enabled = $4,
+          daily_token_limit = $5,
+          max_concurrency = $6
+      WHERE owner_user_id = $7 AND id = $8
     `, [
       params.pricingMode ?? current.pricingMode,
       params.fixedPricePer1kInput ?? current.fixedPricePer1kInput,
       params.fixedPricePer1kOutput ?? current.fixedPricePer1kOutput,
       newEnabled,
+      params.dailyTokenLimit ?? current.dailyTokenLimit ?? 0,
+      params.maxConcurrency ?? current.maxConcurrency ?? 0,
       params.ownerUserId,
       params.offeringId
     ]);
@@ -1540,6 +1554,15 @@ export const postgresPlatformRepository: PlatformRepository = {
     }
 
     return { ok: true, data: await getOfferingById(params.ownerUserId, params.offeringId) };
+  },
+
+  async getOfferingDailyTokenUsage(offeringId: string): Promise<number> {
+    const currentPool = getPool();
+    const result = await currentPool.query<{ total: string }>(
+      `SELECT COALESCE(SUM(total_tokens),0)::text AS total FROM api_requests WHERE chosen_offering_id = $1 AND created_at >= CURRENT_DATE`,
+      [offeringId]
+    );
+    return Number(result.rows[0]?.total ?? 0);
   },
 
   async removeOffering(params) {
@@ -2626,6 +2649,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
+        o.daily_token_limit AS "dailyTokenLimit",
+        o.max_concurrency AS "maxConcurrency",
         o.created_at AS "createdAt",
         u.display_name AS "ownerDisplayName",
         u.handle AS "ownerHandle",

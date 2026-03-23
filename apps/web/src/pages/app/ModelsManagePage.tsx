@@ -35,6 +35,10 @@ interface Offering {
   enabled: number | boolean;
   createdAt: string;
   executionMode?: string;
+  fixedPricePer1kInput?: number;
+  fixedPricePer1kOutput?: number;
+  dailyTokenLimit?: number;
+  maxConcurrency?: number;
 }
 
 interface SupplyUsageItem {
@@ -485,6 +489,116 @@ function UsingTab() {
 
 // ── Tab 2: Providing ────────────────────────────────────────────
 
+// ── Config Modal ─────────────────────────────────────────────────
+
+function ConfigModal({
+  offering,
+  onClose,
+  onSave,
+  t,
+}: {
+  offering: Offering;
+  onClose: () => void;
+  onSave: (data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; dailyTokenLimit: number; maxConcurrency: number }) => Promise<void>;
+  t: (key: string) => string;
+}) {
+  const [inputPrice, setInputPrice] = useState(String(offering.fixedPricePer1kInput ?? 0));
+  const [outputPrice, setOutputPrice] = useState(String(offering.fixedPricePer1kOutput ?? 0));
+  const [dailyLimit, setDailyLimit] = useState(String(offering.dailyTokenLimit ?? 0));
+  const [maxConc, setMaxConc] = useState(String(offering.maxConcurrency ?? 0));
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave({
+        fixedPricePer1kInput: Number(inputPrice) || 0,
+        fixedPricePer1kOutput: Number(outputPrice) || 0,
+        dailyTokenLimit: Number(dailyLimit) || 0,
+        maxConcurrency: Number(maxConc) || 0,
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="bg-panel border border-line rounded-[var(--radius-card)] p-6 w-full max-w-md shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-base font-semibold text-text-primary mb-1">{t("nodeConfig.title")}</h3>
+        <p className="text-xs text-text-tertiary mb-5 font-mono">{offering.logicalModel}</p>
+
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.inputPrice")}</label>
+            <input
+              type="number"
+              value={inputPrice}
+              onChange={(e) => setInputPrice(e.target.value)}
+              className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+              style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+            />
+          </div>
+          <div>
+            <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.outputPrice")}</label>
+            <input
+              type="number"
+              value={outputPrice}
+              onChange={(e) => setOutputPrice(e.target.value)}
+              className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+              style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+            />
+          </div>
+          <div>
+            <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.dailyLimit")}</label>
+            <input
+              type="number"
+              value={dailyLimit}
+              onChange={(e) => setDailyLimit(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+              style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+            />
+            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.noLimit")}</p>
+          </div>
+          <div>
+            <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.maxConcurrency")}</label>
+            <input
+              type="number"
+              value={maxConc}
+              onChange={(e) => setMaxConc(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+              style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+            />
+            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.noLimit")}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="rounded-[var(--radius-btn)] border border-line text-text-secondary px-4 py-1.5 text-xs font-medium hover:text-text-primary cursor-pointer bg-transparent transition-colors"
+          >
+            {t("nodeConfig.cancel")}
+          </button>
+          <button
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="rounded-[var(--radius-btn)] border border-accent/30 text-accent px-4 py-1.5 text-xs font-medium hover:bg-accent/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
+          >
+            {saving ? "..." : t("nodeConfig.save")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProvidingTab() {
   const { t } = useLocale();
   const myKey = getApiKey() ?? "";
@@ -541,6 +655,9 @@ function ProvidingTab() {
 
   // ── Node token section collapsed ──
   const [nodesSectionOpen, setNodesSectionOpen] = useState(false);
+
+  // ── Config modal ──
+  const [configOffering, setConfigOffering] = useState<Offering | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -792,6 +909,18 @@ function ProvidingTab() {
       setError(extractError(err));
     } finally {
       setTogglingId("");
+    }
+  };
+
+  const handleConfigSave = async (offeringId: string, data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; dailyTokenLimit: number; maxConcurrency: number }) => {
+    try {
+      await apiJson(`/v1/offerings/${encodeURIComponent(offeringId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+      await loadData();
+    } catch (err: unknown) {
+      setError(extractError(err));
     }
   };
 
@@ -1231,6 +1360,18 @@ xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
                       </button>
                     )}
                     <button
+                      onClick={() => !enabled ? setConfigOffering(o) : undefined}
+                      disabled={enabled}
+                      title={enabled ? t("modelsMgmt.configDisabled") : t("modelsMgmt.configure")}
+                      className={`rounded-[var(--radius-btn)] px-3 py-1.5 text-xs font-medium border transition-colors ${
+                        enabled
+                          ? "border-line text-text-tertiary cursor-not-allowed bg-transparent opacity-50"
+                          : "border-accent/30 text-accent hover:bg-accent/10 cursor-pointer bg-transparent"
+                      }`}
+                    >
+                      {t("modelsMgmt.configure")}
+                    </button>
+                    <button
                       onClick={() => void toggleOffering(o)}
                       disabled={togglingId === o.id}
                       className={`rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border transition-colors ${
@@ -1243,7 +1384,25 @@ xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
                     </button>
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-line flex gap-6 text-xs">
+                <div className="mt-3 pt-3 border-t border-line flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                  <div>
+                    <span className="text-text-tertiary">{t("modelsMgmt.price")}</span>
+                    <span className="ml-1.5 text-text-primary font-mono">{formatTokens(o.fixedPricePer1kInput ?? 0)} / {formatTokens(o.fixedPricePer1kOutput ?? 0)} xt/1K</span>
+                  </div>
+                  {(o.dailyTokenLimit ?? 0) > 0 && (
+                    <div>
+                      <span className="text-text-tertiary">{t("nodeConfig.dailyLimit")}</span>
+                      <span className="ml-1.5 text-text-primary font-mono">{formatTokens(o.dailyTokenLimit!)}</span>
+                    </div>
+                  )}
+                  {(o.maxConcurrency ?? 0) > 0 && (
+                    <div>
+                      <span className="text-text-tertiary">{t("nodeConfig.maxConcurrency")}</span>
+                      <span className="ml-1.5 text-text-primary font-mono">{o.maxConcurrency}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 pt-2 border-t border-line flex gap-6 text-xs">
                   <div>
                     <span className="text-text-tertiary">{t("network.requests")}</span>
                     <span className="ml-1.5 text-text-primary font-medium">{usage?.requestCount ?? 0}</span>
@@ -1390,6 +1549,16 @@ xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
             </div>
           )}
         </div>
+      )}
+
+      {/* Config modal */}
+      {configOffering && (
+        <ConfigModal
+          offering={configOffering}
+          onClose={() => setConfigOffering(null)}
+          onSave={(data) => handleConfigSave(configOffering.id, data)}
+          t={t}
+        />
       )}
     </div>
   );

@@ -527,8 +527,14 @@ export const platformService = {
     fixedPricePer1kInput?: number;
     fixedPricePer1kOutput?: number;
     enabled?: boolean;
+    dailyTokenLimit?: number;
+    maxConcurrency?: number;
   }) {
     return platformRepository.updateOffering(params);
+  },
+
+  async getOfferingDailyTokenUsage(offeringId: string): Promise<number> {
+    return platformRepository.getOfferingDailyTokenUsage(offeringId);
   },
 
   removeOffering(params: {

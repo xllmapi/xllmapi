@@ -226,6 +226,10 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return update_offering(params);
   },
 
+  getOfferingDailyTokenUsage(_offeringId: string): number {
+    return 0; // SQLite dev mode: no daily limit tracking
+  },
+
   removeOffering(params) {
     return remove_offering(params);
   },

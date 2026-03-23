@@ -8,6 +8,35 @@ import { streamAnthropic, callAnthropic } from "./providers/anthropic.js";
 
 const limiter = new ConcurrencyLimiter(32);
 
+// ── Per-offering concurrency tracking ──
+const activeConcurrency = new Map<string, number>();
+
+function acquireSlot(offeringId: string, maxConcurrency: number): boolean {
+  if (maxConcurrency <= 0) return true; // no limit
+  const current = activeConcurrency.get(offeringId) ?? 0;
+  if (current >= maxConcurrency) return false;
+  activeConcurrency.set(offeringId, current + 1);
+  return true;
+}
+
+function releaseSlot(offeringId: string) {
+  const current = activeConcurrency.get(offeringId) ?? 0;
+  if (current > 0) activeConcurrency.set(offeringId, current - 1);
+}
+
+// ── Daily token limit check ──
+async function isDailyLimitExceeded(offeringId: string, dailyTokenLimit: number): Promise<boolean> {
+  if (dailyTokenLimit <= 0) return false;
+  try {
+    const { platformService } = await import('../services/platform-service.js');
+    const used = await platformService.getOfferingDailyTokenUsage(offeringId);
+    return used >= dailyTokenLimit;
+  } catch {
+    // If check fails, allow the request to proceed
+    return false;
+  }
+}
+
 export interface ProviderResult {
   chosenOffering: CandidateOffering;
   content: string;
@@ -61,6 +90,21 @@ export async function executeStreamingRequest(params: {
 
   let lastError: unknown;
   for (const offering of shuffled) {
+    // Check daily token limit
+    if (offering.dailyTokenLimit && offering.dailyTokenLimit > 0) {
+      const exceeded = await isDailyLimitExceeded(offering.offeringId, offering.dailyTokenLimit);
+      if (exceeded) {
+        console.log(`[provider-executor] offering=${offering.offeringId} daily token limit exceeded, skipping`);
+        continue;
+      }
+    }
+
+    // Check per-offering concurrency limit
+    if (!acquireSlot(offering.offeringId, offering.maxConcurrency ?? 0)) {
+      console.log(`[provider-executor] offering=${offering.offeringId} max concurrency reached, skipping`);
+      continue;
+    }
+
     const release = await limiter.acquire();
     const startTime = Date.now();
     try {
@@ -189,6 +233,7 @@ export async function executeStreamingRequest(params: {
       console.error(`[provider-executor] offering=${offering.offeringId} provider=${offering.providerType} error:`, err);
       // Try next offering
     } finally {
+      releaseSlot(offering.offeringId);
       release();
     }
   }
@@ -213,6 +258,21 @@ export async function executeRequest(params: {
 
   let lastError: unknown;
   for (const offering of shuffled) {
+    // Check daily token limit
+    if (offering.dailyTokenLimit && offering.dailyTokenLimit > 0) {
+      const exceeded = await isDailyLimitExceeded(offering.offeringId, offering.dailyTokenLimit);
+      if (exceeded) {
+        console.log(`[provider-executor] offering=${offering.offeringId} daily token limit exceeded, skipping`);
+        continue;
+      }
+    }
+
+    // Check per-offering concurrency limit
+    if (!acquireSlot(offering.offeringId, offering.maxConcurrency ?? 0)) {
+      console.log(`[provider-executor] offering=${offering.offeringId} max concurrency reached, skipping`);
+      continue;
+    }
+
     const release = await limiter.acquire();
     const startTime = Date.now();
     try {
@@ -290,6 +350,7 @@ export async function executeRequest(params: {
       lastError = err;
       console.error(`[provider-executor] offering=${offering.offeringId} provider=${offering.providerType} error:`, err);
     } finally {
+      releaseSlot(offering.offeringId);
       release();
     }
   }

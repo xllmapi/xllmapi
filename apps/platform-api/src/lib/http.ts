@@ -29,6 +29,8 @@ export type UpdateOfferingBody = {
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
   enabled?: boolean;
+  dailyTokenLimit?: number;
+  maxConcurrency?: number;
 };
 
 export type ReviewOfferingBody = {

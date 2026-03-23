@@ -25,6 +25,8 @@ export interface CandidateOffering {
   enabled: boolean;
   executionMode?: 'platform' | 'node';
   nodeId?: string;
+  dailyTokenLimit?: number;
+  maxConcurrency?: number;
 }
 
 export interface StreamCompletedEvent {
