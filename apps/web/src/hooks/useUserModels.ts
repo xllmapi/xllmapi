@@ -53,7 +53,7 @@ function notifyListeners() {
 async function fetchUserModels(): Promise<{ models: string[]; offerings: UserOffering[] }> {
   const baseUrl = "";
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const token = localStorage.getItem("session_token") || sessionStorage.getItem("session_token");
+  const token = localStorage.getItem("xllmapi_session_token") || sessionStorage.getItem("xllmapi_session_token");
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   try {
