@@ -33,6 +33,8 @@ interface RequestRecord {
   outputTokens: number;
   totalTokens: number;
   createdAt: string;
+  consumerCost?: number;
+  supplierReward?: number;
 }
 
 interface DailyData {
@@ -53,6 +55,7 @@ interface MergedRecord {
   outputTokens: number;
   totalTokens: number;
   createdAt?: string;
+  consumerCost?: number;
   supplierReward?: number;
 }
 
@@ -167,6 +170,7 @@ export function OverviewPage() {
     outputTokens: Number(r.outputTokens),
     totalTokens: Number(r.totalTokens),
     createdAt: r.createdAt,
+    consumerCost: Number(r.consumerCost ?? 0),
   }));
   {
     const consumeIds = new Set(recentRequests.map((r) => r.requestId));
@@ -182,6 +186,7 @@ export function OverviewPage() {
         outputTokens: Number(s.outputTokens),
         totalTokens: Number(s.totalTokens),
         createdAt: s.createdAt,
+        supplierReward: Number(s.supplierReward ?? 0),
       });
     }
     mergedRecords.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
@@ -252,10 +257,19 @@ export function OverviewPage() {
       className: "font-mono text-xs",
     },
     {
-      key: "totalTokens",
-      header: "xtokens",
+      key: "cost",
+      header: "xt 费用 / tokens",
       align: "right",
-      render: (r) => formatTokens(r.totalTokens),
+      render: (r) => {
+        const xt = r.type === "supply" ? (r.supplierReward ?? 0) : (r.consumerCost ?? 0);
+        return (
+          <span className="inline-flex items-center gap-1">
+            <span className={r.type === "supply" ? "text-emerald-400" : "text-amber-300"}>{formatTokens(xt)} xt</span>
+            <span className="text-text-tertiary/40">/</span>
+            <span className="text-text-tertiary">{formatTokens(r.totalTokens)}</span>
+          </span>
+        );
+      },
     },
     {
       key: "inputTokens",

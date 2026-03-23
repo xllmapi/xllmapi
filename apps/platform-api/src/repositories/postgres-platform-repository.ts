@@ -1045,18 +1045,20 @@ export const postgresPlatformRepository: PlatformRepository = {
     const currentPool = getPool();
     const result = await currentPool.query(`
       SELECT
-        id AS "requestId",
-        logical_model AS "logicalModel",
-        provider,
-        real_model AS "realModel",
-        LEAST(input_tokens, 2147483647)::text AS "inputTokens",
-        LEAST(output_tokens, 2147483647)::text AS "outputTokens",
-        LEAST(total_tokens, 2147483647)::text AS "totalTokens",
-        created_at::text AS "createdAt"
-      FROM api_requests
-      WHERE requester_user_id = $1
-        AND created_at >= (NOW() - ($2 || ' days')::interval)
-      ORDER BY created_at DESC
+        ar.id AS "requestId",
+        ar.logical_model AS "logicalModel",
+        ar.provider,
+        ar.real_model AS "realModel",
+        LEAST(ar.input_tokens, 2147483647)::text AS "inputTokens",
+        LEAST(ar.output_tokens, 2147483647)::text AS "outputTokens",
+        LEAST(ar.total_tokens, 2147483647)::text AS "totalTokens",
+        ar.created_at::text AS "createdAt",
+        COALESCE(sr.consumer_cost, 0)::text AS "consumerCost"
+      FROM api_requests ar
+      LEFT JOIN settlement_records sr ON sr.request_id = ar.id
+      WHERE ar.requester_user_id = $1
+        AND ar.created_at >= (NOW() - ($2 || ' days')::interval)
+      ORDER BY ar.created_at DESC
       LIMIT $3
     `, [userId, days, limit]);
     return result.rows;
