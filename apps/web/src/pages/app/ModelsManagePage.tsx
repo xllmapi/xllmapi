@@ -282,7 +282,8 @@ function PoolGroupedSection({
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <span className="font-mono text-sm font-bold text-text-primary truncate">{displayName}</span>
-                          {isActive ? (
+                          {/* Node real status: based on offering enabled+approved, not connection state */}
+                          {entry.enabled !== false && entry.reviewStatus === "approved" ? (
                             <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
                               {"\uD83D\uDFE2"} {t("modelsMgmt.status.running")}
                             </span>
