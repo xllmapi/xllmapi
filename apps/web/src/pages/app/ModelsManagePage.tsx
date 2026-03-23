@@ -542,6 +542,7 @@ function ConfigModal({
               className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
               style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
             />
+            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.inputPriceHint")}</p>
           </div>
           <div>
             <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.outputPrice")}</label>
@@ -552,6 +553,7 @@ function ConfigModal({
               className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
               style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
             />
+            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.outputPriceHint")}</p>
           </div>
           <div>
             <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.dailyLimit")}</label>
@@ -559,11 +561,11 @@ function ConfigModal({
               type="number"
               value={dailyLimit}
               onChange={(e) => setDailyLimit(e.target.value)}
-              placeholder="0"
+              placeholder="1000000"
               className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
               style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
             />
-            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.noLimit")}</p>
+            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.dailyLimitHint")}</p>
           </div>
           <div>
             <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.maxConcurrency")}</label>
@@ -571,11 +573,11 @@ function ConfigModal({
               type="number"
               value={maxConc}
               onChange={(e) => setMaxConc(e.target.value)}
-              placeholder="0"
+              placeholder="2"
               className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
               style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
             />
-            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.noLimit")}</p>
+            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.maxConcurrencyHint")}</p>
           </div>
         </div>
 

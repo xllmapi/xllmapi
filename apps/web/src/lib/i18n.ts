@@ -406,11 +406,14 @@ const messages: Record<string, Record<string, string>> = {
 
     // Node config modal
     "nodeConfig.title": "节点配置",
-    "nodeConfig.inputPrice": "Input 价格 (xt/1K)",
-    "nodeConfig.outputPrice": "Output 价格 (xt/1K)",
+    "nodeConfig.inputPrice": "Input 价格",
+    "nodeConfig.inputPriceHint": "每 1K tokens 消耗的 xtokens",
+    "nodeConfig.outputPrice": "Output 价格",
+    "nodeConfig.outputPriceHint": "每 1K tokens 消耗的 xtokens",
     "nodeConfig.dailyLimit": "每日 Token 上限",
+    "nodeConfig.dailyLimitHint": "默认 1M，设为 0 则无限制",
     "nodeConfig.maxConcurrency": "最大并发数",
-    "nodeConfig.noLimit": "0 = 无限制",
+    "nodeConfig.maxConcurrencyHint": "默认 2，设为 0 则无限制",
     "nodeConfig.save": "保存",
     "nodeConfig.cancel": "取消",
 
@@ -889,11 +892,14 @@ const messages: Record<string, Record<string, string>> = {
 
     // Node config modal
     "nodeConfig.title": "Node Configuration",
-    "nodeConfig.inputPrice": "Input Price (xt/1K)",
-    "nodeConfig.outputPrice": "Output Price (xt/1K)",
+    "nodeConfig.inputPrice": "Input Price",
+    "nodeConfig.inputPriceHint": "xtokens per 1K tokens",
+    "nodeConfig.outputPrice": "Output Price",
+    "nodeConfig.outputPriceHint": "xtokens per 1K tokens",
     "nodeConfig.dailyLimit": "Daily Token Limit",
+    "nodeConfig.dailyLimitHint": "Default 1M, 0 = unlimited",
     "nodeConfig.maxConcurrency": "Max Concurrency",
-    "nodeConfig.noLimit": "0 = No limit",
+    "nodeConfig.maxConcurrencyHint": "Default 2, 0 = unlimited",
     "nodeConfig.save": "Save",
     "nodeConfig.cancel": "Cancel",
 
