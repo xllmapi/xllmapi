@@ -71,13 +71,18 @@ interface Offering {
   id: string;
   name?: string;
   logicalModel: string;
-  supplierName?: string;
-  supplierHandle?: string;
-  online: boolean;
-  verified?: boolean;
+  realModel?: string;
+  ownerDisplayName?: string;
+  ownerHandle?: string;
+  executionMode?: string;
+  nodeId?: string;
+  enabled?: boolean;
   reviewStatus?: string;
-  inputPricePer1k: number;
-  outputPricePer1k: number;
+  fixedPricePer1kInput: number;
+  fixedPricePer1kOutput: number;
+  upvotes?: number;
+  downvotes?: number;
+  favoriteCount?: number;
 }
 
 /** Horizontal progress bar */
@@ -285,8 +290,9 @@ export function ModelDetailPage() {
               {offerings.map((o) => {
                 const isFav = favoriteIds.has(o.id);
                 const isToggling = togglingFav.has(o.id);
-                const verificationStatus = o.reviewStatus === "approved" || o.verified
+                const verificationStatus = o.reviewStatus === "approved"
                   ? "verified" : o.reviewStatus === "pending" ? "pending" : "unverified";
+                const isOnline = o.executionMode === "platform" || o.enabled !== false;
                 return (
                   <div key={o.id} className="rounded-lg border border-line bg-panel-strong p-4 transition-colors hover:border-accent/20">
                     {/* Row 1: Name + Status */}
@@ -297,8 +303,8 @@ export function ModelDetailPage() {
                       <div className="flex items-center gap-2 shrink-0">
                         {/* Online/offline */}
                         <span className="flex items-center gap-1">
-                          <span className={`inline-block h-2 w-2 rounded-full ${o.online ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
-                          <span className="text-[10px] text-text-tertiary">{o.online ? t("modelDetail.online") : t("modelDetail.offline")}</span>
+                          <span className={`inline-block h-2 w-2 rounded-full ${isOnline ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
+                          <span className="text-[10px] text-text-tertiary">{isOnline ? t("modelDetail.online") : t("modelDetail.offline")}</span>
                         </span>
                         {/* Verification badge */}
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
@@ -318,16 +324,16 @@ export function ModelDetailPage() {
                     {/* Row 2: Supplier + price */}
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-xs text-text-secondary">
-                        {o.supplierHandle ? (
-                          <Link to={`/u/${o.supplierHandle}`} className="hover:text-accent transition-colors" onClick={(e) => e.stopPropagation()}>
-                            {o.supplierName || o.supplierHandle}
+                        {o.ownerHandle ? (
+                          <Link to={`/u/${o.ownerHandle}`} className="hover:text-accent transition-colors" onClick={(e) => e.stopPropagation()}>
+                            {o.ownerDisplayName || o.ownerHandle}
                           </Link>
                         ) : (
-                          <span>{o.supplierName || "—"}</span>
+                          <span>{o.ownerDisplayName || "—"}</span>
                         )}
                       </div>
                       <span className="text-xs font-mono text-text-tertiary">
-                        {o.inputPricePer1k}/{o.outputPricePer1k} {t("modelDetail.pricePer1k")}
+                        {o.fixedPricePer1kInput}/{o.fixedPricePer1kOutput} {t("modelDetail.pricePer1k")}
                       </span>
                     </div>
 
