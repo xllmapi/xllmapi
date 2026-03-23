@@ -154,7 +154,7 @@ export async function handleNodeRoutes(
         nodeId,
         logicalModel: body.logicalModel,
         realModel: body.realModel,
-        pricingMode: "fixed",
+        pricingMode: "fixed_price",
         fixedPricePer1kInput: body.fixedPricePer1kInput,
         fixedPricePer1kOutput: body.fixedPricePer1kOutput,
       });

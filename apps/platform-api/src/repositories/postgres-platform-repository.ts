@@ -2370,7 +2370,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     const currentPool = getPool();
     await currentPool.query(`
       INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, execution_mode, node_id, credential_id, enabled, review_status, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'node', $8, '', true, 'pending', NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'node', $8, NULL, true, 'pending', NOW())
     `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.nodeId]);
   },
 
