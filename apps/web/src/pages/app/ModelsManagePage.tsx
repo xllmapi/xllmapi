@@ -459,8 +459,8 @@ function UsingTab() {
   }, [loadData]);
 
   // Split by paused field
-  const activeModels = models.filter((m) => !m.paused);
-  const historyModels = models.filter((m) => m.paused);
+  const activeModels = models.filter((m) => !m.paused && m.enabled);
+  const historyModels = models.filter((m) => m.paused || !m.enabled);
 
   const handleDisconnect = async (logicalModel: string) => {
     setActionLoading(logicalModel);
