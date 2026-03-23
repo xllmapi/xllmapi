@@ -136,17 +136,18 @@ async function executeOpenAIRequest(
       try {
         const parsed = JSON.parse(data) as {
           choices?: Array<{
-            delta?: { content?: string };
+            delta?: { content?: string; reasoning_content?: string };
             finish_reason?: string | null;
           }>;
           usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
         };
 
         const choice = parsed.choices?.[0];
-        if (choice?.delta?.content) {
-          const delta = choice.delta.content;
-          fullContent += delta;
-          onDelta(delta);
+        // Handle both content and reasoning_content (Kimi Coding uses reasoning_content)
+        const text = choice?.delta?.content || choice?.delta?.reasoning_content;
+        if (text) {
+          fullContent += text;
+          onDelta(text);
         }
         if (choice?.finish_reason) {
           finishReason = choice.finish_reason;

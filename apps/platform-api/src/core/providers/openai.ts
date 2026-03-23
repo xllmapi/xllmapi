@@ -63,8 +63,8 @@ export async function streamOpenAI(params: {
     try {
       const payload = JSON.parse(event.data);
 
-      // Extract delta content
-      const delta = payload?.choices?.[0]?.delta?.content;
+      // Extract delta content (supports reasoning_content for Kimi Coding)
+      const delta = payload?.choices?.[0]?.delta?.content || payload?.choices?.[0]?.delta?.reasoning_content;
       if (typeof delta === "string") {
         content += delta;
         params.onDelta(delta);
