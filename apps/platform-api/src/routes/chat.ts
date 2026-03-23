@@ -35,14 +35,16 @@ async function findOfferingsIncludingNodes(
   includeNodes: boolean,
   userId?: string
 ): Promise<CandidateOffering[]> {
-  // If userId is available, try user's usage list first
+  // If userId is available, check user's usage list
   if (userId) {
-    const userOfferings = await platformService.findUserOfferingsForModel(userId, logicalModel);
-    if (userOfferings.length > 0) {
-      // User has items in their usage list — use those (platform + node offerings)
-      return userOfferings;
+    // Check if user has ANY items in usage list (not just for this model)
+    const allUserOfferings = await platformService.listConnectionPool(userId);
+    if (allUserOfferings.length > 0) {
+      // User has a usage list — only route to models in their list
+      const userOfferings = await platformService.findUserOfferingsForModel(userId, logicalModel);
+      return userOfferings; // May be empty — means this model is not in their list
     }
-    // Empty usage list — fallback to all offerings for backward compat
+    // No usage list at all — fallback to all offerings for backward compat
   }
 
   const platformOfferings = await platformService.findOfferingsForModel(logicalModel);
