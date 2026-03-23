@@ -2674,11 +2674,19 @@ export const postgresPlatformRepository: PlatformRepository = {
   async joinModelPool(params: { userId: string; logicalModel: string }) {
     await ensureDevSeed();
     const currentPool = getPool();
+    // Insert for enabled+approved offerings, AND unpause any existing paused favorites
     await currentPool.query(`
       INSERT INTO offering_favorites (user_id, offering_id, created_at, paused)
       SELECT $1, id, NOW(), false FROM offerings
       WHERE logical_model = $2 AND enabled = true AND review_status = 'approved'
       ON CONFLICT (user_id, offering_id) DO UPDATE SET paused = false
+    `, [params.userId, params.logicalModel]);
+    // Also unpause any existing favorites for this model (even if offering currently disabled)
+    await currentPool.query(`
+      UPDATE offering_favorites SET paused = false
+      WHERE user_id = $1 AND offering_id IN (
+        SELECT id FROM offerings WHERE logical_model = $2
+      )
     `, [params.userId, params.logicalModel]);
   },
 
