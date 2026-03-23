@@ -478,24 +478,21 @@ export function ModelsPage() {
                   </div>
 
                   {/* Nodes + suppliers */}
-                  <div className="flex items-center gap-4 text-xs text-text-secondary mb-2">
+                  <div className="flex items-center gap-4 text-xs text-text-secondary mb-3">
                     <span className="flex items-center gap-1"><Cpu className="w-3 h-3 text-text-tertiary" />{m.ownerCount ?? 0} {t("models.nodes")}</span>
                     <span className="flex items-center gap-1"><Users className="w-3 h-3 text-text-tertiary" />{m.ownerCount ?? 0} {t("models.suppliers")}</span>
                   </div>
 
-                  {/* Provider tags */}
-                  {m.providers && m.providers.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {m.providers.map((p) => (
-                        <span key={p} className="text-[10px] text-text-tertiary bg-accent/6 border border-accent/10 rounded-full px-2 py-0.5">{p}</span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Stats line */}
-                  <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
-                    <span>{s?.totalRequests ?? 0} {t("models.requests")} · {formatTokens(s?.totalTokens ?? 0)} xt</span>
-                    {m.minInputPrice != null && <span>{m.minInputPrice}/{m.minOutputPrice} /1K</span>}
+                  {/* Price + stats */}
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    {m.minInputPrice != null ? (
+                      <span className="text-accent font-medium">
+                        {t("models.avgPrice7d")}: {m.minInputPrice}/{m.minOutputPrice} xt/1K
+                      </span>
+                    ) : (
+                      <span className="text-text-tertiary">{t("models.noPrice")}</span>
+                    )}
+                    <span className="text-text-tertiary">{s?.totalRequests ?? 0} {t("models.requests")}</span>
                   </div>
 
                   {/* Heat bar + sparkline */}

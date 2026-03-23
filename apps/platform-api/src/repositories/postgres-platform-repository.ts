@@ -791,6 +791,26 @@ export const postgresPlatformRepository: PlatformRepository = {
       ORDER BY o.logical_model ASC
     `);
 
+    // 7-day average settlement price per model
+    const avgPriceResult = await currentPool.query<{
+      logicalModel: string;
+      avgInput: string;
+      avgOutput: string;
+    }>(`
+      SELECT
+        ar.logical_model AS "logicalModel",
+        ROUND(AVG(o.fixed_price_per_1k_input))::text AS "avgInput",
+        ROUND(AVG(o.fixed_price_per_1k_output))::text AS "avgOutput"
+      FROM api_requests ar
+      JOIN offerings o ON o.id = ar.chosen_offering_id
+      WHERE ar.created_at > NOW() - INTERVAL '7 days'
+      GROUP BY ar.logical_model
+    `);
+    const avgPriceMap = new Map<string, { avgInput: number; avgOutput: number }>();
+    for (const r of avgPriceResult.rows) {
+      avgPriceMap.set(r.logicalModel, { avgInput: Number(r.avgInput), avgOutput: Number(r.avgOutput) });
+    }
+
     const models: PublicMarketModel[] = [];
     for (const row of result.rows) {
       const featuredSuppliers: Array<{ handle: string; displayName: string }> = [];
@@ -804,6 +824,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         }
       }
 
+      const avg7d = avgPriceMap.get(row.name);
+
       models.push({
         logicalModel: row.name,
         providers: row.providers ?? [],
@@ -812,8 +834,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         enabledOfferingCount: Number(row.enabledOfferingCount),
         credentialCount: Number(row.credentialCount),
         pricingModes: ((row.pricingModes ?? []) as PricingMode[]),
-        minInputPrice: row.minInputPricePer1k === null ? null : Number(row.minInputPricePer1k),
-        minOutputPrice: row.minOutputPricePer1k === null ? null : Number(row.minOutputPricePer1k),
+        minInputPrice: avg7d?.avgInput ?? (row.minInputPricePer1k === null ? null : Number(row.minInputPricePer1k)),
+        minOutputPrice: avg7d?.avgOutput ?? (row.minOutputPricePer1k === null ? null : Number(row.minOutputPricePer1k)),
         status: Number(row.enabledOfferingCount) > 0 ? "available" : "limited",
         capabilities: ["chat"],
         compatibilities: ["openai", "anthropic"],
