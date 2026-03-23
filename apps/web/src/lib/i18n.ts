@@ -351,6 +351,16 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.badgeHosted": "平台托管",
     "modelsMgmt.badgeLocal": "本地节点",
     "modelsMgmt.nodeTokens": "节点令牌管理",
+    "modelsMgmt.active": "活跃",
+    "modelsMgmt.inactive": "不活跃",
+    "modelsMgmt.status.running": "运行中",
+    "modelsMgmt.status.paused": "已暂停",
+    "modelsMgmt.status.offline": "离线",
+    "modelsMgmt.status.notJoined": "未接入网络",
+    "modelsMgmt.status.pendingReview": "待审核",
+    "modelsMgmt.status.stopped": "已停止",
+    "modelsMgmt.lastOnline": "上次在线",
+    "modelsMgmt.publishToNetwork": "发布到网络",
 
     // Nodes page
     "nodes.title": "节点管理",
@@ -791,6 +801,16 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.badgeHosted": "Hosted",
     "modelsMgmt.badgeLocal": "Local",
     "modelsMgmt.nodeTokens": "Node Token Management",
+    "modelsMgmt.active": "Active",
+    "modelsMgmt.inactive": "Inactive",
+    "modelsMgmt.status.running": "Running",
+    "modelsMgmt.status.paused": "Paused",
+    "modelsMgmt.status.offline": "Offline",
+    "modelsMgmt.status.notJoined": "Not Published",
+    "modelsMgmt.status.pendingReview": "Pending Review",
+    "modelsMgmt.status.stopped": "Stopped",
+    "modelsMgmt.lastOnline": "Last online",
+    "modelsMgmt.publishToNetwork": "Publish to Network",
 
     // Nodes page
     "nodes.title": "Node Management",

@@ -70,6 +70,8 @@ interface PoolEntry {
   logicalModel: string;
   supplierName: string;
   joinedAt: string;
+  nodeOnline?: boolean;
+  lastSeen?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -103,6 +105,62 @@ function extractError(err: unknown): string {
     return e.message;
   }
   return "Something went wrong";
+}
+
+// ── Grouping helpers ─────────────────────────────────────────────
+
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "刚刚";
+  if (mins < 60) return `${mins}分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}小时前`;
+  const days = Math.floor(hours / 24);
+  return `${days}天前`;
+}
+
+type OfferingStatus = "running" | "paused" | "offline" | "notJoined" | "pendingReview" | "stopped";
+
+const statusConfig: Record<OfferingStatus, { icon: string; key: string }> = {
+  running: { icon: "\u{1F7E2}", key: "modelsMgmt.status.running" },
+  paused: { icon: "\u23F8\uFE0F", key: "modelsMgmt.status.paused" },
+  offline: { icon: "\u26AB", key: "modelsMgmt.status.offline" },
+  notJoined: { icon: "\u{1F4CE}", key: "modelsMgmt.status.notJoined" },
+  pendingReview: { icon: "\u{1F7E1}", key: "modelsMgmt.status.pendingReview" },
+  stopped: { icon: "\u2B1C", key: "modelsMgmt.status.stopped" },
+};
+
+function getOfferingStatus(
+  o: Offering,
+  nodes: ConnectedNode[],
+): OfferingStatus {
+  const enabled = o.enabled === 1 || o.enabled === true;
+  const isPlatform = o.executionMode === "platform" || !o.executionMode || o.executionMode === "key";
+  const hasOnlineNode = nodes.some((n) => n.status === "online");
+
+  if (!enabled) return "stopped";
+  if (o.reviewStatus === "pending") return "pendingReview";
+  if (o.reviewStatus !== "approved") return "stopped";
+
+  // enabled + approved
+  if (isPlatform) return "running";
+  // local node mode
+  if (hasOnlineNode) return "running";
+  return "offline";
+}
+
+function isOfferingActive(o: Offering, nodes: ConnectedNode[]): boolean {
+  const enabled = o.enabled === 1 || o.enabled === true;
+  const isPlatform = o.executionMode === "platform" || !o.executionMode || o.executionMode === "key";
+  const hasOnlineNode = nodes.some((n) => n.status === "online");
+  return enabled && o.reviewStatus === "approved" && (isPlatform || hasOnlineNode);
+}
+
+function isPoolEntryActive(entry: PoolEntry): boolean {
+  // If API provides nodeOnline, use it; otherwise treat as active
+  if (entry.nodeOnline !== undefined) return entry.nodeOnline;
+  return true;
 }
 
 // ── Main component ──────────────────────────────────────────────
@@ -205,28 +263,87 @@ function UsingTab() {
         </div>
       ) : (
         <>
-          <div className="flex flex-col gap-3">
-            {pool.map((entry) => (
-              <div key={entry.id} className="flex items-center justify-between gap-4 rounded-[var(--radius-card)] border border-line bg-panel px-5 py-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2.5 mb-1">
-                    <span className="font-mono text-sm font-medium text-text-primary">{entry.logicalModel}</span>
+          {(() => {
+            const active = pool.filter(isPoolEntryActive);
+            const inactive = pool.filter((e) => !isPoolEntryActive(e));
+            return (
+              <>
+                {/* Active section */}
+                {active.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-text-primary mb-3">
+                      {t("modelsMgmt.active")} ({active.length})
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      {active.map((entry) => (
+                        <div key={entry.id} className="flex items-center justify-between gap-4 rounded-[var(--radius-card)] border border-line bg-panel px-5 py-4">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2.5 mb-1">
+                              <span className="relative flex h-2 w-2 shrink-0">
+                                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                              </span>
+                              <span className="font-mono text-sm font-medium text-text-primary">{entry.logicalModel}</span>
+                            </div>
+                            <span className="text-xs text-text-tertiary">{entry.supplierName}</span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs text-text-tertiary">{new Date(entry.joinedAt).toLocaleDateString()}</span>
+                            <button
+                              onClick={() => void handleLeavePool(entry.id)}
+                              disabled={leavingId === entry.id}
+                              className="rounded-[var(--radius-btn)] border border-danger/30 text-danger px-3 py-1 text-xs font-medium hover:bg-danger/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
+                            >
+                              {leavingId === entry.id ? "..." : t("modelsMgmt.remove")}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <span className="text-xs text-text-tertiary">{entry.supplierName}</span>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-text-tertiary">{new Date(entry.joinedAt).toLocaleDateString()}</span>
-                  <button
-                    onClick={() => void handleLeavePool(entry.id)}
-                    disabled={leavingId === entry.id}
-                    className="rounded-[var(--radius-btn)] border border-danger/30 text-danger px-3 py-1 text-xs font-medium hover:bg-danger/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
-                  >
-                    {leavingId === entry.id ? "..." : t("modelsMgmt.remove")}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                )}
+
+                {/* Inactive section */}
+                {inactive.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-text-secondary mb-3">
+                      {t("modelsMgmt.inactive")} ({inactive.length})
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      {inactive.map((entry) => (
+                        <div key={entry.id} className="flex items-center justify-between gap-4 rounded-[var(--radius-card)] border border-line bg-panel px-5 py-4 opacity-60">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2.5 mb-1">
+                              <span className="relative flex h-2 w-2 shrink-0">
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-text-tertiary/40" />
+                              </span>
+                              <span className="font-mono text-sm font-medium text-text-primary">{entry.logicalModel}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-text-tertiary">{entry.supplierName}</span>
+                              {entry.lastSeen && (
+                                <span className="text-xs text-text-tertiary">{t("modelsMgmt.lastOnline")}: {formatRelativeTime(entry.lastSeen)}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs text-text-tertiary">{new Date(entry.joinedAt).toLocaleDateString()}</span>
+                            <button
+                              onClick={() => void handleLeavePool(entry.id)}
+                              disabled={leavingId === entry.id}
+                              className="rounded-[var(--radius-btn)] border border-danger/30 text-danger px-3 py-1 text-xs font-medium hover:bg-danger/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
+                            >
+                              {leavingId === entry.id ? "..." : t("modelsMgmt.remove")}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <div className="mt-4">
             <Link
               to="/market"
@@ -929,28 +1046,36 @@ xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
           {t("network.noOfferings")}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {offerings.map((o) => {
+        (() => {
+          const activeOfferings = offerings.filter((o) => isOfferingActive(o, nodes));
+          const inactiveOfferings = offerings.filter((o) => !isOfferingActive(o, nodes));
+
+          const renderOfferingCard = (o: Offering, isInactive: boolean) => {
             const usage = getUsageForOffering(o.id);
             const enabled = isEnabled(o);
             const isL3 = o.executionMode === "local";
-            const nodeForOffering = isL3 ? nodes.find(() => true) : undefined; // best-effort
+            const nodeForOffering = isL3 ? nodes.find(() => true) : undefined;
+            const status = getOfferingStatus(o, nodes);
+            const sc = statusConfig[status];
+
             return (
               <div
                 key={o.id}
                 className={`rounded-[var(--radius-card)] border bg-panel p-5 transition-colors ${
-                  enabled ? "border-accent/20" : "border-line opacity-70"
+                  isInactive ? "border-line opacity-60" : enabled ? "border-accent/20" : "border-line opacity-70"
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2.5 mb-2">
                       <span className="font-mono text-sm font-medium text-text-primary">{o.logicalModel}</span>
-                      <Badge>{enabled ? (o.reviewStatus === "approved" ? "running" : o.reviewStatus) : "stopped"}</Badge>
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-secondary">
+                        {sc.icon} {t(sc.key)}
+                      </span>
                       {isL3 ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium">🖥️ {t("modelsMgmt.badgeLocal")}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium">{"\u{1F5A5}\uFE0F"} {t("modelsMgmt.badgeLocal")}</span>
                       ) : (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">☁️ {t("modelsMgmt.badgeHosted")}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">{"\u2601\uFE0F"} {t("modelsMgmt.badgeHosted")}</span>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-secondary">
@@ -965,19 +1090,33 @@ xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
                           <span>{formatTimeAgo(nodeForOffering.lastHeartbeat)}</span>
                         </>
                       )}
+                      {status === "offline" && isL3 && nodeForOffering && (
+                        <span className="text-text-tertiary">{t("modelsMgmt.lastOnline")}: {formatRelativeTime(nodeForOffering.lastHeartbeat)}</span>
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => void toggleOffering(o)}
-                    disabled={togglingId === o.id}
-                    className={`shrink-0 rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border transition-colors ${
-                      enabled
-                        ? "border-danger/30 text-danger hover:bg-danger/10 bg-transparent"
-                        : "border-accent/30 text-accent hover:bg-accent/10 bg-transparent"
-                    } disabled:opacity-50`}
-                  >
-                    {togglingId === o.id ? "..." : enabled ? t("network.stop") : t("network.start")}
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {status === "notJoined" && (
+                      <button
+                        onClick={() => void toggleOffering(o)}
+                        disabled={togglingId === o.id}
+                        className="rounded-[var(--radius-btn)] border border-accent/30 text-accent px-3 py-1.5 text-xs font-medium hover:bg-accent/10 cursor-pointer bg-transparent transition-colors disabled:opacity-50"
+                      >
+                        {t("modelsMgmt.publishToNetwork")}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => void toggleOffering(o)}
+                      disabled={togglingId === o.id}
+                      className={`rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border transition-colors ${
+                        enabled
+                          ? "border-danger/30 text-danger hover:bg-danger/10 bg-transparent"
+                          : "border-accent/30 text-accent hover:bg-accent/10 bg-transparent"
+                      } disabled:opacity-50`}
+                    >
+                      {togglingId === o.id ? "..." : enabled ? t("network.stop") : t("network.start")}
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-line flex gap-6 text-xs">
                   <div>
@@ -1003,8 +1142,36 @@ xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
                 </div>
               </div>
             );
-          })}
-        </div>
+          };
+
+          return (
+            <div>
+              {/* Active offerings */}
+              {activeOfferings.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-text-primary mb-3">
+                    {t("modelsMgmt.active")} ({activeOfferings.length})
+                  </h3>
+                  <div className="flex flex-col gap-3">
+                    {activeOfferings.map((o) => renderOfferingCard(o, false))}
+                  </div>
+                </div>
+              )}
+
+              {/* Inactive offerings */}
+              {inactiveOfferings.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-text-secondary mb-3">
+                    {t("modelsMgmt.inactive")} ({inactiveOfferings.length})
+                  </h3>
+                  <div className="flex flex-col gap-3">
+                    {inactiveOfferings.map((o) => renderOfferingCard(o, true))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()
       )}
 
       {/* ── Node tokens section (collapsible, only if L3 nodes exist) ── */}
