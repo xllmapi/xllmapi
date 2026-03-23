@@ -20,7 +20,7 @@ interface ProviderPreset {
 
 const PRESETS: ProviderPreset[] = [
   { key: 'deepseek', name: 'DeepSeek', type: 'openai_compatible', baseUrl: 'https://api.deepseek.com', needsKey: true },
-  { key: 'kimi', name: 'Kimi / Moonshot', type: 'openai_compatible', baseUrl: 'https://api.moonshot.cn/v1', needsKey: true },
+  { key: 'kimi', name: 'Kimi / Moonshot', type: 'openai_compatible', baseUrl: 'https://api.moonshot.ai/v1', needsKey: true },
   { key: 'minimax', name: 'MiniMax', type: 'openai_compatible', baseUrl: 'https://api.minimax.chat/v1', needsKey: true },
   { key: 'openai', name: 'OpenAI', type: 'openai_compatible', baseUrl: 'https://api.openai.com/v1', needsKey: true },
   { key: 'anthropic', name: 'Anthropic', type: 'anthropic', baseUrl: 'https://api.anthropic.com', needsKey: true },
