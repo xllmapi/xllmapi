@@ -199,6 +199,14 @@ export function OverviewPage() {
     return true;
   });
 
+  // Pagination
+  const PAGE_SIZE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const pagedRequests = filteredRequests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1); }, [selectedDate, selectedModel]);
+
   // Build merged model data (consume + supply per model)
   interface MergedModelRow {
     logicalModel: string;
@@ -426,18 +434,39 @@ export function OverviewPage() {
         </div>
 
         <span className="text-[11px] text-text-tertiary">
-          {viewMode === "requests" ? `${filteredRequests.length} records` : `${filteredModels.length} models`}
+          {viewMode === "requests" ? `${filteredRequests.length} records · ${currentPage}/${totalPages}` : `${filteredModels.length} models`}
         </span>
       </div>
 
       {viewMode === "requests" ? (
-        <DataTable
-          columns={requestColumns}
-          data={filteredRequests}
-          rowKey={(r) => r.id}
-          emptyText={t("overview.noRecords")}
-          rowClassName={(r) => r.type === "supply" ? "bg-emerald-400/5" : "bg-amber-300/3"}
-        />
+        <>
+          <DataTable
+            columns={requestColumns}
+            data={pagedRequests}
+            rowKey={(r) => r.id}
+            emptyText={t("overview.noRecords")}
+            rowClassName={(r) => r.type === "supply" ? "bg-emerald-400/5" : "bg-amber-300/3"}
+          />
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-3 py-1 text-xs rounded-[var(--radius-btn)] border border-line text-text-secondary hover:bg-accent/10 cursor-pointer bg-transparent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                ←
+              </button>
+              <span className="text-xs text-text-tertiary">{currentPage} / {totalPages}</span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1 text-xs rounded-[var(--radius-btn)] border border-line text-text-secondary hover:bg-accent/10 cursor-pointer bg-transparent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                →
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <DataTable
           columns={modelColumns}
