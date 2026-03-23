@@ -80,7 +80,7 @@ async function executeOpenAIRequest(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'User-Agent': 'xllmapi-node/0.1.0 (compatible; claude-code/1.0)',
+    'User-Agent': 'claude-code/1.0',
   };
   if (provider.apiKey) {
     headers['Authorization'] = `Bearer ${provider.apiKey}`;

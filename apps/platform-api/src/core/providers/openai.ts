@@ -39,7 +39,7 @@ export async function streamOpenAI(params: {
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${params.apiKey}`,
-      "user-agent": "xllmapi/0.1.0 (compatible; claude-code/1.0)"
+      "user-agent": "claude-code/1.0"
     },
     body: JSON.stringify(body),
     signal: params.signal
@@ -124,7 +124,7 @@ export async function callOpenAI(params: {
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${params.apiKey}`,
-      "user-agent": "xllmapi/0.1.0 (compatible; claude-code/1.0)"
+      "user-agent": "claude-code/1.0"
     },
     body: JSON.stringify(body),
     signal: params.signal

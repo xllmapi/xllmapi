@@ -175,7 +175,7 @@ const validate_provider_connectivity_ = async (params: {
       headers: {
         Authorization: `Bearer ${params.apiKey}`,
         "content-type": "application/json",
-        "user-agent": "xllmapi/0.1.0 (compatible; claude-code/1.0)"
+        "user-agent": "claude-code/1.0"
       },
       body: JSON.stringify({
         model: params.testModel || defaultModel,
