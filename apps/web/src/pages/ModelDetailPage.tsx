@@ -120,10 +120,11 @@ export function ModelDetailPage() {
     setOfferingsLoading(true);
     const params = new URLSearchParams({ logicalModel, limit: "100" });
     Promise.all([
-      apiJson<{ data: Offering[] }>(`/v1/market/offerings?${params}`).catch(() => ({ data: [] as Offering[] })),
+      apiJson<{ data: { data: Offering[]; total: number } }>(`/v1/market/offerings?${params}`).catch(() => ({ data: { data: [] as Offering[], total: 0 } })),
       apiJson<{ data: { offeringId: string }[] }>("/v1/user/favorites").catch(() => ({ data: [] as { offeringId: string }[] })),
     ]).then(([offRes, favRes]) => {
-      setOfferings(offRes.data ?? []);
+      const offerings = Array.isArray(offRes.data) ? offRes.data : (offRes.data?.data ?? []);
+      setOfferings(offerings);
       setFavoriteIds(new Set((favRes.data ?? []).map((f) => f.offeringId)));
     }).finally(() => setOfferingsLoading(false));
   }, [logicalModel]);
