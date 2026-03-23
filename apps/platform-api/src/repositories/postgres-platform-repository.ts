@@ -1534,7 +1534,7 @@ export const postgresPlatformRepository: PlatformRepository = {
           INSERT INTO notifications (id, type, title, content, target_user_id, created_by, created_at)
           VALUES ($1, 'system', $2, $3, $4, $5, NOW())
           ON CONFLICT DO NOTHING
-        `, [notifId, `模型节点 ${current.logicalModel} 状态变更`, `供应者 ${supplierName} 的节点状态已变更，已自动移至连接模型历史。`, row.user_id, params.ownerUserId]);
+        `, [notifId, `${current.logicalModel} 节点状态变更`, `供应者 ${supplierName} 的模型节点状态已变更。`, row.user_id, params.ownerUserId]);
       }
     }
 
