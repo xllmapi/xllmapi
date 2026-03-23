@@ -64,13 +64,15 @@ async function discoverOllamaModels(provider: ProviderConfig): Promise<string[]>
 }
 
 async function discoverOpenAICompatibleModels(provider: ProviderConfig): Promise<string[]> {
-  const baseUrl = provider.baseUrl ?? 'http://localhost:8000';
+  const baseUrl = (provider.baseUrl ?? 'http://localhost:8000').replace(/\/+$/, '');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (provider.apiKey) {
     headers['Authorization'] = `Bearer ${provider.apiKey}`;
   }
 
-  const resp = await fetch(`${baseUrl}/v1/models`, {
+  // If baseUrl already ends with /v1, don't add /v1 again
+  const modelsUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/models` : `${baseUrl}/v1/models`;
+  const resp = await fetch(modelsUrl, {
     headers,
     signal: AbortSignal.timeout(10_000),
   });
