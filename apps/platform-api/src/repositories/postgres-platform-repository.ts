@@ -2197,7 +2197,6 @@ export const postgresPlatformRepository: PlatformRepository = {
       LIMIT 1
     `, [hashedToken]);
     if (!result.rows[0]) return null;
-    await currentPool.query(`UPDATE node_tokens SET last_used_at = NOW() WHERE id = $1`, [result.rows[0].nodeTokenId]);
     return result.rows[0];
   },
 
