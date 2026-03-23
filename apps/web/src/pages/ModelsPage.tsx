@@ -230,12 +230,15 @@ function MarketTabContent() {
   interface MarketOffering {
     id: string;
     logicalModel: string;
-    supplierName: string;
-    type: "official" | "distributed";
-    online: boolean;
-    votes: number;
-    inputPricePer1k: number;
-    outputPricePer1k: number;
+    ownerDisplayName?: string;
+    ownerHandle?: string;
+    executionMode?: string;
+    enabled?: boolean;
+    reviewStatus?: string;
+    upvotes?: number;
+    downvotes?: number;
+    fixedPricePer1kInput?: number;
+    fixedPricePer1kOutput?: number;
   }
 
   const [offerings, setOfferings] = useState<MarketOffering[]>([]);
@@ -289,28 +292,34 @@ function MarketTabContent() {
           <div className="text-center text-text-tertiary py-20">{t("market.empty")}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {offerings.map((o) => (
-              <div key={o.id} onClick={() => navigate(`/market/${encodeURIComponent(o.id)}`)}
-                className="rounded-[var(--radius-card)] border border-line bg-panel p-5 transition-colors hover:border-accent/25 cursor-pointer">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">{o.logicalModel}</span>
-                  <span className={`relative flex h-2 w-2 shrink-0`}>
-                    {o.online && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />}
-                    <span className={`relative inline-flex h-2 w-2 rounded-full ${o.online ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
-                  </span>
+            {offerings.map((o) => {
+              const isOnline = o.enabled !== false && o.reviewStatus === "approved";
+              const isPlatform = o.executionMode === "platform" || !o.executionMode;
+              return (
+                <div key={o.id} onClick={() => navigate(`/mnetwork/${encodeURIComponent(o.logicalModel)}`)}
+                  className="rounded-[var(--radius-card)] border border-line bg-panel p-5 transition-colors hover:border-accent/25 cursor-pointer">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">{o.logicalModel}</span>
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      {isOnline && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />}
+                      <span className={`relative inline-flex h-2 w-2 rounded-full ${isOnline ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs text-text-secondary truncate">{o.ownerDisplayName || o.ownerHandle || "—"}</span>
+                    {isPlatform ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ {t("modelsMgmt.platformHosted")}</span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-500/10 text-purple-400">🖥️ {t("modelsMgmt.distributed")}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-text-tertiary">
+                    <span>👍 {o.upvotes ?? 0}</span>
+                    <span className="font-mono">{formatTokens(o.fixedPricePer1kInput ?? 0)}/{formatTokens(o.fixedPricePer1kOutput ?? 0)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs text-text-secondary truncate">{o.supplierName}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                    o.type === "official" ? "bg-accent/10 text-accent" : "bg-purple-500/10 text-purple-400"
-                  }`}>{o.type === "official" ? t("market.badge.official") : t("market.badge.distributed")}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-text-tertiary">
-                  <span>{o.votes} {t("market.votes")}</span>
-                  <span className="font-mono">{o.inputPricePer1k}/{o.outputPricePer1k} /1K</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

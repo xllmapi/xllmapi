@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { apiJson } from "@/lib/api";
+import { formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/Badge";
@@ -9,21 +10,17 @@ import { Footer } from "@/components/layout/Footer";
 interface OfferingDetail {
   id: string;
   logicalModel: string;
-  supplierName: string;
-  supplierHandle: string;
-  type: "official" | "distributed";
-  online: boolean;
-  status: string;
-  stability: number;
-  avgLatencyMs: number;
-  successRate: number;
-  totalServed: number;
-  inputPricePer1k: number;
-  outputPricePer1k: number;
-  votes: number;
-  favorites: number;
-  myVote: number;
-  myFavorite: boolean;
+  realModel?: string;
+  ownerDisplayName?: string;
+  ownerHandle?: string;
+  executionMode?: string;
+  enabled?: boolean;
+  reviewStatus?: string;
+  fixedPricePer1kInput?: number;
+  fixedPricePer1kOutput?: number;
+  upvotes?: number;
+  downvotes?: number;
+  favoriteCount?: number;
 }
 
 interface Comment {
@@ -44,8 +41,6 @@ export function MarketDetailPage() {
   const [error, setError] = useState("");
   const [commentText, setCommentText] = useState("");
   const [posting, setPosting] = useState(false);
-  const [voting, setVoting] = useState(false);
-
   const loadDetail = useCallback(async () => {
     if (!offeringId) return;
     try {
@@ -65,34 +60,6 @@ export function MarketDetailPage() {
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
-
-  const handleVote = async (direction: 1 | -1) => {
-    if (!detail || voting) return;
-    setVoting(true);
-    try {
-      await apiJson(`/v1/market/offerings/${encodeURIComponent(detail.id)}/vote`, {
-        method: "POST",
-        body: JSON.stringify({ direction }),
-      });
-      await loadDetail();
-    } catch {
-      // ignore
-    } finally {
-      setVoting(false);
-    }
-  };
-
-  const handleFavorite = async () => {
-    if (!detail) return;
-    try {
-      await apiJson(`/v1/market/offerings/${encodeURIComponent(detail.id)}/favorite`, {
-        method: "POST",
-      });
-      await loadDetail();
-    } catch {
-      // ignore
-    }
-  };
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,84 +108,44 @@ export function MarketDetailPage() {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold tracking-tight">{detail.logicalModel}</h1>
-              <Badge>{detail.status}</Badge>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                detail.type === "official" ? "bg-accent/10 text-accent" : "bg-purple-500/10 text-purple-400"
-              }`}>
-                {detail.type === "official" ? t("market.badge.official") : t("market.badge.distributed")}
-              </span>
+              <Badge>{detail.enabled !== false && detail.reviewStatus === "approved" ? "available" : "offline"}</Badge>
+              {(detail.executionMode === "platform" || !detail.executionMode) ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ 平台托管</span>
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-500/10 text-purple-400">🖥️ 分布式</span>
+              )}
               <span className="relative flex h-2.5 w-2.5">
-                {detail.online && (
+                {detail.enabled !== false && detail.reviewStatus === "approved" && (
                   <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />
                 )}
-                <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${detail.online ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
+                <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${detail.enabled !== false && detail.reviewStatus === "approved" ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
               </span>
             </div>
-            <Link to={`/u/${detail.supplierHandle}`} className="text-sm text-text-secondary hover:text-accent no-underline transition-colors">
-              {detail.supplierName} (@{detail.supplierHandle})
-            </Link>
+            {detail.ownerHandle ? (
+              <Link to={`/u/${detail.ownerHandle}`} className="text-sm text-text-secondary hover:text-accent no-underline transition-colors">
+                {detail.ownerDisplayName || detail.ownerHandle}
+              </Link>
+            ) : (
+              <span className="text-sm text-text-secondary">{detail.ownerDisplayName || "—"}</span>
+            )}
           </div>
 
           {/* Action buttons */}
-          {isLoggedIn && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => void handleVote(1)}
-                disabled={voting}
-                className={`rounded-[var(--radius-btn)] border px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors ${
-                  detail.myVote === 1 ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-secondary hover:border-accent/30"
-                } bg-transparent disabled:opacity-50`}
-              >
-                +{detail.votes}
-              </button>
-              <button
-                onClick={() => void handleVote(-1)}
-                disabled={voting}
-                className={`rounded-[var(--radius-btn)] border px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors ${
-                  detail.myVote === -1 ? "border-danger/40 bg-danger/10 text-danger" : "border-line text-text-secondary hover:border-danger/30"
-                } bg-transparent disabled:opacity-50`}
-              >
-                -
-              </button>
-              <button
-                onClick={() => void handleFavorite()}
-                className={`rounded-[var(--radius-btn)] border px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors ${
-                  detail.myFavorite ? "border-amber-400/40 bg-amber-400/10 text-amber-400" : "border-line text-text-secondary hover:border-amber-400/30"
-                } bg-transparent`}
-              >
-                {detail.myFavorite ? t("market.favorited") : t("market.favorite")} ({detail.favorites})
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: t("market.metric.stability"), value: `${(detail.stability * 100).toFixed(1)}%` },
-            { label: t("market.metric.latency"), value: `${detail.avgLatencyMs}ms` },
-            { label: t("market.metric.successRate"), value: `${(detail.successRate * 100).toFixed(1)}%` },
-            { label: t("market.metric.totalServed"), value: String(detail.totalServed) },
-          ].map((m, i) => (
-            <div key={i} className="rounded-[var(--radius-card)] border border-line bg-panel p-4 text-center">
-              <div className="text-lg font-bold text-accent">{m.value}</div>
-              <div className="text-xs text-text-tertiary mt-1">{m.label}</div>
-            </div>
-          ))}
+          <div className="flex items-center gap-3 text-xs text-text-tertiary">
+            <span>👍 {detail.upvotes ?? 0} / 👎 {detail.downvotes ?? 0}</span>
+            <span>❤️ {detail.favoriteCount ?? 0}</span>
+          </div>
         </div>
 
         {/* Price info */}
-        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 mb-8">
-          <h2 className="text-base font-semibold mb-3 tracking-tight">{t("market.pricing")}</h2>
-          <div className="flex gap-8 text-sm">
-            <div>
-              <span className="text-text-tertiary">{t("market.inputPrice")}</span>
-              <span className="ml-2 font-mono text-text-primary">{detail.inputPricePer1k} xt/1K</span>
-            </div>
-            <div>
-              <span className="text-text-tertiary">{t("market.outputPrice")}</span>
-              <span className="ml-2 font-mono text-text-primary">{detail.outputPricePer1k} xt/1K</span>
-            </div>
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="rounded-[var(--radius-card)] border border-line bg-panel p-4 text-center">
+            <div className="text-lg font-bold text-accent">{formatTokens(detail.fixedPricePer1kInput ?? 0)}</div>
+            <div className="text-xs text-text-tertiary mt-1">Input / 1K tokens</div>
+          </div>
+          <div className="rounded-[var(--radius-card)] border border-line bg-panel p-4 text-center">
+            <div className="text-lg font-bold text-accent">{formatTokens(detail.fixedPricePer1kOutput ?? 0)}</div>
+            <div className="text-xs text-text-tertiary mt-1">Output / 1K tokens</div>
           </div>
         </div>
 
