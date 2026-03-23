@@ -747,6 +747,9 @@ export const platformService = {
   async leaveConnectionPool(userId: string, offeringId: string) {
     return platformRepository.leaveConnectionPool({ userId, offeringId });
   },
+  async toggleConnectionPoolPause(userId: string, offeringId: string, paused: boolean) {
+    return platformRepository.toggleConnectionPoolPause({ userId, offeringId, paused });
+  },
   async listConnectionPool(userId: string) {
     return platformRepository.listConnectionPool(userId);
   },

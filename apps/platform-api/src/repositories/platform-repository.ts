@@ -273,6 +273,7 @@ export type PlatformRepository = {
   joinConnectionPool(params: { userId: string; offeringId: string }): MaybePromise<void>;
   leaveConnectionPool(params: { userId: string; offeringId: string }): MaybePromise<void>;
   listConnectionPool(userId: string): MaybePromise<any[]>;
+  toggleConnectionPoolPause(params: { userId: string; offeringId: string; paused: boolean }): MaybePromise<void>;
 
   // --- Market ---
   listMarketOfferings(params: { page?: number; limit?: number; executionMode?: string; logicalModel?: string; sort?: string }): MaybePromise<{ data: any[]; total: number }>;

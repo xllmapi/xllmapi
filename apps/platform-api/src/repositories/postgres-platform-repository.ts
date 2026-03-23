@@ -1240,6 +1240,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       WHERE o.logical_model = $2
         AND o.enabled = true
         AND o.review_status = 'approved'
+        AND f.paused = false
     `, [params.userId, params.logicalModel]);
     return result.rows;
   },
@@ -2489,6 +2490,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       SELECT
         f.offering_id AS "offeringId",
         f.created_at AS "joinedAt",
+        f.paused,
         o.logical_model AS "logicalModel",
         o.real_model AS "realModel",
         o.name AS "name",
@@ -2508,6 +2510,14 @@ export const postgresPlatformRepository: PlatformRepository = {
       ORDER BY f.created_at DESC
     `, [userId]);
     return result.rows;
+  },
+
+  async toggleConnectionPoolPause(params: { userId: string; offeringId: string; paused: boolean }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      UPDATE offering_favorites SET paused = $3 WHERE user_id = $1 AND offering_id = $2
+    `, [params.userId, params.offeringId, params.paused]);
   },
 
   // --- Market ---

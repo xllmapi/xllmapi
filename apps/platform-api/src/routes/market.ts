@@ -286,6 +286,23 @@ export async function handleMarketRoutes(
       res.end(response.payload);
       return true;
     }
+
+    // PATCH — pause/resume offering in usage list
+    if (req.method === "PATCH") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      const body = await read_json<{ paused: boolean }>(req);
+      await platformService.toggleConnectionPoolPause(auth.userId, offeringId, body.paused);
+      const response = json(200, { requestId, ok: true });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
   }
 
   return false;

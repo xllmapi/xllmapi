@@ -378,6 +378,7 @@ export const sqlitePlatformRepository: PlatformRepository = {
   joinConnectionPool() {},
   leaveConnectionPool() {},
   listConnectionPool() { return []; },
+  toggleConnectionPoolPause() {},
 
   // --- Market (stubs) ---
   listMarketOfferings() { return { data: [], total: 0 }; },

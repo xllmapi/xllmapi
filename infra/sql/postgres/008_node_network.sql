@@ -67,8 +67,10 @@ CREATE TABLE IF NOT EXISTS offering_favorites (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   offering_id TEXT NOT NULL REFERENCES offerings(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  paused BOOLEAN NOT NULL DEFAULT FALSE,
   PRIMARY KEY (user_id, offering_id)
 );
+ALTER TABLE offering_favorites ADD COLUMN IF NOT EXISTS paused BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Offering comments
 CREATE TABLE IF NOT EXISTS offering_comments (

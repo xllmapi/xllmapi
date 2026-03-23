@@ -77,6 +77,7 @@ interface PoolEntry {
   fixedPricePer1kOutput?: number;
   enabled?: boolean;
   reviewStatus?: string;
+  paused?: boolean;
   joinedAt: string;
 }
 
@@ -164,7 +165,7 @@ function isOfferingActive(o: Offering, nodes: ConnectedNode[]): boolean {
 }
 
 function isPoolEntryActive(entry: PoolEntry): boolean {
-  return (entry.enabled !== false) && (entry.reviewStatus === "approved" || !entry.reviewStatus);
+  return !entry.paused && (entry.enabled !== false) && (entry.reviewStatus === "approved" || !entry.reviewStatus);
 }
 
 // ── Main component ──────────────────────────────────────────────
@@ -228,6 +229,8 @@ function PoolGroupedSection({
   toggleGroup,
   leavingId,
   handleLeavePool,
+  togglingPauseId,
+  handleTogglePause,
   isActive,
   t,
 }: {
@@ -236,6 +239,8 @@ function PoolGroupedSection({
   toggleGroup: (model: string) => void;
   leavingId: string;
   handleLeavePool: (id: string) => Promise<void>;
+  togglingPauseId: string;
+  handleTogglePause: (id: string, paused: boolean) => Promise<void>;
   isActive: boolean;
   t: (key: string) => string;
 }) {
@@ -322,11 +327,15 @@ function PoolGroupedSection({
                       {/* Buttons */}
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          disabled
-                          title={t("modelsMgmt.pauseUnavailable")}
-                          className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium border border-amber-500/30 text-amber-500 opacity-50 cursor-not-allowed bg-transparent transition-colors"
+                          onClick={() => void handleTogglePause(entry.offeringId, !!entry.paused)}
+                          disabled={togglingPauseId === entry.offeringId}
+                          className={`rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border transition-colors disabled:opacity-50 bg-transparent ${
+                            entry.paused
+                              ? "border-accent/30 text-accent hover:bg-accent/10"
+                              : "border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+                          }`}
                         >
-                          {t("modelsMgmt.pause")}
+                          {togglingPauseId === entry.offeringId ? "..." : entry.paused ? t("modelsMgmt.resume") : t("modelsMgmt.pause")}
                         </button>
                         <button
                           onClick={() => void handleLeavePool(entry.offeringId)}
@@ -387,6 +396,24 @@ function UsingTab() {
     }
   };
 
+  const [togglingPauseId, setTogglingPauseId] = useState("");
+  const handleTogglePause = async (offeringId: string, currentlyPaused: boolean) => {
+    setTogglingPauseId(offeringId);
+    setError("");
+    try {
+      await apiJson(`/v1/me/connection-pool/${encodeURIComponent(offeringId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ paused: !currentlyPaused }),
+      });
+      invalidateUserModels();
+      await loadData();
+    } catch (err: unknown) {
+      setError(extractError(err));
+    } finally {
+      setTogglingPauseId("");
+    }
+  };
+
   const toggleGroup = useCallback((model: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -438,6 +465,8 @@ function UsingTab() {
                       toggleGroup={toggleGroup}
                       leavingId={leavingId}
                       handleLeavePool={handleLeavePool}
+                      togglingPauseId={togglingPauseId}
+                      handleTogglePause={handleTogglePause}
                       isActive={true}
                       t={t}
                     />
@@ -455,6 +484,8 @@ function UsingTab() {
                       toggleGroup={toggleGroup}
                       leavingId={leavingId}
                       handleLeavePool={handleLeavePool}
+                      togglingPauseId={togglingPauseId}
+                      handleTogglePause={handleTogglePause}
                       isActive={false}
                       t={t}
                     />
