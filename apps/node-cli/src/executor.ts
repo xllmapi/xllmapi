@@ -113,6 +113,7 @@ async function executeOpenAIRequest(
   let fullContent = '';
   let finishReason = 'stop';
   let usage: UsageInfo = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  let inThinking = false; // Track whether we're inside a <think> block
 
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
@@ -143,11 +144,29 @@ async function executeOpenAIRequest(
         };
 
         const choice = parsed.choices?.[0];
-        // Handle both content and reasoning_content (Kimi Coding uses reasoning_content)
-        const text = choice?.delta?.content || choice?.delta?.reasoning_content;
-        if (text) {
-          fullContent += text;
-          onDelta(text);
+        const contentDelta = choice?.delta?.content;
+        const reasoningDelta = choice?.delta?.reasoning_content;
+
+        // Normalize: wrap reasoning_content in <think> tags for frontend
+        if (reasoningDelta) {
+          if (!inThinking) {
+            inThinking = true;
+            const prefix = '<think>';
+            fullContent += prefix;
+            onDelta(prefix);
+          }
+          fullContent += reasoningDelta;
+          onDelta(reasoningDelta);
+        }
+        if (contentDelta) {
+          if (inThinking) {
+            inThinking = false;
+            const suffix = '</think>';
+            fullContent += suffix;
+            onDelta(suffix);
+          }
+          fullContent += contentDelta;
+          onDelta(contentDelta);
         }
         if (choice?.finish_reason) {
           finishReason = choice.finish_reason;
@@ -163,6 +182,13 @@ async function executeOpenAIRequest(
         // Skip malformed JSON chunks
       }
     }
+  }
+
+  // Close thinking tag if still open
+  if (inThinking) {
+    const suffix = '</think>';
+    fullContent += suffix;
+    onDelta(suffix);
   }
 
   // Estimate usage if not provided by API

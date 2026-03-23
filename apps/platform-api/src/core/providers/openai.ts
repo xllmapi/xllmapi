@@ -56,6 +56,7 @@ export async function streamOpenAI(params: {
   let content = "";
   let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   let finishReason = "stop";
+  let inThinking = false;
 
   for await (const event of parseSseStream(response.body, params.signal)) {
     if (event.data === "[DONE]") break;
@@ -63,11 +64,19 @@ export async function streamOpenAI(params: {
     try {
       const payload = JSON.parse(event.data);
 
-      // Extract delta content (supports reasoning_content for Kimi Coding)
-      const delta = payload?.choices?.[0]?.delta?.content || payload?.choices?.[0]?.delta?.reasoning_content;
-      if (typeof delta === "string") {
-        content += delta;
-        params.onDelta(delta);
+      const contentDelta = payload?.choices?.[0]?.delta?.content;
+      const reasoningDelta = payload?.choices?.[0]?.delta?.reasoning_content;
+
+      // Normalize: wrap reasoning_content in <think> tags
+      if (typeof reasoningDelta === "string" && reasoningDelta) {
+        if (!inThinking) { inThinking = true; content += "<think>"; params.onDelta("<think>"); }
+        content += reasoningDelta;
+        params.onDelta(reasoningDelta);
+      }
+      if (typeof contentDelta === "string" && contentDelta) {
+        if (inThinking) { inThinking = false; content += "</think>"; params.onDelta("</think>"); }
+        content += contentDelta;
+        params.onDelta(contentDelta);
       }
 
       // Extract finish reason
@@ -86,6 +95,9 @@ export async function streamOpenAI(params: {
       // Non-JSON data line, skip
     }
   }
+
+  // Close thinking tag if still open
+  if (inThinking) { content += "</think>"; params.onDelta("</think>"); }
 
   // If usage wasn't provided via stream, estimate from content
   if (usage.totalTokens === 0 && content.length > 0) {
