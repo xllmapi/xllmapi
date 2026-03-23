@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS nodes (
 -- Extend offerings with execution mode and node reference
 ALTER TABLE offerings ADD COLUMN IF NOT EXISTS execution_mode TEXT NOT NULL DEFAULT 'platform';
 ALTER TABLE offerings ADD COLUMN IF NOT EXISTS node_id TEXT REFERENCES nodes(id) ON DELETE SET NULL;
+ALTER TABLE offerings ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE offerings ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- User preferences for distributed node routing
 CREATE TABLE IF NOT EXISTS user_node_preferences (
