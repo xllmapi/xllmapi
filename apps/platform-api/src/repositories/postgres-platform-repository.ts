@@ -791,6 +791,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         AND o.review_status = 'approved'
         AND (c.status = 'active' OR o.credential_id IS NULL)
         AND o.owner_user_id NOT LIKE '%_demo'
+        AND o.execution_mode = 'platform'
       GROUP BY o.logical_model
       ORDER BY o.logical_model ASC
     `);
@@ -2726,6 +2727,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         MIN(o.fixed_price_per_1k_input)::int AS "minInputPrice",
         MIN(o.fixed_price_per_1k_output)::int AS "minOutputPrice",
         MAX(o.execution_mode) AS "executionMode",
+        bool_and(o.enabled) AS "enabled",
         bool_and(f.paused) AS "paused",
         COUNT(DISTINCT ar.id)::int AS "totalRequests",
         COALESCE(SUM(ar.total_tokens), 0)::bigint AS "totalTokens"

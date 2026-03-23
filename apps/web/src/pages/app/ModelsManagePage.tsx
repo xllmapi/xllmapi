@@ -194,6 +194,7 @@ interface PoolModelEntry {
   minInputPrice: number;
   minOutputPrice: number;
   executionMode: string;
+  enabled: boolean;
   paused: boolean;
   totalRequests: number;
   totalTokens: number;
@@ -336,9 +337,9 @@ function GroupedPoolCard({
           </span>
         ) : (
           <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${
-            entry.offeringCount > 0 ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-panel border-line text-text-secondary"
+            entry.enabled ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-panel border-line text-text-secondary"
           }`}>
-            {entry.offeringCount > 0 ? "\uD83D\uDFE2" : "\u26AB"}{entry.offeringCount > 0 ? t("modelsMgmt.status.online") : t("modelsMgmt.status.offline")}
+            {entry.enabled ? "\uD83D\uDFE2" : "\u26AB"}{entry.enabled ? t("modelsMgmt.status.online") : t("modelsMgmt.status.offline")}
           </span>
         )}
 
@@ -369,13 +370,15 @@ function GroupedPoolCard({
         <div className="flex items-center gap-2 shrink-0 ml-auto">
           {isHistory ? (
             <>
-              <button
-                onClick={(e) => { e.stopPropagation(); void onReconnect?.(entry.logicalModel); }}
-                disabled={actionLoading === entry.logicalModel}
-                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
-              >
-                {actionLoading === entry.logicalModel ? "..." : t("modelsMgmt.reconnect")}
-              </button>
+              {entry.enabled && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); void onReconnect?.(entry.logicalModel); }}
+                  disabled={actionLoading === entry.logicalModel}
+                  className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === entry.logicalModel ? "..." : t("modelsMgmt.reconnect")}
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); void onRemove?.(entry.logicalModel); }}
                 disabled={actionLoading === entry.logicalModel}

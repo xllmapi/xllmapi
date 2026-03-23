@@ -325,9 +325,9 @@ export function ModelsPage() {
       <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-2xl mx-auto">
           {[
-            { value: models.length, label: t("models.stat.models") },
-            { value: totalNodes, label: t("models.stat.nodes") },
-            { value: totalSuppliers, label: t("models.stat.suppliers") },
+            { value: models.length + new Set(distributedOfferings.map((o) => o.logicalModel)).size, label: t("models.stat.models") },
+            { value: totalNodes + distributedOfferings.length, label: t("models.stat.nodes") },
+            { value: totalSuppliers + new Set(distributedOfferings.map((o) => o.ownerHandle).filter(Boolean)).size, label: t("models.stat.suppliers") },
             { value: formatTokens(totalTokens), label: t("models.stat.tokens") },
           ].map((s, i) => (
             <div key={i} className="text-center">
