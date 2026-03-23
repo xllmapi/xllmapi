@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // ── xllmapi-node CLI entry point ────────────────────────────────────
 
+import * as readline from 'node:readline';
 import type { NodeConfig, ProviderConfig } from './config.js';
 import { WsClient } from './ws-client.js';
 
@@ -10,100 +11,117 @@ const DEFAULT_PLATFORM_URL = 'ws://localhost:3000/ws/node';
 // ── Built-in provider presets ─────────────────────────────────────
 
 interface ProviderPreset {
+  key: string;
   name: string;
   type: ProviderConfig['type'];
   baseUrl: string;
-  description: string;
+  needsKey: boolean;
 }
 
-const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
-  deepseek: {
-    name: 'DeepSeek',
-    type: 'openai_compatible',
-    baseUrl: 'https://api.deepseek.com',
-    description: 'DeepSeek (deepseek-chat, deepseek-reasoner)',
-  },
-  kimi: {
-    name: 'Kimi / Moonshot',
-    type: 'openai_compatible',
-    baseUrl: 'https://api.moonshot.cn/v1',
-    description: 'Kimi (moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k)',
-  },
-  minimax: {
-    name: 'MiniMax',
-    type: 'openai_compatible',
-    baseUrl: 'https://api.minimax.chat/v1',
-    description: 'MiniMax (MiniMax-M2.5, MiniMax-M2.7, MiniMax-Text-01)',
-  },
-  openai: {
-    name: 'OpenAI',
-    type: 'openai_compatible',
-    baseUrl: 'https://api.openai.com/v1',
-    description: 'OpenAI (gpt-4o, gpt-4o-mini)',
-  },
-  anthropic: {
-    name: 'Anthropic',
-    type: 'anthropic',
-    baseUrl: 'https://api.anthropic.com',
-    description: 'Anthropic (claude-sonnet, claude-opus)',
-  },
-  ollama: {
-    name: 'Ollama (本地)',
-    type: 'ollama',
-    baseUrl: 'http://localhost:11434',
-    description: 'Ollama 本地模型',
-  },
-};
+const PRESETS: ProviderPreset[] = [
+  { key: 'deepseek', name: 'DeepSeek', type: 'openai_compatible', baseUrl: 'https://api.deepseek.com', needsKey: true },
+  { key: 'kimi', name: 'Kimi / Moonshot', type: 'openai_compatible', baseUrl: 'https://api.moonshot.cn/v1', needsKey: true },
+  { key: 'minimax', name: 'MiniMax', type: 'openai_compatible', baseUrl: 'https://api.minimax.chat/v1', needsKey: true },
+  { key: 'openai', name: 'OpenAI', type: 'openai_compatible', baseUrl: 'https://api.openai.com/v1', needsKey: true },
+  { key: 'anthropic', name: 'Anthropic', type: 'anthropic', baseUrl: 'https://api.anthropic.com', needsKey: true },
+  { key: 'ollama', name: 'Ollama (本地)', type: 'ollama', baseUrl: 'http://localhost:11434', needsKey: false },
+  { key: 'custom', name: '自定义 (OpenAI 兼容)', type: 'openai_compatible', baseUrl: '', needsKey: true },
+];
 
-// ── Help ──────────────────────────────────────────────────────────
+// ── TUI helpers ───────────────────────────────────────────────────
 
-function printUsage(): void {
-  const presetList = Object.entries(PROVIDER_PRESETS)
-    .map(([key, p]) => `    ${key.padEnd(12)} ${p.description}`)
-    .join('\n');
-
-  console.log(`
-xllmapi-node v${VERSION} — 分布式 LLM 节点
-
-用法:
-  xllmapi-node --token <ntok_xxx> --provider <preset> --api-key <key>
-
-必填:
-  --token <token>         节点认证令牌 (ntok_xxx)
-  --provider <preset>     供应商名称 (见下方预设列表) 或 openai_compatible
-  --api-key <key>         供应商 API Key
-
-可选:
-  --platform-url <url>    平台 WS 地址 (默认: ${DEFAULT_PLATFORM_URL})
-  --base-url <url>        自定义 API 地址 (覆盖预设)
-  --local-ollama <url>    Ollama 地址 (默认: http://localhost:11434)
-  --local-vllm <url>      vLLM 地址
-  --help                  显示帮助
-
-内置供应商预设:
-${presetList}
-
-示例:
-  # DeepSeek (只需 token + provider + api-key)
-  xllmapi-node --token ntok_xxx --provider deepseek --api-key sk-xxx
-
-  # Kimi / Moonshot
-  xllmapi-node --token ntok_xxx --provider kimi --api-key sk-xxx
-
-  # MiniMax
-  xllmapi-node --token ntok_xxx --provider minimax --api-key sk-xxx
-
-  # 本地 Ollama
-  xllmapi-node --token ntok_xxx --provider ollama
-
-  # 自定义 OpenAI 兼容 API
-  xllmapi-node --token ntok_xxx --provider openai_compatible --api-key sk-xxx --base-url https://custom.api.com/v1
-`);
+function createRL(): readline.Interface {
+  return readline.createInterface({ input: process.stdin, output: process.stdout });
 }
 
-// ── Parse args ────────────────────────────────────────────────────
+function ask(rl: readline.Interface, question: string): Promise<string> {
+  return new Promise((resolve) => rl.question(question, (answer) => resolve(answer.trim())));
+}
 
-function parseArgs(argv: string[]): NodeConfig {
+// ── Interactive TUI ───────────────────────────────────────────────
+
+async function interactiveTUI(): Promise<NodeConfig> {
+  const rl = createRL();
+
+  console.log('');
+  console.log('╔══════════════════════════════════════════╗');
+  console.log('║     xllmapi-node v' + VERSION + '                  ║');
+  console.log('║     分布式模型节点                        ║');
+  console.log('╚══════════════════════════════════════════╝');
+  console.log('');
+
+  // Step 1: Platform URL
+  const platformInput = await ask(rl, `平台地址 (回车使用默认 ${DEFAULT_PLATFORM_URL}): `);
+  const platformUrl = platformInput || DEFAULT_PLATFORM_URL;
+
+  // Step 2: Node token
+  console.log('');
+  const token = await ask(rl, '节点令牌 (ntok_xxx): ');
+  if (!token) {
+    console.error('错误: 节点令牌不能为空');
+    process.exit(1);
+  }
+
+  // Step 3: Choose provider
+  console.log('');
+  console.log('选择模型供应商:');
+  console.log('');
+  PRESETS.forEach((p, i) => {
+    console.log(`  ${i + 1}. ${p.name}`);
+  });
+  console.log('');
+
+  const choiceStr = await ask(rl, `输入编号 (1-${PRESETS.length}): `);
+  const choiceIdx = parseInt(choiceStr, 10) - 1;
+  if (isNaN(choiceIdx) || choiceIdx < 0 || choiceIdx >= PRESETS.length) {
+    console.error('错误: 无效的选择');
+    process.exit(1);
+  }
+
+  const preset = PRESETS[choiceIdx]!;
+  console.log(`\n已选择: ${preset.name}`);
+
+  // Step 4: Base URL (for custom)
+  let baseUrl = preset.baseUrl;
+  if (preset.key === 'custom') {
+    baseUrl = await ask(rl, 'API 地址 (如 https://api.example.com/v1): ');
+    if (!baseUrl) {
+      console.error('错误: 自定义供应商需要 API 地址');
+      process.exit(1);
+    }
+  }
+
+  // Step 5: API Key
+  let apiKey: string | undefined;
+  if (preset.needsKey) {
+    apiKey = await ask(rl, `${preset.name} API Key: `);
+    if (!apiKey) {
+      console.error('错误: API Key 不能为空');
+      process.exit(1);
+    }
+  }
+
+  rl.close();
+
+  const providers: ProviderConfig[] = [{
+    type: preset.type,
+    apiKey,
+    baseUrl,
+  }];
+
+  return { token, platformUrl, providers };
+}
+
+// ── CLI args mode (non-interactive) ───────────────────────────────
+
+function parseArgs(argv: string[]): NodeConfig | null {
+  const args = argv.slice(2);
+
+  // If no args or only "start", use interactive mode
+  if (args.length === 0 || (args.length === 1 && args[0] === 'start')) {
+    return null; // signal to use TUI
+  }
+
   let token: string | undefined;
   let platformUrl = DEFAULT_PLATFORM_URL;
   let providerName: string | undefined;
@@ -111,8 +129,6 @@ function parseArgs(argv: string[]): NodeConfig {
   let baseUrl: string | undefined;
   let localOllama: string | undefined;
   let localVllm: string | undefined;
-
-  const args = argv.slice(2);
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -123,53 +139,32 @@ function parseArgs(argv: string[]): NodeConfig {
       case '--base-url': baseUrl = args[++i]; break;
       case '--local-ollama': localOllama = args[++i]; break;
       case '--local-vllm': localVllm = args[++i]; break;
-      case '--help': case '-h': printUsage(); process.exit(0); break;
-      case 'start': break; // ignore legacy "start" subcommand
+      case '--help': case '-h': printHelp(); process.exit(0); break;
+      case 'start': break;
       default:
         console.error(`未知参数: ${args[i]}`);
-        printUsage();
         process.exit(1);
     }
   }
 
   if (!token) {
     console.error('错误: --token 是必填项');
-    printUsage();
     process.exit(1);
   }
 
-  // Build provider list
   const providers: ProviderConfig[] = [];
 
-  if (localOllama) {
-    providers.push({ type: 'ollama', baseUrl: localOllama });
-  }
-
-  if (localVllm) {
-    providers.push({ type: 'vllm', baseUrl: localVllm });
-  }
+  if (localOllama) providers.push({ type: 'ollama', baseUrl: localOllama });
+  if (localVllm) providers.push({ type: 'vllm', baseUrl: localVllm });
 
   if (providerName) {
-    const preset = PROVIDER_PRESETS[providerName.toLowerCase()];
+    const preset = PRESETS.find((p) => p.key === providerName!.toLowerCase());
     if (preset) {
-      // Use preset
-      providers.push({
-        type: preset.type,
-        apiKey,
-        baseUrl: baseUrl ?? preset.baseUrl,
-      });
-      console.log(`[config] 使用预设: ${preset.name} (${preset.baseUrl})`);
+      providers.push({ type: preset.type, apiKey, baseUrl: baseUrl ?? preset.baseUrl });
     } else {
-      // Custom provider type
       const validTypes = ['openai_compatible', 'anthropic', 'ollama', 'vllm'] as const;
       if (!validTypes.includes(providerName as typeof validTypes[number])) {
-        console.error(`错误: 未知的供应商 "${providerName}"`);
-        console.error(`可用预设: ${Object.keys(PROVIDER_PRESETS).join(', ')}`);
-        console.error(`或使用: ${validTypes.join(', ')}`);
-        process.exit(1);
-      }
-      if (!baseUrl && providerName !== 'ollama' && providerName !== 'vllm') {
-        console.error(`错误: 自定义供应商需要 --base-url`);
+        console.error(`未知供应商: ${providerName}`);
         process.exit(1);
       }
       providers.push({
@@ -180,35 +175,65 @@ function parseArgs(argv: string[]): NodeConfig {
     }
   }
 
-  // Default to ollama if nothing specified and --local-ollama not set
   if (providers.length === 0) {
-    console.error('错误: 请指定供应商。');
-    console.error(`示例: --provider deepseek --api-key sk-xxx`);
-    console.error(`或:   --provider ollama`);
+    console.error('错误: 请指定 --provider');
     process.exit(1);
   }
 
   return { token, platformUrl, providers };
 }
 
-// ── Main ─────────────────────────────────────────────────────────────
+function printHelp(): void {
+  const presetList = PRESETS.filter((p) => p.key !== 'custom')
+    .map((p) => `    ${p.key.padEnd(12)} ${p.name}`)
+    .join('\n');
 
-const config = parseArgs(process.argv);
+  console.log(`
+xllmapi-node v${VERSION} — 分布式模型节点
 
-console.log(`\nxllmapi-node v${VERSION}`);
-console.log(`平台: ${config.platformUrl}`);
-console.log(`供应商: ${config.providers.map(p => `${p.type}${p.baseUrl ? ` (${p.baseUrl})` : ''}`).join(', ')}`);
-console.log('');
+交互模式 (推荐):
+  xllmapi-node              直接运行，按提示操作
 
-const client = new WsClient(config);
-client.connect();
+命令行模式:
+  xllmapi-node --token <ntok_xxx> --provider <name> --api-key <key>
 
-// Graceful shutdown
-function handleShutdown(): void {
-  console.log('\n[node] 正在关闭...');
-  client.shutdown();
-  setTimeout(() => process.exit(0), 1000);
+内置供应商:
+${presetList}
+
+示例:
+  xllmapi-node --token ntok_xxx --provider deepseek --api-key sk-xxx
+  xllmapi-node --token ntok_xxx --provider kimi --api-key sk-xxx
+  xllmapi-node --token ntok_xxx --provider ollama
+`);
 }
 
-process.on('SIGINT', handleShutdown);
-process.on('SIGTERM', handleShutdown);
+// ── Main ─────────────────────────────────────────────────────────────
+
+async function main() {
+  let config = parseArgs(process.argv);
+
+  if (!config) {
+    // Interactive TUI mode
+    config = await interactiveTUI();
+  }
+
+  console.log('');
+  console.log(`xllmapi-node v${VERSION}`);
+  console.log(`平台: ${config.platformUrl}`);
+  console.log(`供应商: ${config.providers.map((p) => `${p.type}${p.baseUrl ? ` (${p.baseUrl})` : ''}`).join(', ')}`);
+  console.log('');
+
+  const client = new WsClient(config);
+  client.connect();
+
+  function handleShutdown(): void {
+    console.log('\n[node] 正在关闭...');
+    client.shutdown();
+    setTimeout(() => process.exit(0), 1000);
+  }
+
+  process.on('SIGINT', handleShutdown);
+  process.on('SIGTERM', handleShutdown);
+}
+
+void main();
