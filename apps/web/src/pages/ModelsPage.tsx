@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiJson } from "@/lib/api";
+import { formatTokens } from "@/lib/utils";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
 import { Cpu, Users } from "lucide-react";
@@ -182,12 +183,6 @@ function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; m
   );
 }
 
-function formatTokens(v: number | string): string {
-  const n = Number(v) || 0;
-  if (n >= 999_950) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(Math.round(n));
-}
 
 function StatusDot({ status }: { status: string }) {
   const color = status === "available" ? "bg-emerald-400" : "bg-amber-400";
@@ -486,9 +481,16 @@ export function ModelsPage() {
                   {/* Price + stats */}
                   <div className="flex items-center justify-between text-xs mb-2">
                     {m.minInputPrice != null ? (
-                      <span className="text-accent font-medium">
-                        {t("models.avgPrice7d")}: {m.minInputPrice}/{m.minOutputPrice} xt/1K
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-text-tertiary">{t("models.avgPrice7d")}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-accent font-medium">{formatTokens(m.minInputPrice)}</span>
+                          <span className="text-text-tertiary/40">in</span>
+                          <span className="text-accent font-medium">{formatTokens(m.minOutputPrice ?? 0)}</span>
+                          <span className="text-text-tertiary/40">out</span>
+                          <span className="text-text-tertiary text-[10px]">xt/1K</span>
+                        </span>
+                      </div>
                     ) : (
                       <span className="text-text-tertiary">{t("models.noPrice")}</span>
                     )}
