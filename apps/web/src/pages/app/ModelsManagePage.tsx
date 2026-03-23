@@ -71,6 +71,7 @@ interface NodeOffering {
   id: string;
   logicalModel: string;
   realModel: string;
+  enabled: boolean;
   reviewStatus: string;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
@@ -1882,20 +1883,30 @@ node dist/main.js start \\
                             <p className="text-xs font-medium text-text-secondary mb-1.5">{t("nodes.publishedModels")}:</p>
                             {nodeOfferings.length > 0 ? (
                               <div className="flex flex-col gap-1.5">
-                                {nodeOfferings.map((o) => (
+                                {nodeOfferings.map((o) => {
+                                  const isRunning = o.enabled && o.reviewStatus === "approved" && node.status === "online";
+                                  const isPending = o.reviewStatus === "pending";
+                                  const isRejected = o.reviewStatus === "rejected";
+                                  const isStopped = !o.enabled && !isPending && !isRejected;
+                                  return (
                                   <div key={o.id} className="flex items-center gap-2 pl-2">
                                     <span className="font-mono text-xs text-text-primary">{o.logicalModel}</span>
-                                    {o.reviewStatus === "pending" && (
-                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-medium text-amber-400">
-                                        {"\uD83D\uDFE1"}{t("nodes.pendingReview")}
-                                      </span>
-                                    )}
-                                    {o.reviewStatus === "approved" && (
+                                    {isRunning && (
                                       <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400">
                                         {"\uD83D\uDFE2"}{t("modelsMgmt.status.running")}
                                       </span>
                                     )}
-                                    {o.reviewStatus === "rejected" && (
+                                    {isPending && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 font-medium text-amber-400">
+                                        {"\uD83D\uDFE1"}{t("nodes.pendingReview")}
+                                      </span>
+                                    )}
+                                    {isStopped && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-secondary">
+                                        {"\u26AB"}{t("modelsMgmt.status.offline")}
+                                      </span>
+                                    )}
+                                    {isRejected && (
                                       <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-danger/10 border border-danger/20 font-medium text-danger">
                                         {"\u274C"}{t("modelsMgmt.status.stopped")}
                                       </span>
@@ -1904,7 +1915,7 @@ node dist/main.js start \\
                                       in {formatTokens(o.fixedPricePer1kInput ?? 0)}/out {formatTokens(o.fixedPricePer1kOutput ?? 0)}
                                     </span>
                                   </div>
-                                ))}
+                                  ); })}
                               </div>
                             ) : (
                               <p className="text-xs text-text-tertiary pl-2">({t("nodes.nonePublished")})</p>
