@@ -1496,7 +1496,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     if (!current) {
       return { ok: false, code: "not_found", message: "offering not found for current user" };
     }
-    if (params.enabled === true) {
+    if (params.enabled === true && current.credentialId) {
       const credential = await this.getProviderCredential(params.ownerUserId, current.credentialId);
       if (!credential || credential.status !== "active") {
         return { ok: false, code: "risk_inactive_credential", message: "activate the linked credential before enabling this offering" };
