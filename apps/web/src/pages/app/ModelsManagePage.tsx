@@ -458,6 +458,10 @@ function UsingTab() {
   }, []);
 
   useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => {
+    const timer = setInterval(() => { void loadData(); }, 30_000);
+    return () => clearInterval(timer);
+  }, [loadData]);
 
   // Split by paused field
   const activeModels = models.filter((m) => !m.paused);
@@ -963,6 +967,12 @@ function ProvidingTab() {
   }, []);
 
   useEffect(() => { void loadData(); }, [loadData]);
+
+  // Auto-refresh node/offering data every 30s
+  useEffect(() => {
+    const timer = setInterval(() => { void loadData(); }, 30_000);
+    return () => clearInterval(timer);
+  }, [loadData]);
 
   // ── Provider helpers ──
   const providerMap = new Map<string, ProviderPreset>();
