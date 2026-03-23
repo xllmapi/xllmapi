@@ -98,9 +98,11 @@ export function App() {
             }
           >
             <Route index element={<OverviewPage />} />
-            <Route path="models" element={<ModelsManagePage />} />
-            <Route path="network" element={<Navigate to="/app/models" replace />} />
-            <Route path="nodes" element={<Navigate to="/app/models" replace />} />
+            <Route path="models" element={<Navigate to="/app/models/connected" replace />} />
+            <Route path="models/connected" element={<ModelsManagePage />} />
+            <Route path="models/provided" element={<ModelsManagePage />} />
+            <Route path="network" element={<Navigate to="/app/models/connected" replace />} />
+            <Route path="nodes" element={<Navigate to="/app/models/connected" replace />} />
             <Route path="invitations" element={<InvitationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="security" element={<SecurityPage />} />

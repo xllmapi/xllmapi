@@ -352,6 +352,8 @@ const messages: Record<string, Record<string, string>> = {
 
     // Sidebar additions
     "sidebar.models": "模型管理",
+    "sidebar.connected": "连接的",
+    "sidebar.provided": "接入的",
 
     // Models management page
     "modelsMgmt.title": "模型管理",
@@ -821,6 +823,8 @@ const messages: Record<string, Record<string, string>> = {
 
     // Sidebar additions
     "sidebar.models": "Models",
+    "sidebar.connected": "Connected",
+    "sidebar.provided": "Provided",
 
     // Models management page
     "modelsMgmt.title": "Model Management",

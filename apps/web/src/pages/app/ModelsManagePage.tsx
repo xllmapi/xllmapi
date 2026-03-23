@@ -170,43 +170,15 @@ function isPoolEntryActive(entry: PoolEntry): boolean {
 
 // ── Main component ──────────────────────────────────────────────
 
-type Tab = "using" | "providing";
-
 export function ModelsManagePage() {
   const { t } = useLocale();
-  const [activeTab, setActiveTab] = useState<Tab>("using");
+  const isProvided = window.location.pathname.includes("/models/provided");
+  const title = isProvided ? t("sidebar.provided") : t("sidebar.connected");
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 tracking-tight">{t("modelsMgmt.title")}</h1>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-line">
-        <button
-          onClick={() => setActiveTab("using")}
-          className={`px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
-            activeTab === "using"
-              ? "border-accent text-accent"
-              : "border-transparent text-text-secondary hover:text-text-primary"
-          }`}
-          style={{ background: "none" }}
-        >
-          {t("modelsMgmt.using")}
-        </button>
-        <button
-          onClick={() => setActiveTab("providing")}
-          className={`px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
-            activeTab === "providing"
-              ? "border-accent text-accent"
-              : "border-transparent text-text-secondary hover:text-text-primary"
-          }`}
-          style={{ background: "none" }}
-        >
-          {t("modelsMgmt.providing")}
-        </button>
-      </div>
-
-      {activeTab === "using" ? <UsingTab /> : <ProvidingTab />}
+      <h1 className="text-2xl font-bold mb-6 tracking-tight">{title}</h1>
+      {isProvided ? <ProvidingTab /> : <UsingTab />}
     </div>
   );
 }
