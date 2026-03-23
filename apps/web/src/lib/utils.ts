@@ -11,8 +11,14 @@ export function formatNumber(n: number): string {
 
 export function formatTokens(v: number | string): string {
   const n = Number(v) || 0;
-  if (n >= 999_950) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return m >= 10 ? `${m.toFixed(1)}M` : `${m.toFixed(2)}M`;
+  }
+  if (n >= 1_000) {
+    const k = n / 1_000;
+    return k >= 100 ? `${k.toFixed(0)}K` : `${k.toFixed(1)}K`;
+  }
   return String(Math.round(n));
 }
 
