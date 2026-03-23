@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
@@ -67,6 +67,19 @@ function BarChart7d({ data }: { data: number[] }) {
   );
 }
 
+interface Offering {
+  id: string;
+  name?: string;
+  logicalModel: string;
+  supplierName?: string;
+  supplierHandle?: string;
+  online: boolean;
+  verified?: boolean;
+  reviewStatus?: string;
+  inputPricePer1k: number;
+  outputPricePer1k: number;
+}
+
 /** Horizontal progress bar */
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
@@ -84,6 +97,10 @@ export function ModelDetailPage() {
   const [model, setModel] = useState<NetworkModel | null>(null);
   const [stats, setStats] = useState<ModelStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [offerings, setOfferings] = useState<Offering[]>([]);
+  const [offeringsLoading, setOfferingsLoading] = useState(true);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [togglingFav, setTogglingFav] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     Promise.all([
@@ -96,6 +113,34 @@ export function ModelDetailPage() {
       setStats(s);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [logicalModel]);
+
+  // Fetch offerings for this model
+  useEffect(() => {
+    if (!logicalModel) return;
+    setOfferingsLoading(true);
+    const params = new URLSearchParams({ logicalModel, limit: "100" });
+    Promise.all([
+      apiJson<{ data: Offering[] }>(`/v1/market/offerings?${params}`).catch(() => ({ data: [] as Offering[] })),
+      apiJson<{ data: { offeringId: string }[] }>("/v1/user/favorites").catch(() => ({ data: [] as { offeringId: string }[] })),
+    ]).then(([offRes, favRes]) => {
+      setOfferings(offRes.data ?? []);
+      setFavoriteIds(new Set((favRes.data ?? []).map((f) => f.offeringId)));
+    }).finally(() => setOfferingsLoading(false));
+  }, [logicalModel]);
+
+  const toggleFavorite = useCallback(async (offeringId: string) => {
+    setTogglingFav((prev) => new Set(prev).add(offeringId));
+    try {
+      if (favoriteIds.has(offeringId)) {
+        await apiJson(`/v1/offerings/${offeringId}/favorite`, { method: "DELETE" });
+        setFavoriteIds((prev) => { const next = new Set(prev); next.delete(offeringId); return next; });
+      } else {
+        await apiJson(`/v1/offerings/${offeringId}/favorite`, { method: "POST" });
+        setFavoriteIds((prev) => new Set(prev).add(offeringId));
+      }
+    } catch { /* ignore */ }
+    setTogglingFav((prev) => { const next = new Set(prev); next.delete(offeringId); return next; });
+  }, [favoriteIds]);
 
   if (loading) {
     return (
@@ -201,7 +246,7 @@ export function ModelDetailPage() {
         )}
 
         {/* Suppliers + nodes */}
-        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5">
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 mb-6">
           <h3 className="text-xs font-semibold text-text-secondary mb-3">{t("models.suppliers")}</h3>
           <div className="flex flex-wrap gap-2 mb-3">
             {(model.featuredSuppliers ?? []).map((s) => (
@@ -218,6 +263,90 @@ export function ModelDetailPage() {
             <span>{t("models.stat.suppliers")}: {model.ownerCount ?? 0}</span>
             {stats?.uniqueUsers != null && <span>{t("models.requests")}: {stats.uniqueUsers} users</span>}
           </div>
+        </div>
+
+        {/* Offerings / Nodes list */}
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5">
+          <h3 className="text-xs font-semibold text-text-secondary mb-4">{t("modelDetail.offerings")}</h3>
+          {offeringsLoading ? (
+            <div className="grid grid-cols-1 gap-3">
+              {[1, 2].map((i) => (
+                <div key={i} className="rounded-lg border border-line bg-panel-strong p-4 animate-pulse">
+                  <div className="h-4 bg-line rounded w-1/3 mb-2" />
+                  <div className="h-3 bg-line rounded w-1/2" />
+                </div>
+              ))}
+            </div>
+          ) : offerings.length === 0 ? (
+            <p className="text-text-tertiary text-sm text-center py-6">{t("modelDetail.noOfferings")}</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {offerings.map((o) => {
+                const isFav = favoriteIds.has(o.id);
+                const isToggling = togglingFav.has(o.id);
+                const verificationStatus = o.reviewStatus === "approved" || o.verified
+                  ? "verified" : o.reviewStatus === "pending" ? "pending" : "unverified";
+                return (
+                  <div key={o.id} className="rounded-lg border border-line bg-panel-strong p-4 transition-colors hover:border-accent/20">
+                    {/* Row 1: Name + Status */}
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">
+                        {o.name || t("modelDetail.noName")}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Online/offline */}
+                        <span className="flex items-center gap-1">
+                          <span className={`inline-block h-2 w-2 rounded-full ${o.online ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
+                          <span className="text-[10px] text-text-tertiary">{o.online ? t("modelDetail.online") : t("modelDetail.offline")}</span>
+                        </span>
+                        {/* Verification badge */}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          verificationStatus === "verified"
+                            ? "bg-emerald-400/10 text-emerald-400"
+                            : verificationStatus === "pending"
+                              ? "bg-amber-400/10 text-amber-400"
+                              : "bg-text-tertiary/10 text-text-tertiary"
+                        }`}>
+                          {verificationStatus === "verified" ? t("modelDetail.verified")
+                            : verificationStatus === "pending" ? t("modelDetail.pending")
+                              : t("modelDetail.unverified")}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Supplier + price */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-xs text-text-secondary">
+                        {o.supplierHandle ? (
+                          <Link to={`/u/${o.supplierHandle}`} className="hover:text-accent transition-colors" onClick={(e) => e.stopPropagation()}>
+                            {o.supplierName || o.supplierHandle}
+                          </Link>
+                        ) : (
+                          <span>{o.supplierName || "—"}</span>
+                        )}
+                      </div>
+                      <span className="text-xs font-mono text-text-tertiary">
+                        {o.inputPricePer1k}/{o.outputPricePer1k} {t("modelDetail.pricePer1k")}
+                      </span>
+                    </div>
+
+                    {/* Row 3: Add to list button */}
+                    <button
+                      onClick={() => toggleFavorite(o.id)}
+                      disabled={isToggling}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${
+                        isFav
+                          ? "border-accent/40 bg-accent/10 text-accent"
+                          : "border-line text-text-tertiary hover:text-text-secondary hover:border-accent/25"
+                      } ${isToggling ? "opacity-50" : ""}`}
+                    >
+                      {isFav ? t("modelDetail.added") : t("modelDetail.addToList")}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

@@ -220,7 +220,7 @@ function HeatBar({ value, max }: { value: number; max: number }) {
   );
 }
 
-/** Market tab — offerings listing (embedded from MarketPage) */
+/** Market tab — offerings listing */
 function MarketTabContent() {
   const { t } = useLocale();
   const navigate = useNavigate();
@@ -313,7 +313,7 @@ function MarketTabContent() {
   );
 }
 
-type SortKey = "requests" | "tokens" | "price";
+type SortKey = "popular" | "requests" | "tokens" | "price" | "newest";
 
 export function ModelsPage() {
   const [models, setModels] = useState<NetworkModel[]>([]);
@@ -322,8 +322,10 @@ export function ModelsPage() {
   const [trendData, setTrendData] = useState<TrendDay[]>([]);
   const [trendMetric, setTrendMetric] = useState<TrendMetric>("requests");
   const [trendDays, setTrendDays] = useState(7);
-  const [sortBy, setSortBy] = useState<SortKey>("requests");
+  const [sortBy, setSortBy] = useState<SortKey>("popular");
   const [search, setSearch] = useState("");
+  const [filterOnline, setFilterOnline] = useState(false);
+  const [filterVerified, setFilterVerified] = useState(false);
   const { t } = useLocale();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -348,11 +350,23 @@ export function ModelsPage() {
   const totalTokens = stats.reduce((sum, s) => sum + s.totalTokens, 0);
   const maxRequests = Math.max(...stats.map((s) => s.totalRequests), 1);
 
-  const filtered = models.filter((m) => !search || m.logicalModel.toLowerCase().includes(search.toLowerCase()));
+  const filtered = models.filter((m) => {
+    const q = search.toLowerCase();
+    if (q) {
+      const nameMatch = m.logicalModel.toLowerCase().includes(q);
+      const supplierMatch = (m.featuredSuppliers ?? []).some((s) => s.displayName.toLowerCase().includes(q) || s.handle.toLowerCase().includes(q));
+      if (!nameMatch && !supplierMatch) return false;
+    }
+    if (filterOnline && m.status !== "available") return false;
+    if (filterVerified && !(m.providers && m.providers.length > 0)) return false;
+    return true;
+  });
   const sorted = [...filtered].sort((a, b) => {
     const sa = statsMap.get(a.logicalModel), sb = statsMap.get(b.logicalModel);
+    if (sortBy === "popular") return (b.ownerCount ?? 0) - (a.ownerCount ?? 0);
     if (sortBy === "requests") return (sb?.totalRequests ?? 0) - (sa?.totalRequests ?? 0);
     if (sortBy === "tokens") return (sb?.totalTokens ?? 0) - (sa?.totalTokens ?? 0);
+    if (sortBy === "newest") return (b.logicalModel > a.logicalModel ? 1 : -1);
     return (a.minInputPrice ?? 9999) - (b.minInputPrice ?? 9999);
   });
 
@@ -402,20 +416,32 @@ export function ModelsPage() {
       {/* === Overview tab === */}
       {activeTab === "overview" && (<>
 
-      {/* Sort + Search */}
+      {/* Search + Filter + Sort */}
       <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
+          {/* Sort buttons */}
           <div className="flex items-center gap-1">
-            {(["requests", "tokens", "price"] as SortKey[]).map((key) => (
+            {(["popular", "requests", "tokens", "price", "newest"] as SortKey[]).map((key) => (
               <button key={key} onClick={() => setSortBy(key)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${sortBy === key ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"}`}>
                 {t(`models.sort.${key}`)}
               </button>
             ))}
           </div>
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("models.search")}
-            className="rounded-[var(--radius-input)] border border-line px-3 py-1.5 text-sm text-text-primary w-44 focus:outline-none focus:border-accent transition-colors font-mono"
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("models.searchSupplier")}
+            className="rounded-[var(--radius-input)] border border-line px-3 py-1.5 text-sm text-text-primary w-56 focus:outline-none focus:border-accent transition-colors font-mono"
             style={{ backgroundColor: "rgba(16,21,34,0.6)" }} />
+        </div>
+        {/* Filter toggles */}
+        <div className="flex items-center gap-2 mt-3">
+          <button onClick={() => setFilterOnline(!filterOnline)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${filterOnline ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400" : "border-line text-text-tertiary hover:text-text-secondary"}`}>
+            {filterOnline ? t("models.filter.onlineOnly") : t("models.filter.all")}
+          </button>
+          <button onClick={() => setFilterVerified(!filterVerified)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${filterVerified ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"}`}>
+            {filterVerified ? t("models.filter.verified") : t("models.filter.verifiedAll")}
+          </button>
         </div>
       </section>
 
