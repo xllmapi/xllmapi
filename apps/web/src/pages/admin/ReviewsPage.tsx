@@ -4,7 +4,7 @@ import { formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { FormButton } from "@/components/ui/FormButton";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Badge } from "@/components/ui/Badge";
+// Badge removed — using inline spans for colored type badges
 
 interface PendingOffering {
   id: string;
@@ -13,10 +13,12 @@ interface PendingOffering {
   ownerUserId: string;
   userEmail: string;
   userDisplayName: string;
-  providerType: string;
+  providerType?: string;
+  executionMode?: string;
+  nodeId?: string;
   fixedPricePer1kInput: number;
   fixedPricePer1kOutput: number;
-  createdAt: string;
+  createdAt?: string;
 }
 
 export function ReviewsPage() {
@@ -92,16 +94,21 @@ export function ReviewsPage() {
                       <span className="text-text-tertiary">{o.userEmail}</span>
                     )}
                     <span>&middot;</span>
-                    <Badge>{o.providerType || "unknown"}</Badge>
+                    {o.executionMode === "node" ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-500/10 text-purple-400">🖥️ 分布式</span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ {o.providerType || "平台托管"}</span>
+                    )}
                     <span>&middot;</span>
                     <span>
-                      {t("admin.reviews.priceIn")}: {formatTokens(o.fixedPricePer1kInput ?? 0)}/1K
+                      in {formatTokens(o.fixedPricePer1kInput ?? 0)} / out {formatTokens(o.fixedPricePer1kOutput ?? 0)}
                     </span>
-                    <span>
-                      {t("admin.reviews.priceOut")}: {formatTokens(o.fixedPricePer1kOutput ?? 0)}/1K
-                    </span>
-                    <span>&middot;</span>
-                    <span>{new Date(o.createdAt).toLocaleDateString()}</span>
+                    {o.createdAt && (
+                      <>
+                        <span>&middot;</span>
+                        <span>{new Date(o.createdAt).toLocaleDateString()}</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2 ml-4 shrink-0">

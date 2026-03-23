@@ -1460,6 +1460,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         u.display_name AS "userDisplayName"
       , o.execution_mode AS "executionMode"
       , o.node_id AS "nodeId"
+      , o.created_at AS "createdAt"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN users u ON u.id = o.owner_user_id
