@@ -258,30 +258,30 @@ export function OverviewPage() {
     },
     {
       key: "cost",
-      header: "xt 费用 / tokens",
+      header: "xtokens",
       align: "right",
       render: (r) => {
         const xt = r.type === "supply" ? (r.supplierReward ?? 0) : (r.consumerCost ?? 0);
-        return (
-          <span className="inline-flex items-center gap-1">
-            <span className={r.type === "supply" ? "text-emerald-400" : "text-amber-300"}>{formatTokens(xt)} xt</span>
-            <span className="text-text-tertiary/40">/</span>
-            <span className="text-text-tertiary">{formatTokens(r.totalTokens)}</span>
-          </span>
-        );
+        return <span className={r.type === "supply" ? "text-emerald-400 font-medium" : "text-amber-300 font-medium"}>{formatTokens(xt)}</span>;
       },
+    },
+    {
+      key: "totalTokens",
+      header: "Tokens",
+      align: "right",
+      render: (r) => <span className="text-text-tertiary">{formatTokens(r.totalTokens)}</span>,
     },
     {
       key: "inputTokens",
       header: "Input",
       align: "right",
-      render: (r) => formatTokens(r.inputTokens),
+      render: (r) => <span className="text-text-tertiary">{formatTokens(r.inputTokens)}</span>,
     },
     {
       key: "outputTokens",
       header: "Output",
       align: "right",
-      render: (r) => formatTokens(r.outputTokens),
+      render: (r) => <span className="text-text-tertiary">{formatTokens(r.outputTokens)}</span>,
     },
     {
       key: "provider",
