@@ -75,10 +75,13 @@ async function executeOpenAIRequest(
   onDelta: OnDelta,
   onDone: OnDone,
 ): Promise<void> {
-  const baseUrl = provider.baseUrl ?? 'http://localhost:11434';
-  const url = `${baseUrl}/v1/chat/completions`;
+  const baseUrl = (provider.baseUrl ?? 'http://localhost:11434').replace(/\/+$/, '');
+  const url = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'xllmapi-node/0.1.0 (compatible; claude-code/1.0)',
+  };
   if (provider.apiKey) {
     headers['Authorization'] = `Bearer ${provider.apiKey}`;
   }
