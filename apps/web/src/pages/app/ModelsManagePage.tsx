@@ -329,10 +329,16 @@ function GroupedPoolCard({
       <div className="flex items-center gap-2.5 px-4 py-2.5 min-w-0 flex-wrap">
         <span className="font-mono font-medium text-sm text-text-primary truncate shrink-0">{entry.logicalModel}</span>
 
-        {/* Status badge */}
-        {!isHistory && (
+        {/* Status badge — connected models show "已连接", history shows node real status */}
+        {!isHistory ? (
           <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
-            {"\uD83D\uDFE2"}{t("modelsMgmt.status.running")}
+            {"\uD83D\uDFE2"}{t("modelsMgmt.status.connected")}
+          </span>
+        ) : (
+          <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${
+            entry.offeringCount > 0 ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-panel border-line text-text-secondary"
+          }`}>
+            {entry.offeringCount > 0 ? "\uD83D\uDFE2" : "\u26AB"}{entry.offeringCount > 0 ? t("modelsMgmt.status.online") : t("modelsMgmt.status.offline")}
           </span>
         )}
 
