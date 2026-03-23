@@ -2,14 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Cpu, Loader2 } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 
-interface Model {
+interface PoolEntry {
+  offeringId: string;
   logicalModel: string;
-  providerCount?: number;
-  status?: string;
+  ownerDisplayName?: string;
 }
 
-interface ModelsResponse {
-  data: Model[];
+interface PoolResponse {
+  data: PoolEntry[];
+}
+
+interface Model {
+  logicalModel: string;
+  providerCount: number;
+}
+
+interface NetworkModelsResponse {
+  data: { logicalModel: string; providerCount?: number; status?: string }[];
 }
 
 interface ModelSelectorProps {
@@ -18,13 +27,27 @@ interface ModelSelectorProps {
   className?: string;
 }
 
-function isRealModel(name: string) {
-  return !name.startsWith("community-") && !name.startsWith("e2e-");
-}
-
 export function ModelSelector({ value, onChange, className }: ModelSelectorProps) {
-  const { data, loading } = useApi<ModelsResponse>("/v1/network/models");
-  const models = (data?.data ?? []).filter((m) => isRealModel(m.logicalModel));
+  // Try user's usage list first, fallback to network models for users without favorites
+  const { data: poolData, loading: poolLoading } = useApi<PoolResponse>("/v1/me/connection-pool");
+  const { data: networkData, loading: networkLoading } = useApi<NetworkModelsResponse>("/v1/network/models");
+
+  const loading = poolLoading || networkLoading;
+
+  // Deduplicate by logicalModel from user's usage list
+  const poolModels: Model[] = [];
+  const seen = new Set<string>();
+  for (const entry of poolData?.data ?? []) {
+    if (!seen.has(entry.logicalModel)) {
+      seen.add(entry.logicalModel);
+      poolModels.push({ logicalModel: entry.logicalModel, providerCount: 1 });
+    }
+  }
+
+  // If user has items in usage list, use those. Otherwise fallback to all network models.
+  const models: Model[] = poolModels.length > 0
+    ? poolModels
+    : (networkData?.data ?? []).map((m) => ({ logicalModel: m.logicalModel, providerCount: m.providerCount ?? 0 }));
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
