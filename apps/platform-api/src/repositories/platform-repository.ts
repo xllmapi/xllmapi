@@ -257,6 +257,7 @@ export type PlatformRepository = {
   listNodeOfferings(nodeId: string): MaybePromise<any[]>;
   findOfferingsForModelWithNodes(params: { logicalModel: string; userId?: string }): MaybePromise<any[]>;
   setNodeOfferingsAvailability(params: { nodeId: string; available: boolean }): MaybePromise<void>;
+  getNodeByPublicId(publicNodeId: string): MaybePromise<any | null>;
 
   // --- Social: Votes ---
   castVote(params: { userId: string; offeringId: string; vote: 'upvote' | 'downvote' }): MaybePromise<void>;

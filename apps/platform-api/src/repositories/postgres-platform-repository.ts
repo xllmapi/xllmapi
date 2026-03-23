@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { randomInt, randomUUID } from "node:crypto";
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
 
 import type {
   CandidateOffering,
@@ -2373,10 +2373,21 @@ export const postgresPlatformRepository: PlatformRepository = {
   async createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; description?: string; maxConcurrency?: number }) {
     await ensureDevSeed();
     const currentPool = getPool();
+
+    // Generate unique public node ID
+    const publicNodeId = 'mnode_' + randomBytes(4).toString('hex');
+
+    // Check auto-approve config
+    const configResult = await currentPool.query(
+      `SELECT value FROM platform_config WHERE key = 'offering_auto_approve' LIMIT 1`
+    );
+    const autoApprove = configResult.rows[0]?.value === 'true';
+    const reviewStatus = autoApprove ? 'approved' : 'pending';
+
     await currentPool.query(`
-      INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, execution_mode, node_id, credential_id, enabled, review_status, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'node', $8, NULL, true, 'pending', NOW())
-    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.nodeId]);
+      INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, execution_mode, node_id, credential_id, enabled, review_status, public_node_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'node', $8, NULL, true, $9, $10, NOW())
+    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.nodeId, reviewStatus, publicNodeId]);
   },
 
   async listNodeOfferings(nodeId: string) {
@@ -2432,6 +2443,35 @@ export const postgresPlatformRepository: PlatformRepository = {
     await currentPool.query(`
       UPDATE offerings SET enabled = $2 WHERE node_id = $1 AND execution_mode = 'node'
     `, [params.nodeId, params.available]);
+  },
+
+  async getNodeByPublicId(publicNodeId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        o.id, o.logical_model AS "logicalModel", o.real_model AS "realModel",
+        o.execution_mode AS "executionMode", o.public_node_id AS "publicNodeId",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.daily_token_limit AS "dailyTokenLimit",
+        o.max_concurrency AS "maxConcurrency",
+        o.enabled, o.review_status AS "reviewStatus",
+        o.node_id AS "nodeId",
+        u.display_name AS "ownerDisplayName",
+        u.handle AS "ownerHandle",
+        n.status AS "nodeStatus",
+        n.connected_at AS "nodeConnectedAt",
+        n.total_requests_served AS "totalRequests",
+        n.total_success_count AS "totalSuccess",
+        n.ip_address AS "nodeIp"
+      FROM offerings o
+      JOIN users u ON u.id = o.owner_user_id
+      LEFT JOIN nodes n ON n.id = o.node_id
+      WHERE o.public_node_id = $1
+      LIMIT 1
+    `, [publicNodeId]);
+    return result.rows[0] ?? null;
   },
 
   // --- Social: Votes ---
@@ -2768,6 +2808,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
+        o.enabled,
+        o.review_status AS "reviewStatus",
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency",
         o.created_at AS "createdAt",

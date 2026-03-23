@@ -363,6 +363,7 @@ export const sqlitePlatformRepository: PlatformRepository = {
   listNodeOfferings() { return []; },
   findOfferingsForModelWithNodes() { return []; },
   setNodeOfferingsAvailability() {},
+  getNodeByPublicId() { return null; },
 
   // --- Social: Votes (stubs) ---
   castVote() {},

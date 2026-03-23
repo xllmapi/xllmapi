@@ -102,3 +102,9 @@ CREATE INDEX IF NOT EXISTS idx_offering_votes_offering ON offering_votes(offerin
 CREATE INDEX IF NOT EXISTS idx_offering_favorites_offering ON offering_favorites(offering_id);
 CREATE INDEX IF NOT EXISTS idx_offering_comments_offering ON offering_comments(offering_id);
 CREATE INDEX IF NOT EXISTS idx_user_connection_pool_offering ON user_connection_pool(offering_id);
+
+-- public_node_id for shareable node URLs
+ALTER TABLE offerings ADD COLUMN IF NOT EXISTS public_node_id TEXT UNIQUE;
+
+-- auto-approve config for node offerings
+INSERT INTO platform_config (key, value, updated_at) VALUES ('offering_auto_approve', 'false', NOW()) ON CONFLICT DO NOTHING;

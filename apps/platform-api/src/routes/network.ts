@@ -55,6 +55,25 @@ export async function handleNetworkRoutes(
     return true;
   }
 
+  // GET /v1/network/node/:publicNodeId — public node detail page
+  const nodePublicMatch = req.method === "GET"
+    ? url.pathname.match(/^\/v1\/network\/node\/([^/]+)$/)
+    : null;
+  if (nodePublicMatch) {
+    const publicNodeId = nodePublicMatch[1];
+    const data = await platformService.getNodeByPublicId(publicNodeId);
+    if (!data) {
+      const response = json(404, { error: { message: "node not found", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const response = json(200, { requestId, data });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/v1/pricing/guidance") {
     const auth = await authenticate_request_(req);
     if (!auth) {

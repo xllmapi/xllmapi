@@ -23,7 +23,9 @@ export class WsClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private startTime = Date.now();
   private activeRequests = 0;
+  private totalRequests = 0;
   private shuttingDown = false;
+  private statusTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: NodeConfig) {
     this.config = config;
@@ -61,6 +63,10 @@ export class WsClient {
 
   shutdown(): void {
     this.shuttingDown = true;
+    if (this.statusTimer) {
+      clearInterval(this.statusTimer);
+      this.statusTimer = null;
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -119,6 +125,14 @@ export class WsClient {
 
     this.send({ type: 'capabilities', models: capabilities });
     console.log('[ws] Capabilities sent, ready for requests.');
+
+    // Start periodic status log
+    if (this.statusTimer) clearInterval(this.statusTimer);
+    this.statusTimer = setInterval(() => {
+      const uptime = Math.floor((Date.now() - this.startTime) / 1000);
+      const mins = Math.floor(uptime / 60);
+      console.log(`[status] 在线 | 请求: ${this.totalRequests} | 运行: ${mins}m | 节点: ${this.nodeId ?? '?'}`);
+    }, 60_000);
   }
 
   private handleAuthError(msg: NodeAuthErrorMessage): void {
@@ -145,6 +159,7 @@ export class WsClient {
     console.log(`[req:${requestId}] Executing model=${payload.model}`);
 
     this.activeRequests++;
+    this.totalRequests++;
 
     await executeRequest(
       payload,

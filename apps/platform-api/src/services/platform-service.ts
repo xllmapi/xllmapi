@@ -732,6 +732,9 @@ export const platformService = {
   async createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number }) {
     return platformRepository.createNodeOffering(params);
   },
+  async getNodeByPublicId(publicNodeId: string) {
+    return platformRepository.getNodeByPublicId(publicNodeId);
+  },
   async listNodeOfferings(nodeId: string) {
     return platformRepository.listNodeOfferings(nodeId);
   },
