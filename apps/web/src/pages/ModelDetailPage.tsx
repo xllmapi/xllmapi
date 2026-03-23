@@ -209,7 +209,7 @@ export function ModelDetailPage() {
           </div>
           <div className="rounded-[var(--radius-card)] border border-line bg-panel p-4 text-center">
             <div className="text-xl font-bold text-text-primary">
-              {model.minInputPrice != null ? <>{formatTokens(model.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(model.minOutputPrice ?? 0)}</> : "—"}
+              {model.minInputPrice != null ? <>{formatTokens(model.minInputPrice)} <span className="text-sm font-normal text-text-tertiary">xt/1K</span></> : "—"}
             </div>
             <div className="text-[10px] text-text-tertiary mt-1">{t("models.avgPrice7d")}</div>
           </div>
