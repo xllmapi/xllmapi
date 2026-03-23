@@ -254,6 +254,7 @@ export type PlatformRepository = {
 
   // --- Node Offerings ---
   createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; description?: string; maxConcurrency?: number }): MaybePromise<void>;
+  listNodeOfferings(nodeId: string): MaybePromise<any[]>;
   findOfferingsForModelWithNodes(params: { logicalModel: string; userId?: string }): MaybePromise<any[]>;
   setNodeOfferingsAvailability(params: { nodeId: string; available: boolean }): MaybePromise<void>;
 

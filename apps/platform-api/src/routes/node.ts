@@ -1,13 +1,17 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import crypto from "node:crypto";
+
 import {
   json,
   read_json,
   authenticate_session_only_,
   unauthorized_,
+  forbidden_,
   match_id_route_
 } from "../lib/http.js";
 import { platformService } from "../services/platform-service.js";
+import { nodeConnectionManager } from "../core/node-connection-manager.js";
 
 export async function handleNodeRoutes(
   req: IncomingMessage,
@@ -88,7 +92,89 @@ export async function handleNodeRoutes(
     }
   }
 
-  // GET /v1/nodes — list my nodes
+  // POST /v1/nodes/:nodeId/test — test a model on a node
+  if (req.method === "POST") {
+    const testMatch = url.pathname.match(/^\/v1\/nodes\/([^/]+)\/test$/);
+    if (testMatch) {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      const nodeId = testMatch[1];
+      const node = await platformService.getNode(nodeId);
+      if (!node || node.userId !== auth.userId) {
+        const response = forbidden_(requestId, "Node not found or not owned by you");
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      const body = await read_json<{ model: string }>(req);
+      const result = await nodeConnectionManager.testModel(nodeId, body.model);
+      const response = json(200, { requestId, data: result });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+  }
+
+  // POST /v1/nodes/:nodeId/offerings — create a node offering
+  if (req.method === "POST") {
+    const offeringsMatch = url.pathname.match(/^\/v1\/nodes\/([^/]+)\/offerings$/);
+    if (offeringsMatch) {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      const nodeId = offeringsMatch[1];
+      const node = await platformService.getNode(nodeId);
+      if (!node || node.userId !== auth.userId) {
+        const response = forbidden_(requestId, "Node not found or not owned by you");
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      const body = await read_json<{
+        logicalModel: string;
+        realModel: string;
+        fixedPricePer1kInput: number;
+        fixedPricePer1kOutput: number;
+        dailyTokenLimit?: number;
+        maxConcurrency?: number;
+      }>(req);
+      const offeringId = `off_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
+      await platformService.createNodeOffering({
+        offeringId,
+        ownerUserId: auth.userId,
+        nodeId,
+        logicalModel: body.logicalModel,
+        realModel: body.realModel,
+        pricingMode: "fixed",
+        fixedPricePer1kInput: body.fixedPricePer1kInput,
+        fixedPricePer1kOutput: body.fixedPricePer1kOutput,
+      });
+      const offering = {
+        id: offeringId,
+        nodeId,
+        logicalModel: body.logicalModel,
+        realModel: body.realModel,
+        fixedPricePer1kInput: body.fixedPricePer1kInput,
+        fixedPricePer1kOutput: body.fixedPricePer1kOutput,
+        reviewStatus: "pending",
+      };
+      const response = json(201, { requestId, ok: true, data: offering });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+  }
+
+  // GET /v1/nodes — list my nodes (with offerings)
   if (req.method === "GET" && url.pathname === "/v1/nodes") {
     const auth = await authenticate_session_only_(req);
     if (!auth) {
@@ -97,8 +183,11 @@ export async function handleNodeRoutes(
       res.end(response.payload);
       return true;
     }
-    const result = await platformService.listUserNodes(auth.userId);
-    const response = json(200, { requestId, data: result });
+    const nodes = await platformService.listUserNodes(auth.userId);
+    for (const node of nodes) {
+      node.offerings = await platformService.listNodeOfferings(node.id);
+    }
+    const response = json(200, { requestId, data: nodes });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;

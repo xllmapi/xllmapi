@@ -360,6 +360,7 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   // --- Node Offerings (stubs) ---
   createNodeOffering() {},
+  listNodeOfferings() { return []; },
   findOfferingsForModelWithNodes() { return []; },
   setNodeOfferingsAvailability() {},
 

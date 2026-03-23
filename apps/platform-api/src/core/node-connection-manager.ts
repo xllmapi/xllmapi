@@ -287,6 +287,22 @@ class NodeConnectionManager {
     this.logger.info('node-ws: node cleaned up', { nodeId });
   }
 
+  async testModel(nodeId: string, model: string): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+    const start = Date.now();
+    try {
+      await this.dispatch(nodeId, `test_${Date.now()}`, {
+        model,
+        messages: [{ role: 'user', content: 'Hello' }],
+        temperature: 0,
+        maxTokens: 10,
+        stream: false,
+      });
+      return { ok: true, latencyMs: Date.now() - start };
+    } catch (err: any) {
+      return { ok: false, latencyMs: Date.now() - start, error: err?.message ?? 'Unknown error' };
+    }
+  }
+
   isNodeOnline(nodeId: string): boolean {
     return this.connections.has(nodeId);
   }

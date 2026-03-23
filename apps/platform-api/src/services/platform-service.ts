@@ -699,6 +699,15 @@ export const platformService = {
   async getNodeStats(nodeId: string) {
     return platformRepository.getNode(nodeId);
   },
+  async getNode(nodeId: string) {
+    return platformRepository.getNode(nodeId);
+  },
+  async createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number }) {
+    return platformRepository.createNodeOffering(params);
+  },
+  async listNodeOfferings(nodeId: string) {
+    return platformRepository.listNodeOfferings(nodeId);
+  },
 
   // Preferences
   async getNodePreferences(userId: string) {
