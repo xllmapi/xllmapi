@@ -1005,11 +1005,11 @@ function ProvidingTab() {
     setNewTokenValue("");
     setCreating(true);
     try {
-      const res = await apiJson<{ data: { id: string; token: string } }>("/v1/nodes/tokens", {
+      const res = await apiJson<{ data: { id: string; rawToken: string } }>("/v1/nodes/tokens", {
         method: "POST",
         body: JSON.stringify({ label: newLabel.trim() || "default" }),
       });
-      setNewTokenValue(res.data?.token ?? "");
+      setNewTokenValue(res.data?.rawToken ?? "");
       setSuccess(t("nodes.tokenCreated"));
       setNewLabel("");
       await loadData();
@@ -1065,15 +1065,46 @@ function ProvidingTab() {
         </div>
       )}
 
-      {/* Newly created token display */}
+      {/* Newly created token display + install guide */}
       {newTokenValue && (
         <div className="mb-6 rounded-[var(--radius-card)] border border-accent/30 bg-accent/5 p-5">
-          <p className="text-sm text-text-secondary mb-2">{t("nodes.copyTokenWarning")}</p>
-          <div className="flex items-center gap-3">
-            <code className="flex-1 font-mono text-sm text-text-primary bg-bg-0/50 rounded-[var(--radius-input)] px-3 py-2 overflow-hidden text-ellipsis select-all">
+          <h3 className="text-base font-semibold text-text-primary mb-2">{t("nodes.tokenCreatedTitle")}</h3>
+          <div className="mb-3 rounded-[var(--radius-input)] bg-danger/10 border border-danger/30 px-4 py-2.5 text-sm text-danger font-medium">
+            {t("nodes.saveTokenWarning")}
+          </div>
+          <div className="flex items-center gap-3 mb-5">
+            <code className="flex-1 font-mono text-sm text-text-primary bg-bg-0/50 rounded-[var(--radius-input)] px-3 py-2 overflow-hidden text-ellipsis select-all break-all">
               {newTokenValue}
             </code>
             <CopyButton text={newTokenValue} />
+          </div>
+
+          <h4 className="text-sm font-semibold mb-3 text-text-primary">{t("nodes.installGuide")}</h4>
+          <p className="text-text-secondary text-sm mb-3">{t("nodes.installDescCli")}</p>
+          <div className="relative">
+            <pre className="rounded-[var(--radius-input)] bg-bg-0/50 border border-line px-4 py-3 text-sm font-mono text-text-primary overflow-x-auto whitespace-pre-wrap">
+{`# ${t("nodes.installStep1")}
+cd apps/node-cli && npm run build
+
+# ${t("nodes.installStep2")}
+node dist/main.js start \\
+  --token ${newTokenValue} \\
+  --platform-url ws://localhost:3000/ws/node \\
+  --local-ollama http://localhost:11434
+
+# ${t("nodes.installStep3")}
+node dist/main.js start \\
+  --token ${newTokenValue} \\
+  --platform-url ws://localhost:3000/ws/node \\
+  --provider openai_compatible \\
+  --api-key YOUR_API_KEY \\
+  --base-url https://api.deepseek.com`}
+            </pre>
+            <div className="absolute top-2 right-2">
+              <CopyButton
+                text={`cd apps/node-cli && npm run build\n\nnode dist/main.js start \\\n  --token ${newTokenValue} \\\n  --platform-url ws://localhost:3000/ws/node \\\n  --local-ollama http://localhost:11434`}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1336,18 +1367,29 @@ function ProvidingTab() {
 
               {/* Install guide */}
               <h4 className="text-sm font-semibold mb-3 text-text-primary">{t("nodes.installGuide")}</h4>
-              <p className="text-text-secondary text-sm mb-4">{t("nodes.installDesc")}</p>
+              <p className="text-text-secondary text-sm mb-4">{t("nodes.installDescCli")}</p>
               <div className="relative">
-                <pre className="rounded-[var(--radius-input)] bg-bg-0/50 border border-line px-4 py-3 text-sm font-mono text-text-primary overflow-x-auto">
-{`# Install xllmapi-node
-npm install -g xllmapi-node
+                <pre className="rounded-[var(--radius-input)] bg-bg-0/50 border border-line px-4 py-3 text-sm font-mono text-text-primary overflow-x-auto whitespace-pre-wrap">
+{`# ${t("nodes.installStep1")}
+cd apps/node-cli && npm run build
 
-# Run with your token
-xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
+# ${t("nodes.installStep2")}
+node dist/main.js start \\
+  --token ${newTokenValue || "YOUR_TOKEN"} \\
+  --platform-url ws://localhost:3000/ws/node \\
+  --local-ollama http://localhost:11434
+
+# ${t("nodes.installStep3")}
+node dist/main.js start \\
+  --token ${newTokenValue || "YOUR_TOKEN"} \\
+  --platform-url ws://localhost:3000/ws/node \\
+  --provider openai_compatible \\
+  --api-key YOUR_API_KEY \\
+  --base-url https://api.deepseek.com`}
                 </pre>
                 <div className="absolute top-2 right-2">
                   <CopyButton
-                    text={`npm install -g xllmapi-node\nxllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
+                    text={`cd apps/node-cli && npm run build\n\nnode dist/main.js start \\\n  --token ${newTokenValue || "YOUR_TOKEN"} \\\n  --platform-url ws://localhost:3000/ws/node \\\n  --local-ollama http://localhost:11434`}
                   />
                 </div>
               </div>
