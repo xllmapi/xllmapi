@@ -1458,8 +1458,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         c.status AS "credentialStatus",
         i.email AS "userEmail",
         u.display_name AS "userDisplayName"
+      , o.execution_mode AS "executionMode"
+      , o.node_id AS "nodeId"
       FROM offerings o
-      JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN users u ON u.id = o.owner_user_id
       LEFT JOIN user_identities i ON i.user_id = o.owner_user_id
       WHERE o.review_status = 'pending'
