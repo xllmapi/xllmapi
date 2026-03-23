@@ -278,22 +278,54 @@ function PoolGroupedSection({
                         !isActive ? "border-line opacity-60" : "border-accent/20"
                       }`}
                     >
-                      {/* Row 1: Model name */}
-                      <div className="flex items-center gap-2.5 mb-2">
-                        <span className="font-mono text-sm font-bold text-text-primary">{displayName}</span>
+                      {/* Row 1: Model name + buttons (same line) */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="font-mono text-sm font-bold text-text-primary truncate">{displayName}</span>
+                          {isActive ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
+                              {"\uD83D\uDFE2"} {t("modelsMgmt.status.running")}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-secondary shrink-0">
+                              {"\u26AB"} {t("modelsMgmt.status.offline")}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isActive ? (
+                            <button
+                              onClick={() => void handleTogglePause(entry.offeringId, false)}
+                              disabled={togglingPauseId === entry.offeringId}
+                              className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
+                            >
+                              {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.disconnect")}
+                            </button>
+                          ) : (
+                            <>
+                              {entry.enabled !== false && entry.reviewStatus === "approved" && (
+                                <button
+                                  onClick={() => void handleTogglePause(entry.offeringId, true)}
+                                  disabled={togglingPauseId === entry.offeringId}
+                                  className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
+                                >
+                                  {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.connect")}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => void handleLeavePool(entry.offeringId)}
+                                disabled={leavingId === entry.offeringId}
+                                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
+                              >
+                                {leavingId === entry.offeringId ? "..." : t("modelsMgmt.delete")}
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Row 2: Status badges */}
+                      {/* Row 2: Badges */}
                       <div className="flex items-center gap-2 mb-2">
-                        {isActive ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400">
-                            {"\uD83D\uDFE2"} {t("modelsMgmt.status.running")}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-secondary">
-                            {"\u26AB"} {t("modelsMgmt.status.offline")}
-                          </span>
-                        )}
                         {isPlatform ? (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium">{"\u2601\uFE0F"} {t("modelsMgmt.platformHosted")}</span>
                         ) : (
@@ -305,7 +337,7 @@ function PoolGroupedSection({
                       </div>
 
                       {/* Row 3: Supplier + price */}
-                      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-secondary mb-3">
+                      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-secondary">
                         <span>
                           {t("modelsMgmt.supplier")}:{" "}
                           {entry.ownerHandle ? (
@@ -320,42 +352,8 @@ function PoolGroupedSection({
                           )}
                         </span>
                         <span>
-                          {t("modelsMgmt.price")}: <span className="font-mono text-text-primary">{inputPrice}/{outputPrice} xt/1K</span>
+                          {t("modelsMgmt.price")}: <span className="font-mono text-text-primary">{formatTokens(inputPrice)}/{formatTokens(outputPrice)}</span>
                         </span>
-                      </div>
-
-                      {/* Buttons */}
-                      <div className="flex items-center justify-end gap-2">
-                        {isActive ? (
-                          /* Connected: single "disconnect" button */
-                          <button
-                            onClick={() => void handleTogglePause(entry.offeringId, false)}
-                            disabled={togglingPauseId === entry.offeringId}
-                            className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
-                          >
-                            {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.disconnect")}
-                          </button>
-                        ) : (
-                          /* History: "connect" (only if offering is running) + "delete" */
-                          <>
-                            {entry.enabled !== false && entry.reviewStatus === "approved" && (
-                              <button
-                                onClick={() => void handleTogglePause(entry.offeringId, true)}
-                                disabled={togglingPauseId === entry.offeringId}
-                                className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
-                              >
-                                {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.connect")}
-                              </button>
-                            )}
-                            <button
-                              onClick={() => void handleLeavePool(entry.offeringId)}
-                              disabled={leavingId === entry.offeringId}
-                              className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
-                            >
-                              {leavingId === entry.offeringId ? "..." : t("modelsMgmt.delete")}
-                            </button>
-                          </>
-                        )}
                       </div>
                     </div>
                   );
