@@ -206,40 +206,44 @@ export function ModelDetailPage() {
   return (
     <div className="min-h-screen flex flex-col pt-14">
       <div className="mx-auto max-w-2xl px-6 pt-8 pb-24 flex-1 w-full">
-        {/* Top row: back + join button */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Back button */}
+        <div className="mb-6">
           <button onClick={() => navigate("/mnetwork")}
             className="text-xs text-text-tertiary hover:text-accent transition-colors cursor-pointer bg-transparent border-none p-0">
             {t("models.back")}
           </button>
-
-          {!joinChecking && (
-            <button
-              onClick={handleJoinLeave}
-              disabled={joinLoading}
-              className={`rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer border ${
-                joined
-                  ? "border-accent/40 bg-accent/10 text-accent"
-                  : "border-accent/30 text-accent hover:bg-accent/10 bg-transparent"
-              } ${joinLoading ? "opacity-50" : ""}`}
-            >
-              {joinLoading ? "..." : joined ? `${t("modelDetail.joined")} \u2713` : t("modelDetail.joinList")}
-            </button>
-          )}
         </div>
 
-        {/* Header */}
+        {/* Header card with join button inside */}
         <div className={`mb-8 rounded-[var(--radius-card)] p-5 border ${isPlatformModel ? "border-blue-500/20 bg-blue-500/5" : "border-purple-500/20 bg-purple-500/5"}`}>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold font-mono tracking-tight">{model.logicalModel}</h1>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${model.status === "available" ? "border-emerald-400/30 text-emerald-400" : "border-amber-400/30 text-amber-400"}`}>
-              {model.status === "available" ? "\uD83D\uDFE2" : "\uD83D\uDFE1"} {model.status ?? "available"}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-text-secondary">
-            <span>{model.ownerCount ?? 0} {t("models.nodes")}</span>
-            <span className="text-text-tertiary/40">&middot;</span>
-            <span>{(model.featuredSuppliers ?? []).length || (model.ownerCount ?? 0)} {t("models.suppliers")}</span>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-2xl font-bold font-mono tracking-tight">{model.logicalModel}</h1>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${model.status === "available" ? "border-emerald-400/30 text-emerald-400" : "border-amber-400/30 text-amber-400"}`}>
+                  {model.status === "available" ? "\uD83D\uDFE2" : "\uD83D\uDFE1"} {model.status ?? "available"}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-text-secondary">
+                <span>{model.ownerCount ?? 0} {t("models.nodes")}</span>
+                <span className="text-text-tertiary/40">&middot;</span>
+                <span>{(model.featuredSuppliers ?? []).length || (model.ownerCount ?? 0)} {t("models.suppliers")}</span>
+              </div>
+            </div>
+
+            {!joinChecking && (
+              <button
+                onClick={handleJoinLeave}
+                disabled={joinLoading}
+                className={`rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium transition-colors cursor-pointer border shrink-0 ${
+                  joined
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-accent/30 text-accent hover:bg-accent/10 bg-transparent"
+                } ${joinLoading ? "opacity-50" : ""}`}
+              >
+                {joinLoading ? "..." : joined ? `${t("modelDetail.joined")} \u2713` : t("modelDetail.joinList")}
+              </button>
+            )}
           </div>
         </div>
 

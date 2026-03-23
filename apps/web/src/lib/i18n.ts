@@ -422,6 +422,15 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.maxConc": "最大并发",
     "modelsMgmt.joinDate": "加入",
     "modelsMgmt.uptime": "连续运行",
+    "modelsMgmt.requests": "请求",
+    "modelsMgmt.tokensUsed": "tokens",
+    "modelsMgmt.avg7dPrice": "近7天均价",
+    "modelsMgmt.runningNodes": "当前运行节点",
+    "modelsMgmt.maxPrice": "最高可接受价格",
+    "modelsMgmt.configPrice": "配置",
+    "modelsMgmt.reconnect": "重新连接",
+    "modelsMgmt.historySection": "历史",
+    "modelsMgmt.removeConfirm": "确定永久删除？",
 
     // Node config modal
     "nodeConfig.title": "节点配置",
@@ -927,6 +936,15 @@ const messages: Record<string, Record<string, string>> = {
     "modelsMgmt.maxConc": "Max concurrency",
     "modelsMgmt.joinDate": "Joined",
     "modelsMgmt.uptime": "Uptime",
+    "modelsMgmt.requests": "requests",
+    "modelsMgmt.tokensUsed": "tokens",
+    "modelsMgmt.avg7dPrice": "7d avg price",
+    "modelsMgmt.runningNodes": "Running nodes",
+    "modelsMgmt.maxPrice": "Max acceptable price",
+    "modelsMgmt.configPrice": "Configure",
+    "modelsMgmt.reconnect": "Reconnect",
+    "modelsMgmt.historySection": "History",
+    "modelsMgmt.removeConfirm": "Permanently delete?",
 
     // Node config modal
     "nodeConfig.title": "Node Configuration",

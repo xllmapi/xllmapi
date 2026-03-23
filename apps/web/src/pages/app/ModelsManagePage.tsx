@@ -175,42 +175,139 @@ interface PoolModelEntry {
   minInputPrice: number;
   minOutputPrice: number;
   executionMode: string;
+  paused: boolean;
+  totalRequests: number;
+  totalTokens: number;
+}
+
+interface ModelConfig {
+  maxInputPrice?: number;
+  maxOutputPrice?: number;
+}
+
+function PriceConfigInline({
+  logicalModel,
+  onClose,
+  t,
+}: {
+  logicalModel: string;
+  onClose: () => void;
+  t: (key: string) => string;
+}) {
+  const [maxIn, setMaxIn] = useState("");
+  const [maxOut, setMaxOut] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+
+  useEffect(() => {
+    apiJson<{ data: ModelConfig }>(`/v1/me/model-config/${encodeURIComponent(logicalModel)}`)
+      .then((res) => {
+        setMaxIn(String(res.data?.maxInputPrice ?? ""));
+        setMaxOut(String(res.data?.maxOutputPrice ?? ""));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingConfig(false));
+  }, [logicalModel]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await apiJson(`/v1/me/model-config/${encodeURIComponent(logicalModel)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          maxInputPrice: maxIn ? Number(maxIn) : null,
+          maxOutputPrice: maxOut ? Number(maxOut) : null,
+        }),
+      });
+      onClose();
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loadingConfig) return <span className="text-text-tertiary text-xs">...</span>;
+
+  return (
+    <div className="flex items-center gap-2 mt-1" onClick={(e) => e.stopPropagation()}>
+      <input
+        type="number"
+        value={maxIn}
+        onChange={(e) => setMaxIn(e.target.value)}
+        placeholder="input"
+        className="w-20 rounded border border-line px-2 py-1 text-xs font-mono text-text-primary focus:outline-none focus:border-accent transition-colors"
+        style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+      />
+      <span className="text-text-tertiary">/</span>
+      <input
+        type="number"
+        value={maxOut}
+        onChange={(e) => setMaxOut(e.target.value)}
+        placeholder="output"
+        className="w-20 rounded border border-line px-2 py-1 text-xs font-mono text-text-primary focus:outline-none focus:border-accent transition-colors"
+        style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+      />
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="rounded px-2.5 py-1 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
+      >
+        {saving ? "..." : t("nodeConfig.save")}
+      </button>
+      <button
+        onClick={onClose}
+        className="rounded px-2 py-1 text-xs text-text-tertiary hover:text-text-secondary cursor-pointer bg-transparent border-none transition-colors"
+      >
+        {t("nodeConfig.cancel")}
+      </button>
+    </div>
+  );
 }
 
 function GroupedPoolCard({
   entry,
   expanded,
   onToggleExpand,
-  disconnecting,
+  actionLoading,
   onDisconnect,
+  isHistory,
+  onReconnect,
+  onRemove,
   t,
 }: {
   entry: PoolModelEntry;
   expanded: boolean;
   onToggleExpand: () => void;
-  disconnecting: string;
-  onDisconnect: (model: string) => Promise<void>;
+  actionLoading: string;
+  onDisconnect?: (model: string) => Promise<void>;
+  isHistory?: boolean;
+  onReconnect?: (model: string) => Promise<void>;
+  onRemove?: (model: string) => Promise<void>;
   t: (key: string) => string;
 }) {
   const inputPrice = entry.minInputPrice ?? 0;
   const outputPrice = entry.minOutputPrice ?? 0;
   const isPlatform = entry.executionMode === "platform" || !entry.executionMode || entry.executionMode === "key";
+  const [showPriceConfig, setShowPriceConfig] = useState(false);
 
   return (
     <div
       className={`rounded-[var(--radius-card)] border bg-panel transition-colors cursor-pointer ${
         isPlatform ? "border-blue-500/20 bg-blue-500/5" : "border-purple-500/20 bg-purple-500/5"
-      }`}
+      } ${isHistory ? "opacity-60" : ""}`}
       onClick={onToggleExpand}
     >
       {/* Collapsed single-line row */}
-      <div className="flex items-center gap-2.5 px-4 py-2.5 min-w-0">
+      <div className="flex items-center gap-2.5 px-4 py-2.5 min-w-0 flex-wrap">
         <span className="font-mono font-medium text-sm text-text-primary truncate shrink-0">{entry.logicalModel}</span>
 
         {/* Status badge */}
-        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
-          {"\uD83D\uDFE2"}{t("modelsMgmt.status.running")}
-        </span>
+        {!isHistory && (
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 font-medium text-emerald-400 shrink-0">
+            {"\uD83D\uDFE2"}{t("modelsMgmt.status.running")}
+          </span>
+        )}
 
         {/* Type badge */}
         {isPlatform ? (
@@ -225,24 +322,72 @@ function GroupedPoolCard({
         {/* Price */}
         <span className="font-mono text-xs text-text-tertiary shrink-0">{formatTokens(inputPrice)}/{formatTokens(outputPrice)}</span>
 
-        {/* Disconnect button */}
+        {/* Stats separator + stats */}
+        {(entry.totalRequests > 0 || entry.totalTokens > 0) && (
+          <>
+            <span className="text-text-tertiary/40 shrink-0">|</span>
+            <span className="text-xs text-text-secondary shrink-0">
+              {entry.totalRequests}{t("modelsMgmt.requests")} &middot; {formatTokens(entry.totalTokens)} {t("modelsMgmt.tokensUsed")}
+            </span>
+          </>
+        )}
+
+        {/* Action buttons */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
-          <button
-            onClick={(e) => { e.stopPropagation(); void onDisconnect(entry.logicalModel); }}
-            disabled={disconnecting === entry.logicalModel}
-            className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
-          >
-            {disconnecting === entry.logicalModel ? "..." : t("modelsMgmt.disconnect")}
-          </button>
+          {isHistory ? (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); void onReconnect?.(entry.logicalModel); }}
+                disabled={actionLoading === entry.logicalModel}
+                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
+              >
+                {actionLoading === entry.logicalModel ? "..." : t("modelsMgmt.reconnect")}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); void onRemove?.(entry.logicalModel); }}
+                disabled={actionLoading === entry.logicalModel}
+                className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
+              >
+                {t("modelsMgmt.delete")}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); void onDisconnect?.(entry.logicalModel); }}
+              disabled={actionLoading === entry.logicalModel}
+              className="rounded-[var(--radius-btn)] px-3 py-1 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
+            >
+              {actionLoading === entry.logicalModel ? "..." : t("modelsMgmt.disconnect")}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Expanded details */}
       {expanded && (
         <div className="border-t border-line px-4 py-3 text-xs text-text-secondary flex flex-col gap-1.5">
-          <div>{entry.offeringCount} {t("modelsMgmt.nodes")}{t("modelDetail.noOfferings") ? "" : ""}</div>
           <div>
-            {t("modelsMgmt.perKTokens")}: {t("modelsMgmt.xtokensIn")} {formatTokens(inputPrice)} {t("modelsMgmt.xtokens")} / {t("modelsMgmt.xtokensOut")} {formatTokens(outputPrice)} {t("modelsMgmt.xtokens")}
+            {t("modelsMgmt.avg7dPrice")}: {formatTokens(inputPrice)} / {formatTokens(outputPrice)} <span className="text-text-tertiary">({t("modelsMgmt.perKTokens")}: input xtokens / output xtokens)</span>
+          </div>
+          <div>
+            {t("modelsMgmt.runningNodes")}: {entry.offeringCount} {t("modelsMgmt.nodes")}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>{t("modelsMgmt.maxPrice")}:</span>
+            {showPriceConfig ? (
+              <PriceConfigInline
+                logicalModel={entry.logicalModel}
+                onClose={() => setShowPriceConfig(false)}
+                t={t}
+              />
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowPriceConfig(true); }}
+                className="rounded px-2 py-0.5 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors"
+              >
+                {t("modelsMgmt.configPrice")}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -255,7 +400,7 @@ function UsingTab() {
   const [models, setModels] = useState<PoolModelEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [disconnecting, setDisconnecting] = useState("");
+  const [actionLoading, setActionLoading] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -271,8 +416,12 @@ function UsingTab() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
+  // Split by paused field
+  const activeModels = models.filter((m) => !m.paused);
+  const historyModels = models.filter((m) => m.paused);
+
   const handleDisconnect = async (logicalModel: string) => {
-    setDisconnecting(logicalModel);
+    setActionLoading(logicalModel);
     setError("");
     try {
       await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`, { method: "DELETE" });
@@ -281,7 +430,35 @@ function UsingTab() {
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
-      setDisconnecting("");
+      setActionLoading("");
+    }
+  };
+
+  const handleReconnect = async (logicalModel: string) => {
+    setActionLoading(logicalModel);
+    setError("");
+    try {
+      await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`, { method: "POST" });
+      invalidateUserModels();
+      await loadData();
+    } catch (err: unknown) {
+      setError(extractError(err));
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const handleRemove = async (logicalModel: string) => {
+    setActionLoading(logicalModel);
+    setError("");
+    try {
+      await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}/remove`, { method: "POST" });
+      invalidateUserModels();
+      await loadData();
+    } catch (err: unknown) {
+      setError(extractError(err));
+    } finally {
+      setActionLoading("");
     }
   };
 
@@ -305,29 +482,58 @@ function UsingTab() {
         </Link>
       </div>
 
-      {models.length === 0 ? (
+      {activeModels.length === 0 && historyModels.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6 text-center mb-6">
           <p className="text-text-tertiary text-sm">{t("modelsMgmt.emptyUsageList")}</p>
         </div>
       ) : (
-        <section className="mb-6">
-          <h3 className="text-sm font-semibold text-text-primary mb-3">
-            {t("modelsMgmt.connected")} ({models.length})
-          </h3>
-          <div className="flex flex-col gap-2">
-            {models.map((entry) => (
-              <GroupedPoolCard
-                key={entry.logicalModel}
-                entry={entry}
-                expanded={expandedId === entry.logicalModel}
-                onToggleExpand={() => setExpandedId(expandedId === entry.logicalModel ? null : entry.logicalModel)}
-                disconnecting={disconnecting}
-                onDisconnect={handleDisconnect}
-                t={t}
-              />
-            ))}
-          </div>
-        </section>
+        <>
+          {/* Active connected models */}
+          {activeModels.length > 0 && (
+            <section className="mb-6">
+              <h3 className="text-sm font-semibold text-text-primary mb-3">
+                {t("modelsMgmt.connected")} ({activeModels.length})
+              </h3>
+              <div className="flex flex-col gap-2">
+                {activeModels.map((entry) => (
+                  <GroupedPoolCard
+                    key={entry.logicalModel}
+                    entry={entry}
+                    expanded={expandedId === entry.logicalModel}
+                    onToggleExpand={() => setExpandedId(expandedId === entry.logicalModel ? null : entry.logicalModel)}
+                    actionLoading={actionLoading}
+                    onDisconnect={handleDisconnect}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* History (paused) models */}
+          {historyModels.length > 0 && (
+            <section className="mb-6">
+              <h3 className="text-sm font-semibold text-text-primary mb-3">
+                {t("modelsMgmt.historySection")} ({historyModels.length})
+              </h3>
+              <div className="flex flex-col gap-2">
+                {historyModels.map((entry) => (
+                  <GroupedPoolCard
+                    key={entry.logicalModel}
+                    entry={entry}
+                    expanded={expandedId === entry.logicalModel}
+                    onToggleExpand={() => setExpandedId(expandedId === entry.logicalModel ? null : entry.logicalModel)}
+                    actionLoading={actionLoading}
+                    isHistory
+                    onReconnect={handleReconnect}
+                    onRemove={handleRemove}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );
