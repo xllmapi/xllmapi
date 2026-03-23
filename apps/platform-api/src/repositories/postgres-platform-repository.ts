@@ -474,6 +474,13 @@ export const postgresPlatformRepository: PlatformRepository = {
           SET status = 'accepted', accepted_user_id = $1, accepted_at = NOW()
           WHERE id = $2
         `, [userId, invitation.rows[0].id]);
+        // Auto-add all approved offerings to the new user's usage list
+        await client.query(`
+          INSERT INTO offering_favorites (user_id, offering_id, created_at)
+          SELECT $1, id, NOW() FROM offerings
+          WHERE enabled = true AND review_status = 'approved'
+          ON CONFLICT DO NOTHING
+        `, [userId]);
         firstLoginCompleted = true;
       } else {
         await client.query("UPDATE user_identities SET last_login_at = NOW() WHERE user_id = $1", [userId]);
@@ -1205,6 +1212,35 @@ export const postgresPlatformRepository: PlatformRepository = {
       ORDER BY o.id ASC
     `, [logicalModel]);
 
+    return result.rows;
+  },
+
+  async findUserOfferingsForModel(params: { userId: string; logicalModel: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        o.id AS "offeringId",
+        o.owner_user_id AS "ownerUserId",
+        o.logical_model AS "logicalModel",
+        o.real_model AS "realModel",
+        o.pricing_mode AS "pricingMode",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.execution_mode AS "executionMode",
+        o.node_id AS "nodeId",
+        o.enabled,
+        c.provider_type AS "providerType",
+        c.encrypted_secret AS "encryptedSecret",
+        c.api_key_env_name AS "apiKeyEnvName",
+        c.base_url AS "baseUrl"
+      FROM offerings o
+      JOIN offering_favorites f ON f.offering_id = o.id AND f.user_id = $1
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      WHERE o.logical_model = $2
+        AND o.enabled = true
+        AND o.review_status = 'approved'
+    `, [params.userId, params.logicalModel]);
     return result.rows;
   },
 

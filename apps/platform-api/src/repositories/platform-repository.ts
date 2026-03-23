@@ -108,6 +108,7 @@ export type PlatformRepository = {
   }): MaybePromise<void>;
   findOfferingForModel(logicalModel: string): MaybePromise<any>;
   findOfferingsForModel(logicalModel: string): MaybePromise<any[]>;
+  findUserOfferingsForModel(params: { userId: string; logicalModel: string }): MaybePromise<any[]>;
   listProviderCredentials(userId: string): MaybePromise<any>;
   getProviderCredential(userId: string, credentialId: string): MaybePromise<any>;
   createProviderCredential(params: {

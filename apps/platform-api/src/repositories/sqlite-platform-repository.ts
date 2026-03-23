@@ -186,6 +186,10 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return list_offerings_for_model(logicalModel);
   },
 
+  findUserOfferingsForModel() {
+    return [];
+  },
+
   listProviderCredentials(userId) {
     return list_provider_credentials(userId);
   },

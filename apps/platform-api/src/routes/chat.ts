@@ -26,11 +26,25 @@ import { platformService } from "../services/platform-service.js";
  * Fetch offerings for a model, including node-backed offerings.
  * Node offerings are mapped to CandidateOffering shape with executionMode/nodeId.
  * If includeNodes is false, only platform offerings are returned.
+ *
+ * When userId is provided, tries the user's usage list (offering_favorites) first.
+ * Falls back to all offerings if the user's list is empty (backward compat).
  */
 async function findOfferingsIncludingNodes(
   logicalModel: string,
-  includeNodes: boolean
+  includeNodes: boolean,
+  userId?: string
 ): Promise<CandidateOffering[]> {
+  // If userId is available, try user's usage list first
+  if (userId) {
+    const userOfferings = await platformService.findUserOfferingsForModel(userId, logicalModel);
+    if (userOfferings.length > 0) {
+      // User has items in their usage list — use those (platform + node offerings)
+      return userOfferings;
+    }
+    // Empty usage list — fallback to all offerings for backward compat
+  }
+
   const platformOfferings = await platformService.findOfferingsForModel(logicalModel);
 
   if (!includeNodes) {
@@ -318,7 +332,7 @@ export async function handleChatRoutes(
       return true;
     }
 
-    const candidateOfferings = await findOfferingsIncludingNodes(logicalModel, true);
+    const candidateOfferings = await findOfferingsIncludingNodes(logicalModel, true, auth.userId);
     if (candidateOfferings.length === 0) {
       const response = json(404, { error: { message: `no offering available for ${logicalModel}`, requestId } });
       res.writeHead(response.statusCode, response.headers);
@@ -547,7 +561,7 @@ export async function handleChatRoutes(
       return true;
     }
 
-    const candidateOfferings = await findOfferingsIncludingNodes(body.model, true);
+    const candidateOfferings = await findOfferingsIncludingNodes(body.model, true, requesterUserId);
     if (candidateOfferings.length === 0) {
       const response = json(404, {
         error: {
@@ -707,7 +721,7 @@ export async function handleChatRoutes(
       return true;
     }
 
-    const candidateOfferings = await findOfferingsIncludingNodes(mappedBody.model, true);
+    const candidateOfferings = await findOfferingsIncludingNodes(mappedBody.model, true, auth.userId);
     if (candidateOfferings.length === 0) {
       const response = json(404, {
         error: { message: `no offering available for ${mappedBody.model}`, requestId }
