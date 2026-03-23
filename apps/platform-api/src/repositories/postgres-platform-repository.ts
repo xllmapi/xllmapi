@@ -2250,9 +2250,9 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(`
-      INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, execution_mode, node_id, description, max_concurrency, enabled, review_status, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'node', $8, $9, $10, true, 'approved', NOW())
-    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.nodeId, params.description ?? null, params.maxConcurrency ?? 1]);
+      INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, execution_mode, node_id, credential_id, enabled, review_status, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'node', $8, '', true, 'approved', NOW())
+    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.nodeId]);
   },
 
   async findOfferingsForModelWithNodes(params: { logicalModel: string; userId?: string }) {
@@ -2269,8 +2269,6 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
-        o.description,
-        o.max_concurrency AS "maxConcurrency",
         n.status AS "nodeStatus",
         n.last_heartbeat_at AS "nodeLastHeartbeatAt"
       FROM offerings o
@@ -2515,7 +2513,6 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
-        o.description,
         o.created_at AS "createdAt",
         u.display_name AS "ownerDisplayName",
         u.handle AS "ownerHandle",
@@ -2555,7 +2552,6 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
-        o.description,
         o.created_at AS "createdAt",
         u.display_name AS "ownerDisplayName",
         u.handle AS "ownerHandle"
@@ -2602,7 +2598,6 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         o.execution_mode AS "executionMode",
-        o.description,
         o.created_at AS "createdAt"
       FROM offerings o
       JOIN users u ON u.id = o.owner_user_id
