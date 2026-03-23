@@ -1511,22 +1511,18 @@ export const postgresPlatformRepository: PlatformRepository = {
       params.offeringId
     ]);
 
-    // When offering state changes, auto-pause all consumers' usage of this offering
-    // Consumer needs to manually review and resume
+    // On any state change: pause consumers + notify
     if (stateChanged) {
+      const supplierResult = await currentPool.query(
+        `SELECT display_name FROM users WHERE id = $1 LIMIT 1`,
+        [params.ownerUserId]
+      );
+      const supplierName = supplierResult.rows[0]?.display_name ?? params.ownerUserId;
+
       await currentPool.query(`
         UPDATE offering_favorites SET paused = true
         WHERE offering_id = $1 AND paused = false
       `, [params.offeringId]);
-
-      // Notify affected consumers
-      const reason = !newEnabled ? "stopped" : priceChanged ? "price_changed" : "restarted";
-      const title = !newEnabled
-        ? `模型节点 ${current.logicalModel} 已被供应者停止`
-        : priceChanged
-          ? `模型节点 ${current.logicalModel} 价格已变更`
-          : `模型节点 ${current.logicalModel} 已被供应者重新启动`;
-      const content = `该节点已自动移至你的不活跃列表，请确认后手动恢复。`;
 
       const affected = await currentPool.query(
         `SELECT user_id FROM offering_favorites WHERE offering_id = $1`,
@@ -1538,7 +1534,7 @@ export const postgresPlatformRepository: PlatformRepository = {
           INSERT INTO notifications (id, type, title, content, target_user_id, created_by, created_at)
           VALUES ($1, 'system', $2, $3, $4, $5, NOW())
           ON CONFLICT DO NOTHING
-        `, [notifId, title, content, row.user_id, params.ownerUserId]);
+        `, [notifId, `模型节点 ${current.logicalModel} 状态变更`, `供应者 ${supplierName} 的节点状态已变更，已自动移至连接模型历史。`, row.user_id, params.ownerUserId]);
       }
     }
 
