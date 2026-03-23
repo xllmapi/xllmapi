@@ -759,6 +759,18 @@ export const platformService = {
   async listConnectionPool(userId: string) {
     return platformRepository.listConnectionPool(userId);
   },
+  async joinModelPool(userId: string, logicalModel: string) {
+    return platformRepository.joinModelPool({ userId, logicalModel });
+  },
+  async leaveModelPool(userId: string, logicalModel: string) {
+    return platformRepository.leaveModelPool({ userId, logicalModel });
+  },
+  async isModelInPool(userId: string, logicalModel: string) {
+    return platformRepository.isModelInPool({ userId, logicalModel });
+  },
+  async listConnectionPoolGrouped(userId: string) {
+    return platformRepository.listConnectionPoolGrouped(userId);
+  },
 
   // Market
   async listMarketOfferings(params: { page?: number; limit?: number; executionMode?: string; logicalModel?: string; sort?: string }) {

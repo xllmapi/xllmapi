@@ -253,6 +253,75 @@ export async function handleMarketRoutes(
     return true;
   }
 
+  // ---- Connection Pool (model-level) ----
+
+  const modelPoolMatch = url.pathname.match(/^\/v1\/me\/connection-pool\/model\/([^/]+)$/);
+  if (modelPoolMatch) {
+    const logicalModel = decodeURIComponent(modelPoolMatch[1]);
+
+    if (req.method === "POST") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      await platformService.joinModelPool(auth.userId, logicalModel);
+      const response = json(200, { requestId, ok: true });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    if (req.method === "DELETE") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      await platformService.leaveModelPool(auth.userId, logicalModel);
+      const response = json(200, { requestId, ok: true });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    if (req.method === "GET") {
+      const auth = await authenticate_session_only_(req);
+      if (!auth) {
+        const response = unauthorized_(requestId);
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      const inPool = await platformService.isModelInPool(auth.userId, logicalModel);
+      const response = json(200, { requestId, data: { logicalModel, inPool } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+  }
+
+  // ---- Connection Pool (grouped by model) ----
+
+  if (req.method === "GET" && url.pathname === "/v1/me/connection-pool/grouped") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth) {
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const data = await platformService.listConnectionPoolGrouped(auth.userId);
+    const response = json(200, { object: "list", requestId, data });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   const poolMatch = url.pathname.match(/^\/v1\/me\/connection-pool\/([^/]+)$/);
   if (poolMatch) {
     const offeringId = poolMatch[1];

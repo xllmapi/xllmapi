@@ -278,6 +278,18 @@ export type PlatformRepository = {
   listConnectionPool(userId: string): MaybePromise<any[]>;
   toggleConnectionPoolPause(params: { userId: string; offeringId: string; paused: boolean }): MaybePromise<void>;
 
+  // --- Connection Pool (model-level) ---
+  joinModelPool(params: { userId: string; logicalModel: string }): MaybePromise<void>;
+  leaveModelPool(params: { userId: string; logicalModel: string }): MaybePromise<void>;
+  isModelInPool(params: { userId: string; logicalModel: string }): MaybePromise<boolean>;
+  listConnectionPoolGrouped(userId: string): MaybePromise<Array<{
+    logicalModel: string;
+    offeringCount: number;
+    minInputPrice: number;
+    minOutputPrice: number;
+    executionMode: string;
+  }>>;
+
   // --- Market ---
   listMarketOfferings(params: { page?: number; limit?: number; executionMode?: string; logicalModel?: string; sort?: string }): MaybePromise<{ data: any[]; total: number }>;
   getMarketOffering(params: { offeringId: string; userId?: string }): MaybePromise<any | null>;

@@ -2603,6 +2603,63 @@ export const postgresPlatformRepository: PlatformRepository = {
     `, [params.userId, params.offeringId, params.paused]);
   },
 
+  // --- Connection Pool (model-level) ---
+
+  async joinModelPool(params: { userId: string; logicalModel: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO offering_favorites (user_id, offering_id, created_at)
+      SELECT $1, id, NOW() FROM offerings
+      WHERE logical_model = $2 AND enabled = true AND review_status = 'approved' AND execution_mode = 'platform'
+      ON CONFLICT DO NOTHING
+    `, [params.userId, params.logicalModel]);
+  },
+
+  async leaveModelPool(params: { userId: string; logicalModel: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      DELETE FROM offering_favorites
+      WHERE user_id = $1 AND offering_id IN (
+        SELECT id FROM offerings WHERE logical_model = $2
+      )
+    `, [params.userId, params.logicalModel]);
+  },
+
+  async isModelInPool(params: { userId: string; logicalModel: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT EXISTS(
+        SELECT 1 FROM offering_favorites f
+        JOIN offerings o ON o.id = f.offering_id
+        WHERE f.user_id = $1 AND o.logical_model = $2
+      ) AS "inPool"
+    `, [params.userId, params.logicalModel]);
+    return result.rows[0]?.inPool ?? false;
+  },
+
+  async listConnectionPoolGrouped(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        o.logical_model AS "logicalModel",
+        COUNT(f.offering_id)::int AS "offeringCount",
+        MIN(o.fixed_price_per_1k_input)::int AS "minInputPrice",
+        MIN(o.fixed_price_per_1k_output)::int AS "minOutputPrice",
+        MAX(o.execution_mode) AS "executionMode"
+      FROM offering_favorites f
+      JOIN offerings o ON o.id = f.offering_id
+      WHERE f.user_id = $1 AND f.paused = false
+        AND o.owner_user_id NOT LIKE '%_demo'
+      GROUP BY o.logical_model
+      ORDER BY o.logical_model
+    `, [userId]);
+    return result.rows;
+  },
+
   // --- Market ---
 
   async listMarketOfferings(params: { page?: number; limit?: number; executionMode?: string; logicalModel?: string; sort?: string }) {
