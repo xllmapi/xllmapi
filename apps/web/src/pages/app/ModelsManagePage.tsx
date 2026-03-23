@@ -1386,8 +1386,11 @@ xllmapi-node --token YOUR_TOKEN --api https://api.xllmapi.com`}
                 </div>
                 <div className="mt-3 pt-3 border-t border-line flex flex-wrap gap-x-6 gap-y-1 text-xs">
                   <div>
-                    <span className="text-text-tertiary">{t("modelsMgmt.price")}</span>
-                    <span className="ml-1.5 text-text-primary font-mono">{formatTokens(o.fixedPricePer1kInput ?? 0)} / {formatTokens(o.fixedPricePer1kOutput ?? 0)} xt/1K</span>
+                    <span className="text-text-tertiary">in</span>
+                    <span className="ml-1 text-text-primary font-mono">{formatTokens(o.fixedPricePer1kInput ?? 0)}</span>
+                    <span className="mx-1.5 text-text-tertiary/30">/</span>
+                    <span className="text-text-tertiary">out</span>
+                    <span className="ml-1 text-text-primary font-mono">{formatTokens(o.fixedPricePer1kOutput ?? 0)}</span>
                   </div>
                   {(o.dailyTokenLimit ?? 0) > 0 && (
                     <div>
