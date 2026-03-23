@@ -326,24 +326,36 @@ function PoolGroupedSection({
 
                       {/* Buttons */}
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => void handleTogglePause(entry.offeringId, !!entry.paused)}
-                          disabled={togglingPauseId === entry.offeringId}
-                          className={`rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border transition-colors disabled:opacity-50 bg-transparent ${
-                            entry.paused
-                              ? "border-accent/30 text-accent hover:bg-accent/10"
-                              : "border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
-                          }`}
-                        >
-                          {togglingPauseId === entry.offeringId ? "..." : entry.paused ? t("modelsMgmt.resume") : t("modelsMgmt.pause")}
-                        </button>
-                        <button
-                          onClick={() => void handleLeavePool(entry.offeringId)}
-                          disabled={leavingId === entry.offeringId}
-                          className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
-                        >
-                          {leavingId === entry.offeringId ? "..." : t("modelsMgmt.remove")}
-                        </button>
+                        {isActive ? (
+                          /* Connected: single "disconnect" button */
+                          <button
+                            onClick={() => void handleTogglePause(entry.offeringId, false)}
+                            disabled={togglingPauseId === entry.offeringId}
+                            className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
+                          >
+                            {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.disconnect")}
+                          </button>
+                        ) : (
+                          /* History: "connect" (only if offering is running) + "delete" */
+                          <>
+                            {entry.enabled !== false && entry.reviewStatus === "approved" && (
+                              <button
+                                onClick={() => void handleTogglePause(entry.offeringId, true)}
+                                disabled={togglingPauseId === entry.offeringId}
+                                className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border border-accent/30 text-accent hover:bg-accent/10 bg-transparent transition-colors disabled:opacity-50"
+                              >
+                                {togglingPauseId === entry.offeringId ? "..." : t("modelsMgmt.connect")}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => void handleLeavePool(entry.offeringId)}
+                              disabled={leavingId === entry.offeringId}
+                              className="rounded-[var(--radius-btn)] px-4 py-1.5 text-xs font-medium cursor-pointer border border-danger/30 text-danger hover:bg-danger/10 bg-transparent transition-colors disabled:opacity-50"
+                            >
+                              {leavingId === entry.offeringId ? "..." : t("modelsMgmt.delete")}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -457,7 +469,7 @@ function UsingTab() {
                 {active.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-text-primary mb-3">
-                      {t("modelsMgmt.active")} ({active.length})
+                      {t("modelsMgmt.connected")} ({active.length})
                     </h3>
                     <PoolGroupedSection
                       entries={active}
@@ -476,7 +488,7 @@ function UsingTab() {
                 {inactive.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-text-secondary mb-3">
-                      {t("modelsMgmt.inactive")} ({inactive.length})
+                      {t("modelsMgmt.history")} ({inactive.length})
                     </h3>
                     <PoolGroupedSection
                       entries={inactive}
