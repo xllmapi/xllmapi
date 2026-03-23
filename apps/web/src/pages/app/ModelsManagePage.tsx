@@ -39,6 +39,7 @@ interface Offering {
   fixedPricePer1kOutput?: number;
   dailyTokenLimit?: number;
   maxConcurrency?: number;
+  nodeId?: string;
 }
 
 interface SupplyUsageItem {
@@ -79,9 +80,8 @@ interface ConnectedNode {
   id: string;
   tokenId: string;
   status: string;
-  lastHeartbeat: string;
-  ip: string;
-  ipAddress?: string;
+  lastHeartbeatAt: string;
+  ipAddress: string;
   connectedAt?: string;
   modelsCount: number;
   capabilities?: NodeCapability[];
@@ -1623,7 +1623,7 @@ node dist/main.js start \\
             const usage = getUsageForOffering(o.id);
             const enabled = isEnabled(o);
             const isL3 = o.executionMode === "node" || o.executionMode === "local";
-            const nodeForOffering = isL3 ? nodes.find(() => true) : undefined;
+            const nodeForOffering = isL3 ? nodes.find((n) => n.id === o.nodeId) : undefined;
             const status = getOfferingStatus(o, nodes);
             const sc = statusConfig[status];
 
@@ -1655,12 +1655,12 @@ node dist/main.js start \\
                       )}
                       {isL3 && nodeForOffering && (
                         <>
-                          <span>IP: {nodeForOffering.ip}</span>
-                          <span>{formatTimeAgo(nodeForOffering.lastHeartbeat)}</span>
+                          <span>IP: {nodeForOffering.ipAddress}</span>
+                          <span>{formatTimeAgo(nodeForOffering.lastHeartbeatAt)}</span>
                         </>
                       )}
                       {status === "offline" && isL3 && nodeForOffering && (
-                        <span className="text-text-tertiary">{t("modelsMgmt.lastOnline")}: {formatRelativeTime(nodeForOffering.lastHeartbeat)}</span>
+                        <span className="text-text-tertiary">{t("modelsMgmt.lastOnline")}: {formatRelativeTime(nodeForOffering.lastHeartbeatAt)}</span>
                       )}
                     </div>
                   </div>
@@ -1800,8 +1800,8 @@ node dist/main.js start \\
                     {nodes.map((node) => {
                       const caps = node.capabilities ?? [];
                       const nodeOfferings = node.offerings ?? [];
-                      const nodeIp = node.ipAddress ?? node.ip ?? "";
-                      const connectionTime = node.connectedAt ?? node.lastHeartbeat;
+                      const nodeIp = node.ipAddress ?? "";
+                      const connectionTime = node.connectedAt ?? node.lastHeartbeatAt;
 
                       return (
                         <div

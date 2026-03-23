@@ -42,6 +42,7 @@ interface DistributedOffering {
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
   uptimeSeconds?: number;
+  publicNodeId?: string;
 }
 
 type TrendMetric = "requests" | "tokens" | "price";
@@ -484,7 +485,7 @@ export function ModelsPage() {
             {distributedOfferings.map((o) => {
               const isOnline = o.enabled !== false && o.reviewStatus === "approved";
               return (
-                <div key={o.id} onClick={() => navigate(`/market/${encodeURIComponent(o.id)}`)}
+                <div key={o.id} onClick={() => navigate(`/mnetwork/node/${encodeURIComponent(o.publicNodeId || o.id)}`)}
                   className="rounded-[var(--radius-card)] border border-purple-500/20 bg-purple-500/5 p-5 transition-colors hover:border-purple-500/40 cursor-pointer">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 min-w-0">

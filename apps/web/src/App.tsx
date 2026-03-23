@@ -60,6 +60,7 @@ const SettingsPage = lazy(() => import("@/pages/admin/SettingsPage").then((m) =>
 const ProvidersPage = lazy(() => import("@/pages/admin/ProvidersPage").then((m) => ({ default: m.ProvidersPage })));
 const AdminNotificationsPage = lazy(() => import("@/pages/admin/AdminNotificationsPage").then((m) => ({ default: m.AdminNotificationsPage })));
 const ModelsManagePage = lazy(() => import("@/pages/app/ModelsManagePage").then((m) => ({ default: m.ModelsManagePage })));
+const NodeDetailPage = lazy(() => import("@/pages/NodeDetailPage").then((m) => ({ default: m.NodeDetailPage })));
 const MarketDetailPage = lazy(() => import("@/pages/MarketDetailPage").then((m) => ({ default: m.MarketDetailPage })));
 const UserProfilePage = lazy(() => import("@/pages/UserProfilePage").then((m) => ({ default: m.UserProfilePage })));
 
@@ -82,6 +83,7 @@ export function App() {
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/mnetwork" element={<ModelsPage />} />
+          <Route path="/mnetwork/node/:publicNodeId" element={<NodeDetailPage />} />
           <Route path="/mnetwork/:logicalModel" element={<ModelDetailPage />} />
           <Route path="/market" element={<Navigate to="/mnetwork?tab=market" replace />} />
           <Route path="/market/:offeringId" element={<MarketDetailPage />} />

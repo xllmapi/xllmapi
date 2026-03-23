@@ -26,6 +26,8 @@ export function ReviewsPage() {
   const [offerings, setOfferings] = useState<PendingOffering[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  const [autoApprove, setAutoApprove] = useState(false);
+  const [autoApproveLoading, setAutoApproveLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -40,9 +42,36 @@ export function ReviewsPage() {
     }
   }, []);
 
+  const loadAutoApprove = useCallback(async () => {
+    try {
+      const res = await apiJson<{ data: { key: string; value: string }[] }>("/v1/admin/config");
+      const item = (res.data ?? []).find((c) => c.key === "offering_auto_approve");
+      setAutoApprove(item?.value === "true");
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+    void loadAutoApprove();
+  }, [loadData, loadAutoApprove]);
+
+  const toggleAutoApprove = async () => {
+    setAutoApproveLoading(true);
+    try {
+      const newValue = !autoApprove;
+      await apiJson("/v1/admin/config", {
+        method: "PUT",
+        body: JSON.stringify({ key: "offering_auto_approve", value: String(newValue) }),
+      });
+      setAutoApprove(newValue);
+    } catch {
+      // ignore
+    } finally {
+      setAutoApproveLoading(false);
+    }
+  };
 
   const handleReview = async (id: string, status: "approved" | "rejected", reason?: string) => {
     setActing(id);
@@ -70,6 +99,28 @@ export function ReviewsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6 tracking-tight">{t("admin.reviews.title")}</h1>
+
+      {/* Auto-approve toggle */}
+      <div className="flex items-center gap-3 mb-6 rounded-[var(--radius-card)] border border-line bg-panel p-4">
+        <span className="text-sm font-medium text-text-secondary">{t("admin.autoApprove")}</span>
+        <button
+          onClick={() => void toggleAutoApprove()}
+          disabled={autoApproveLoading}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer border-none ${
+            autoApprove ? "bg-emerald-500" : "bg-text-tertiary/30"
+          } ${autoApproveLoading ? "opacity-50" : ""}`}
+        >
+          <span
+            className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+              autoApprove ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
+        </button>
+        <span className={`text-xs font-medium ${autoApprove ? "text-emerald-400" : "text-text-tertiary"}`}>
+          {autoApprove ? t("admin.autoApproveOn") : t("admin.autoApproveOff")}
+        </span>
+      </div>
+
       {offerings.length === 0 ? (
         <EmptyState message={t("admin.reviews.noRecords")} />
       ) : (

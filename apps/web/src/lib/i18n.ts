@@ -527,6 +527,20 @@ const messages: Record<string, Record<string, string>> = {
     "userProfile.publishedOfferings": "已发布服务",
     "userProfile.noOfferings": "暂无已发布服务",
 
+    // Node detail
+    "nodeDetail.title": "节点详情",
+    "nodeDetail.uptime": "持续运行",
+    "nodeDetail.avgLatency": "平均延迟",
+    "nodeDetail.successRate": "成功率",
+    "nodeDetail.totalRequests": "总请求",
+    "nodeDetail.price": "价格",
+    "nodeDetail.config": "配置",
+
+    // Admin auto-approve
+    "admin.autoApprove": "自动审核模式",
+    "admin.autoApproveOn": "开启",
+    "admin.autoApproveOff": "关闭",
+
     "common.loading": "加载中…",
     "common.error": "出错了",
     "common.empty": "暂无数据",
@@ -1060,6 +1074,20 @@ const messages: Record<string, Record<string, string>> = {
     "userProfile.joined": "Joined",
     "userProfile.publishedOfferings": "Published Offerings",
     "userProfile.noOfferings": "No published offerings",
+
+    // Node detail
+    "nodeDetail.title": "Node Detail",
+    "nodeDetail.uptime": "Uptime",
+    "nodeDetail.avgLatency": "Avg Latency",
+    "nodeDetail.successRate": "Success Rate",
+    "nodeDetail.totalRequests": "Total Requests",
+    "nodeDetail.price": "Price",
+    "nodeDetail.config": "Configuration",
+
+    // Admin auto-approve
+    "admin.autoApprove": "Auto-approve Mode",
+    "admin.autoApproveOn": "On",
+    "admin.autoApproveOff": "Off",
 
     "common.loading": "Loading…",
     "common.error": "Something went wrong",
