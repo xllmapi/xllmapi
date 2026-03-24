@@ -1,5 +1,6 @@
 // ── WebSocket client ─────────────────────────────────────────────────
 
+import { createLogger } from '@xllmapi/logger';
 import WebSocket from 'ws';
 import type {
   NodeMessage,
@@ -11,6 +12,8 @@ import { NODE_PROTOCOL_VERSION } from '@xllmapi/shared-types';
 import type { NodeConfig } from './config.js';
 import { discoverModels } from './discovery.js';
 import { executeRequest } from './executor.js';
+
+const log = createLogger({ module: 'ws' });
 
 const MAX_RECONNECT_DELAY_MS = 60_000;
 const INITIAL_RECONNECT_DELAY_MS = 1_000;
@@ -34,12 +37,12 @@ export class WsClient {
   connect(): void {
     if (this.shuttingDown) return;
 
-    console.log(`[ws] Connecting to ${this.config.platformUrl}...`);
+    log.info('connecting', { url: this.config.platformUrl });
 
     this.ws = new WebSocket(this.config.platformUrl);
 
     this.ws.on('open', () => {
-      console.log('[ws] Connected, authenticating...');
+      log.info('connected, authenticating');
       this.reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
       this.send({ type: 'auth', token: this.config.token, protocolVersion: NODE_PROTOCOL_VERSION });
     });
@@ -50,13 +53,13 @@ export class WsClient {
 
     this.ws.on('close', (code: number, reason: Buffer) => {
       const reasonStr = reason.toString() || 'unknown';
-      console.log(`[ws] Connection closed (code=${code}, reason=${reasonStr})`);
+      log.warn('connection closed', { code, reason: reasonStr });
       this.ws = null;
       this.scheduleReconnect();
     });
 
     this.ws.on('error', (err: Error) => {
-      console.error(`[ws] Error: ${err.message}`);
+      log.error('websocket error', { error: err.message });
       // 'close' event will fire after this, triggering reconnect
     });
   }
@@ -88,7 +91,7 @@ export class WsClient {
     try {
       msg = JSON.parse(data.toString()) as NodeMessage;
     } catch {
-      console.error('[ws] Failed to parse message');
+      log.error('failed to parse message');
       return;
     }
 
@@ -106,25 +109,25 @@ export class WsClient {
         this.handleRequest(msg as NodeRequestMessage);
         break;
       default:
-        console.log(`[ws] Unhandled message type: ${msg.type}`);
+        log.warn('unhandled message type', { type: msg.type });
     }
   }
 
   private async handleAuthOk(msg: NodeAuthOkMessage): Promise<void> {
     this.nodeId = msg.nodeId;
-    console.log(`[ws] Authenticated as node ${this.nodeId}`);
+    log.info('authenticated', { nodeId: this.nodeId });
 
     // Discover models and send capabilities
-    console.log('[discovery] Discovering models from configured providers...');
+    log.info('discovering models from configured providers');
     const capabilities = await discoverModels(this.config.providers);
-    console.log(`[discovery] Found ${capabilities.length} model(s)`);
+    log.info('models discovered', { count: capabilities.length });
 
     for (const cap of capabilities) {
       console.log(`  - ${cap.realModel} (${cap.providerType})`);
     }
 
     this.send({ type: 'capabilities', models: capabilities });
-    console.log('[ws] Capabilities sent, ready for requests.');
+    log.info('capabilities sent, ready for requests');
 
     // Start periodic status log
     if (this.statusTimer) clearInterval(this.statusTimer);
@@ -136,8 +139,8 @@ export class WsClient {
   }
 
   private handleAuthError(msg: NodeAuthErrorMessage): void {
-    console.error(`[ws] Authentication failed: ${msg.message}`);
-    console.error('[ws] Check your --token value and try again.');
+    log.error('authentication failed', { message: msg.message });
+    log.error('check your --token value and try again');
     this.shuttingDown = true;
     this.ws?.close();
     process.exit(1);
@@ -156,7 +159,7 @@ export class WsClient {
 
   private async handleRequest(msg: NodeRequestMessage): Promise<void> {
     const { requestId, payload } = msg;
-    console.log(`[req:${requestId}] Executing model=${payload.model}`);
+    log.info('executing request', { requestId, model: payload.model });
 
     this.activeRequests++;
     this.totalRequests++;
@@ -171,13 +174,13 @@ export class WsClient {
       // onDone
       (content, usage, finishReason) => {
         this.activeRequests--;
-        console.log(`[req:${requestId}] Completed (${usage.totalTokens} tokens)`);
+        log.info('request completed', { requestId, totalTokens: usage.totalTokens });
         this.send({ type: 'response.done', requestId, content, usage, finishReason });
       },
       // onError
       (code, message) => {
         this.activeRequests--;
-        console.error(`[req:${requestId}] Error: ${code} — ${message}`);
+        log.error('request failed', { requestId, code, message });
         this.send({ type: 'response.error', requestId, error: { code, message } });
       },
     );
@@ -186,7 +189,7 @@ export class WsClient {
   private scheduleReconnect(): void {
     if (this.shuttingDown) return;
 
-    console.log(`[ws] Reconnecting in ${this.reconnectDelay / 1000}s...`);
+    log.info('reconnecting', { delaySeconds: this.reconnectDelay / 1000 });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();

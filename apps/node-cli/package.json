@@ -10,6 +10,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@xllmapi/logger": "0.1.0",
     "@xllmapi/shared-types": "0.1.0",
     "ws": "^8.18.0"
   },

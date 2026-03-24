@@ -1,7 +1,10 @@
 // ── Model discovery ──────────────────────────────────────────────────
 
+import { createLogger } from '@xllmapi/logger';
 import type { NodeCapability } from '@xllmapi/shared-types';
 import type { ProviderConfig } from './config.js';
+
+const log = createLogger({ module: 'discovery' });
 
 /**
  * Discover available models from all configured providers.
@@ -32,7 +35,7 @@ export async function discoverModels(providers: ProviderConfig[]): Promise<NodeC
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[discovery] Failed to discover models for ${provider.type} (${provider.baseUrl}): ${msg}`);
+      log.error('failed to discover models', { providerType: provider.type, baseUrl: provider.baseUrl, error: msg });
     }
   }
 

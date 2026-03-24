@@ -1,6 +1,9 @@
 // ── LLM request executor ─────────────────────────────────────────────
 
+import { createLogger } from '@xllmapi/logger';
 import type { ProviderConfig } from './config.js';
+
+const log = createLogger({ module: 'executor' });
 
 export interface ExecuteRequestPayload {
   model: string;
@@ -32,6 +35,7 @@ export async function executeRequest(
 ): Promise<void> {
   const provider = findProviderForModel(payload.model, providers);
   if (!provider) {
+    log.warn('no provider found for model', { model: payload.model });
     onError('MODEL_NOT_FOUND', `No provider configured for model: ${payload.model}`);
     return;
   }
@@ -51,6 +55,7 @@ export async function executeRequest(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    log.error('execution error', { model: payload.model, provider: provider.type, error: msg });
     onError('EXECUTION_ERROR', msg);
   }
 }

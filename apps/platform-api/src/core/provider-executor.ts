@@ -1,10 +1,16 @@
 import type { CandidateOffering, ChatMessage } from "@xllmapi/shared-types";
 import { decryptSecret } from "../crypto-utils.js";
-import * as circuitBreaker from "./circuit-breaker.js";
-import { ConcurrencyLimiter } from "./concurrency-limiter.js";
-import { withRetry } from "./retry.js";
-import { streamOpenAI, callOpenAI } from "./providers/openai.js";
-import { streamAnthropic, callAnthropic } from "./providers/anthropic.js";
+import {
+  isAvailable,
+  recordSuccess,
+  recordFailure,
+  ConcurrencyLimiter,
+  withRetry,
+  streamOpenAI,
+  callOpenAI,
+  streamAnthropic,
+  callAnthropic,
+} from "@xllmapi/core";
 
 const limiter = new ConcurrencyLimiter(32);
 
@@ -82,7 +88,7 @@ export async function executeStreamingRequest(params: {
   signal?: AbortSignal;
   onSseWrite: (chunk: string) => void;
 }): Promise<ProviderResult> {
-  const available = params.offerings.filter((o) => circuitBreaker.isAvailable(o.offeringId));
+  const available = params.offerings.filter((o) => isAvailable(o.offeringId));
   const candidates = available.length > 0 ? available : params.offerings;
 
   // Shuffle for balanced routing
@@ -128,7 +134,7 @@ export async function executeStreamingRequest(params: {
           params.onSseWrite
         );
 
-        circuitBreaker.recordSuccess(offering.offeringId);
+        recordSuccess(offering.offeringId);
 
         // Send completed event
         const completedEvent = {
@@ -200,7 +206,7 @@ export async function executeStreamingRequest(params: {
         { signal: params.signal }
       );
 
-      circuitBreaker.recordSuccess(offering.offeringId);
+      recordSuccess(offering.offeringId);
 
       // Send completed event
       const completedEvent = {
@@ -228,7 +234,7 @@ export async function executeStreamingRequest(params: {
         finishReason: result.finishReason
       };
     } catch (err) {
-      circuitBreaker.recordFailure(offering.offeringId);
+      recordFailure(offering.offeringId);
       lastError = err;
       console.error(`[provider-executor] offering=${offering.offeringId} provider=${offering.providerType} error:`, err);
       // Try next offering
@@ -252,7 +258,7 @@ export async function executeRequest(params: {
   maxTokens?: number;
   signal?: AbortSignal;
 }): Promise<ProviderResult> {
-  const available = params.offerings.filter((o) => circuitBreaker.isAvailable(o.offeringId));
+  const available = params.offerings.filter((o) => isAvailable(o.offeringId));
   const candidates = available.length > 0 ? available : params.offerings;
   const shuffled = [...candidates].sort(() => Math.random() - 0.5);
 
@@ -295,7 +301,7 @@ export async function executeRequest(params: {
           },
         );
 
-        circuitBreaker.recordSuccess(offering.offeringId);
+        recordSuccess(offering.offeringId);
 
         return {
           chosenOffering: offering,
@@ -336,7 +342,7 @@ export async function executeRequest(params: {
         { signal: params.signal }
       );
 
-      circuitBreaker.recordSuccess(offering.offeringId);
+      recordSuccess(offering.offeringId);
 
       return {
         chosenOffering: offering,
@@ -346,7 +352,7 @@ export async function executeRequest(params: {
         finishReason: result.finishReason
       };
     } catch (err) {
-      circuitBreaker.recordFailure(offering.offeringId);
+      recordFailure(offering.offeringId);
       lastError = err;
       console.error(`[provider-executor] offering=${offering.offeringId} provider=${offering.providerType} error:`, err);
     } finally {

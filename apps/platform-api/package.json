@@ -10,6 +10,8 @@
     "test": "tsx --test src/tests/*.test.ts"
   },
   "dependencies": {
+    "@xllmapi/core": "0.1.0",
+    "@xllmapi/logger": "0.1.0",
     "@xllmapi/shared-types": "0.1.0",
     "pg": "^8.20.0",
     "redis": "^5.11.0",

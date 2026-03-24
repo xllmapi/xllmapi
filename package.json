@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @xllmapi/logger && npm run build --workspace @xllmapi/shared-types && npm run build --workspace @xllmapi/web && npm run build --workspace @xllmapi/platform-api",
+    "build": "npm run build --workspace @xllmapi/logger && npm run build --workspace @xllmapi/shared-types && npm run build --workspace @xllmapi/core && npm run build --workspace @xllmapi/web && npm run build --workspace @xllmapi/platform-api",
     "build:web": "npm run build --workspace @xllmapi/web",
     "dev:web": "npm run dev --workspace @xllmapi/web",
     "dev:platform-api": "npm run dev --workspace @xllmapi/platform-api",
