@@ -40,6 +40,7 @@ type OfferingListRow = {
   reviewStatus: "pending" | "approved" | "rejected";
   dailyTokenLimit?: number;
   maxConcurrency?: number;
+  contextLength?: number;
 };
 
 type OfferingExecutionRow = CandidateOffering & {
@@ -773,6 +774,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       minOutputPricePer1k: number | null;
       providers: string[] | null;
       pricingModes: string[] | null;
+      maxContextLength: number | null;
     }>(`
       SELECT
         o.logical_model AS name,
@@ -784,7 +786,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         MIN(o.fixed_price_per_1k_input) AS "minInputPricePer1k",
         MIN(o.fixed_price_per_1k_output) AS "minOutputPricePer1k",
         ARRAY_AGG(DISTINCT c.provider_type) AS providers,
-        ARRAY_AGG(DISTINCT o.pricing_mode) AS "pricingModes"
+        ARRAY_AGG(DISTINCT o.pricing_mode) AS "pricingModes",
+        MAX(o.context_length) AS "maxContextLength"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       WHERE o.enabled = TRUE
@@ -845,6 +848,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         status: Number(row.enabledOfferingCount) > 0 ? "available" : "limited",
         capabilities: ["chat"],
         compatibilities: ["openai", "anthropic"],
+        contextLength: row.maxContextLength ? Number(row.maxContextLength) : undefined,
         featuredSuppliers
       });
     }
@@ -1526,8 +1530,9 @@ export const postgresPlatformRepository: PlatformRepository = {
           fixed_price_per_1k_output = $3,
           enabled = $4,
           daily_token_limit = $5,
-          max_concurrency = $6
-      WHERE owner_user_id = $7 AND id = $8
+          max_concurrency = $6,
+          context_length = $7
+      WHERE owner_user_id = $8 AND id = $9
     `, [
       params.pricingMode ?? current.pricingMode,
       params.fixedPricePer1kInput ?? current.fixedPricePer1kInput,
@@ -1535,6 +1540,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       newEnabled,
       params.dailyTokenLimit ?? current.dailyTokenLimit ?? 0,
       params.maxConcurrency ?? current.maxConcurrency ?? 0,
+      params.contextLength ?? current.contextLength ?? 64000,
       params.ownerUserId,
       params.offeringId
     ]);

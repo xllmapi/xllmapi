@@ -148,6 +148,7 @@ export type PlatformRepository = {
     enabled?: boolean;
     dailyTokenLimit?: number;
     maxConcurrency?: number;
+    contextLength?: number;
   }): MaybePromise<any>;
   getOfferingDailyTokenUsage(offeringId: string): MaybePromise<number>;
   removeOffering(params: {

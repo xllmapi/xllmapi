@@ -13,6 +13,7 @@ export interface PublicMarketModel {
   status: "available" | "limited";
   capabilities: string[];
   compatibilities: Array<"openai" | "anthropic">;
+  contextLength?: number;
   featuredSuppliers: Array<{
     handle: string;
     displayName: string;

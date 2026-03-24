@@ -1,6 +1,6 @@
 // Context window limits per model family (tokens)
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  "deepseek": 64000,
+  "deepseek": 128_000,
   "minimax": 200000,
   "gpt-4o": 128000,
   "gpt-4o-mini": 128000,

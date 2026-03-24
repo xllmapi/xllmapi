@@ -556,6 +556,7 @@ export const platformService = {
     enabled?: boolean;
     dailyTokenLimit?: number;
     maxConcurrency?: number;
+    contextLength?: number;
   }) {
     return platformRepository.updateOffering(params);
   },
