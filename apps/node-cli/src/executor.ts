@@ -129,10 +129,11 @@ async function executeOpenAIRequest(
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-      const data = trimmed.slice(6);
-      if (data === '[DONE]') continue;
+      if (!trimmed) continue;
+      // Handle both "data: {...}" and "data:{...}" (some providers omit the space)
+      if (!trimmed.startsWith('data:')) continue;
+      const data = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed.slice(5);
+      if (data === '[DONE]' || data.trim() === '[DONE]') continue;
 
       try {
         const parsed = JSON.parse(data) as {
