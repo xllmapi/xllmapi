@@ -19,10 +19,19 @@ jobs:
 
       - run: npm ci
 
-      - name: Build (shared-types → web → platform-api)
-        run: npm run build
+      - name: Build packages (logger → types → core)
+        run: |
+          npm run build --workspace @xllmapi/logger
+          npm run build --workspace @xllmapi/shared-types
+          npm run build --workspace @xllmapi/core
 
-      - name: TypeScript check
+      - name: Build apps (web, platform-api, node-cli)
+        run: |
+          npm run build --workspace @xllmapi/web
+          npm run build --workspace @xllmapi/platform-api
+          npm run build --workspace @xllmapi/node-cli
+
+      - name: TypeScript check (platform-api)
         run: npx tsc -p apps/platform-api/tsconfig.json --noEmit
 
   test:
@@ -69,7 +78,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi
 
-      - name: Unit tests
+      - name: Unit tests (platform-api)
         run: npx tsx --test --test-force-exit --test-timeout 30000 apps/platform-api/src/tests/*.test.ts
         env:
           XLLMAPI_ENV: development
@@ -77,3 +86,4 @@ jobs:
           XLLMAPI_DB_DRIVER: postgres
           DATABASE_URL: postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi
           REDIS_URL: redis://127.0.0.1:6379
+          LOG_LEVEL: warn
