@@ -543,6 +543,9 @@ const messages: Record<string, Record<string, string>> = {
     "admin.autoApproveOn": "开启",
     "admin.autoApproveOff": "关闭",
 
+    "common.context": "上下文",
+    "common.contextShort": "ctx",
+    "common.maxContext": "最大上下文",
     "common.loading": "加载中…",
     "common.error": "出错了",
     "common.empty": "暂无数据",
@@ -1093,6 +1096,9 @@ const messages: Record<string, Record<string, string>> = {
     "admin.autoApproveOn": "On",
     "admin.autoApproveOff": "Off",
 
+    "common.context": "Context",
+    "common.contextShort": "ctx",
+    "common.maxContext": "Max context",
     "common.loading": "Loading…",
     "common.error": "Something went wrong",
     "common.empty": "No data",

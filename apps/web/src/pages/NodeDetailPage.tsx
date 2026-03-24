@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiJson } from "@/lib/api";
-import { formatTokens } from "@/lib/utils";
+import { formatTokens, getContextLimit, formatContextLength } from "@/lib/utils";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
 import { invalidateUserModels } from "@/hooks/useUserModels";
@@ -199,7 +199,7 @@ export function NodeDetailPage() {
         {/* Running Stats */}
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 mb-6">
           <h3 className="text-xs font-semibold text-text-secondary mb-4">{t("modelsMgmt.status.running")}</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="text-center">
               <div className="text-lg font-bold text-accent">{formatUptime(node.nodeConnectedAt)}</div>
               <div className="text-[11px] text-text-tertiary mt-1">{t("nodeDetail.uptime")}</div>
@@ -217,6 +217,10 @@ export function NodeDetailPage() {
             <div className="text-center">
               <div className="text-lg font-bold text-text-primary">{node.totalRequests ?? 0}</div>
               <div className="text-[11px] text-text-tertiary mt-1">{t("nodeDetail.totalRequests")}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-text-primary">{formatContextLength(getContextLimit(node.logicalModel))}</div>
+              <div className="text-[11px] text-text-tertiary mt-1">{t("common.context")}</div>
             </div>
           </div>
         </div>

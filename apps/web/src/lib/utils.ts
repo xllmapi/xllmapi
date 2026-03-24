@@ -22,6 +22,33 @@ export function formatTokens(v: number | string): string {
   return String(Math.round(n));
 }
 
+// ── Context length helpers ──────────────────────────────────────
+
+export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  deepseek: 64000,
+  minimax: 200000,
+  "gpt-4o": 128000,
+  claude: 200000,
+  kimi: 128000,
+  "kimi-for-coding": 262144,
+  moonshot: 128000,
+  DEFAULT: 64000,
+};
+
+export function getContextLimit(model: string): number {
+  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
+    if (key === "DEFAULT") continue;
+    if (model.toLowerCase().includes(key.toLowerCase())) return limit;
+  }
+  return MODEL_CONTEXT_LIMITS.DEFAULT!;
+}
+
+export function formatContextLength(tokens: number): string {
+  if (tokens >= 1_000_000) return `${Math.round(tokens / 1000)}K`;
+  if (tokens >= 1_000) return `${Math.round(tokens / 1000)}K`;
+  return String(tokens);
+}
+
 export function escapeHtml(str: string): string {
   const map: Record<string, string> = {
     "&": "&amp;",

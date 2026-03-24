@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatInput } from "./ChatInput";
 import { ChatEmptyState } from "./ChatEmptyState";
+import { getContextLimit } from "@/lib/utils";
 import type { Message, CompletionMeta } from "../hooks/useChatStore";
 
 interface ChatMainProps {
@@ -22,6 +24,14 @@ export function ChatMain({
   streaming, metaMap,
 }: ChatMainProps) {
   const hasMessages = messages.length > 0;
+
+  const contextUsed = useMemo(() => {
+    return Math.round(messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0) / 3.5);
+  }, [messages]);
+
+  const contextMax = useMemo(() => {
+    return model ? getContextLimit(model) : 0;
+  }, [model]);
 
   return (
     <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
@@ -52,6 +62,8 @@ export function ChatMain({
           streaming={streaming}
           model={model}
           disabled={!model && messages.length === 0}
+          contextUsed={contextUsed}
+          contextMax={contextMax}
         />
       </div>
     </main>

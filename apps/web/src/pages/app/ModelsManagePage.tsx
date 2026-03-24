@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiJson, getApiKey } from "@/lib/api";
-import { formatTokens } from "@/lib/utils";
+import { formatTokens, getContextLimit, formatContextLength } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
@@ -40,6 +40,7 @@ interface Offering {
   dailyTokenLimit?: number;
   maxConcurrency?: number;
   nodeId?: string;
+  contextLength?: number;
 }
 
 interface SupplyUsageItem {
@@ -199,6 +200,7 @@ interface PoolModelEntry {
   paused: boolean;
   totalRequests: number;
   totalTokens: number;
+  contextLength?: number;
 }
 
 interface ModelConfig {
@@ -348,8 +350,9 @@ function GroupedPoolCard({
         {/* Node count */}
         <span className="text-xs text-text-secondary shrink-0">{entry.offeringCount}{t("modelsMgmt.nodes")}</span>
 
-        {/* Price */}
+        {/* Price + context */}
         <span className="font-mono text-xs text-text-tertiary shrink-0">{formatTokens(inputPrice)}/{formatTokens(outputPrice)}</span>
+        <span className="text-xs text-text-tertiary shrink-0">{formatContextLength(entry.contextLength ?? getContextLimit(entry.logicalModel))} {t("common.contextShort")}</span>
 
         {/* Stats separator + stats */}
         {(entry.totalRequests > 0 || entry.totalTokens > 0) && (
@@ -1720,6 +1723,8 @@ node dist/main.js start \\
                     <span className="mx-1.5 text-text-tertiary/30">/</span>
                     <span className="text-text-tertiary">out</span>
                     <span className="ml-1 text-text-primary font-mono">{formatTokens(o.fixedPricePer1kOutput ?? 0)}</span>
+                    <span className="mx-1.5 text-text-tertiary/30">&middot;</span>
+                    <span className="text-text-tertiary font-mono">{formatContextLength(o.contextLength ?? getContextLimit(o.logicalModel))} {t("common.contextShort")}</span>
                   </div>
                   {(o.dailyTokenLimit ?? 0) > 0 && (
                     <div>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiJson } from "@/lib/api";
-import { formatTokens } from "@/lib/utils";
+import { formatTokens, getContextLimit, formatContextLength } from "@/lib/utils";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
 import { invalidateUserModels } from "@/hooks/useUserModels";
@@ -266,6 +266,10 @@ export function ModelDetailPage() {
             <div className="flex items-center justify-between">
               <span className="text-text-tertiary text-xs">Total Tokens</span>
               <span className="font-mono text-text-primary">{formatTokens(totalTokens)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-text-tertiary text-xs">{t("common.maxContext")}</span>
+              <span className="font-mono text-text-primary">{formatContextLength(getContextLimit(model.logicalModel))} tokens</span>
             </div>
           </div>
         </div>

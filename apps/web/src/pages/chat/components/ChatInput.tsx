@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { SendHorizontal, Square } from "lucide-react";
 import { useLocale } from "@/hooks/useLocale";
+import { formatContextLength } from "@/lib/utils";
 
 interface ChatInputProps {
   input: string;
@@ -10,9 +11,11 @@ interface ChatInputProps {
   streaming: boolean;
   model: string;
   disabled?: boolean;
+  contextUsed?: number;
+  contextMax?: number;
 }
 
-export function ChatInput({ input, onInputChange, onSend, onStop, streaming, model, disabled }: ChatInputProps) {
+export function ChatInput({ input, onInputChange, onSend, onStop, streaming, model, disabled, contextUsed, contextMax }: ChatInputProps) {
   const { t } = useLocale();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,7 +78,7 @@ export function ChatInput({ input, onInputChange, onSend, onStop, streaming, mod
             )}
           </div>
 
-          {/* Bottom bar: model tag + hint */}
+          {/* Bottom bar: model tag + context + hint */}
           <div className="flex items-center justify-between mt-2 px-2">
             {model ? (
               <span className="text-[10px] text-text-tertiary/70 font-medium bg-accent/8 border border-accent/10 rounded-full px-2 py-0.5">
@@ -84,7 +87,18 @@ export function ChatInput({ input, onInputChange, onSend, onStop, streaming, mod
             ) : (
               <span />
             )}
-            <span className="text-[10px] text-text-tertiary/50">{t("chat.input.hint")}</span>
+            <div className="flex items-center gap-3">
+              {contextUsed != null && contextMax != null && contextMax > 0 && (
+                <span className={`text-[10px] font-mono ${
+                  (contextUsed / contextMax) > 0.9 ? "text-danger" :
+                  (contextUsed / contextMax) > 0.7 ? "text-amber-400" :
+                  "text-text-tertiary/60"
+                }`}>
+                  {t("common.context")} {formatContextLength(contextUsed)} / {formatContextLength(contextMax)}
+                </span>
+              )}
+              <span className="text-[10px] text-text-tertiary/50">{t("chat.input.hint")}</span>
+            </div>
           </div>
         </div>
       </div>
