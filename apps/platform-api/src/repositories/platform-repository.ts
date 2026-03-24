@@ -232,6 +232,11 @@ export type PlatformRepository = {
   markNotificationRead(notificationId: string, userId: string): MaybePromise<any>;
   getUnreadCount(userId: string): MaybePromise<number>;
 
+  // --- Platform API Key Methods ---
+  createApiKey(params: { userId: string; label: string }): MaybePromise<{ id: string; rawKey: string }>;
+  listApiKeys(userId: string): MaybePromise<Array<{ id: string; label: string; keyPrefix: string; status: string; createdAt: string }>>;
+  revokeApiKey(params: { userId: string; keyId: string }): MaybePromise<boolean>;
+
   // --- Node Token Methods ---
   createNodeToken(params: { userId: string; label: string }): MaybePromise<{ id: string; rawToken: string }>;
   listNodeTokens(userId: string): MaybePromise<any[]>;

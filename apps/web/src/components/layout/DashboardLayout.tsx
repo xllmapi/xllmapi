@@ -42,6 +42,7 @@ export function DashboardLayout() {
         <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />
         <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
         <SidebarLink to="/app/security" label={t("sidebar.security")} />
+        <SidebarLink to="/app/api-keys" label={t("sidebar.apiKeys")} />
       </nav>
 
       <div className="flex gap-6">
@@ -64,6 +65,7 @@ export function DashboardLayout() {
             </p>
             <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
             <SidebarLink to="/app/security" label={t("sidebar.security")} />
+            <SidebarLink to="/app/api-keys" label={t("sidebar.apiKeys")} />
             <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />
           </nav>
         </aside>

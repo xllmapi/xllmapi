@@ -338,6 +338,11 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return 0;
   },
 
+  // --- Platform API Key Methods (stubs) ---
+  createApiKey() { return { id: '', rawKey: '' }; },
+  listApiKeys() { return []; },
+  revokeApiKey() { return false; },
+
   // --- Node Token Methods (stubs) ---
   createNodeToken() { return { id: '', rawToken: '' }; },
   listNodeTokens() { return []; },

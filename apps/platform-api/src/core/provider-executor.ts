@@ -75,6 +75,101 @@ function resolveBaseUrl(offering: CandidateOffering): string {
 }
 
 /**
+ * Proxy an OpenAI-compatible API request to the best available offering.
+ * Transparently forwards the entire request body (including tools, tool_choice, etc.)
+ * and pipes the provider's raw response back to the client.
+ * This is the "API layer" — no message transformation, no stripping, no wrapping.
+ */
+export async function proxyApiRequest(params: {
+  requestId: string;
+  offerings: CandidateOffering[];
+  /** Raw request body from client — forwarded as-is to provider (with model swapped) */
+  body: Record<string, unknown>;
+  signal?: AbortSignal;
+  onResponse: (status: number, headers: Record<string, string>, body: ReadableStream<Uint8Array> | string) => void;
+}): Promise<{ chosenOffering: CandidateOffering; usage?: { inputTokens: number; outputTokens: number; totalTokens: number } }> {
+  const available = params.offerings.filter((o) => isAvailable(o.offeringId));
+  const candidates = available.length > 0 ? available : params.offerings;
+  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+
+  let lastError: unknown;
+  for (const offering of shuffled) {
+    if (offering.dailyTokenLimit && offering.dailyTokenLimit > 0) {
+      const exceeded = await isDailyLimitExceeded(offering.offeringId, offering.dailyTokenLimit);
+      if (exceeded) continue;
+    }
+    if (!acquireSlot(offering.offeringId, offering.maxConcurrency ?? 0)) continue;
+
+    const release = await limiter.acquire();
+    try {
+      const apiKey = resolveApiKey(offering);
+      const rawBase = resolveBaseUrl(offering);
+      const base = rawBase.replace(/\/+$/, "");
+      const url = base.endsWith("/v1") ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+
+      // Build provider body: swap model, clamp max_tokens, keep everything else
+      const providerBody: Record<string, unknown> = { ...params.body, model: offering.realModel };
+      if (typeof providerBody.max_tokens === "number") {
+        providerBody.max_tokens = Math.min(providerBody.max_tokens as number, 8192);
+      }
+
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "user-agent": "xllmapi/1.0",
+      };
+      if (offering.providerType === "anthropic") {
+        headers["x-api-key"] = apiKey;
+        headers["anthropic-version"] = "2023-06-01";
+      } else {
+        headers["authorization"] = `Bearer ${apiKey}`;
+      }
+
+      const resp = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(providerBody),
+        signal: params.signal,
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => "");
+        recordFailure(offering.offeringId);
+        lastError = new Error(`provider returned ${resp.status}: ${errText}`);
+        continue;
+      }
+
+      recordSuccess(offering.offeringId);
+
+      // Pipe response headers + body back to client
+      const respHeaders: Record<string, string> = {
+        "content-type": resp.headers.get("content-type") ?? "application/json",
+      };
+      if (resp.headers.get("cache-control")) {
+        respHeaders["cache-control"] = resp.headers.get("cache-control")!;
+      }
+
+      if (resp.body) {
+        params.onResponse(resp.status, respHeaders, resp.body);
+      } else {
+        const text = await resp.text();
+        params.onResponse(resp.status, respHeaders, text);
+      }
+
+      return { chosenOffering: offering };
+    } catch (err) {
+      recordFailure(offering.offeringId);
+      lastError = err;
+      console.error(`[proxy] offering=${offering.offeringId} error:`, err);
+    } finally {
+      releaseSlot(offering.offeringId);
+      release();
+    }
+  }
+
+  throw lastError ?? new Error("all offerings failed");
+}
+
+/**
  * Execute a streaming chat request against the best available offering.
  * Handles circuit breaking, retry with fallback, concurrency limiting.
  * Writes SSE events directly to the client via onSseWrite callback.
@@ -136,22 +231,29 @@ export async function executeStreamingRequest(params: {
 
         recordSuccess(offering.offeringId);
 
-        // Send completed event
-        const completedEvent = {
-          requestId: params.requestId,
-          executionId: `exec_${params.requestId}`,
-          chosenOfferingId: offering.offeringId,
-          fallbackUsed: offering !== shuffled[0],
-          provider: 'node',
-          realModel: offering.realModel,
-          usage: nodeResult.usage,
-          timing: {
-            routeMs: 0,
-            providerLatencyMs: Date.now() - startTime,
-            totalMs: Date.now() - startTime
-          }
+        // Send OpenAI-compatible finish + usage chunks
+        const nodeFinishChunk = {
+          id: `exec_${params.requestId}`,
+          object: "chat.completion.chunk",
+          model: offering.realModel,
+          choices: [{ index: 0, delta: {}, finish_reason: nodeResult.finishReason || "stop" }]
         };
-        params.onSseWrite(`event: completed\ndata: ${JSON.stringify(completedEvent)}\n\n`);
+        params.onSseWrite(`data: ${JSON.stringify(nodeFinishChunk)}\n\n`);
+
+        if (nodeResult.usage.totalTokens > 0) {
+          const nodeUsageChunk = {
+            id: `exec_${params.requestId}`,
+            object: "chat.completion.chunk",
+            model: offering.realModel,
+            choices: [],
+            usage: {
+              prompt_tokens: nodeResult.usage.inputTokens,
+              completion_tokens: nodeResult.usage.outputTokens,
+              total_tokens: nodeResult.usage.totalTokens
+            }
+          };
+          params.onSseWrite(`data: ${JSON.stringify(nodeUsageChunk)}\n\n`);
+        }
         params.onSseWrite("data: [DONE]\n\n");
 
         return {
@@ -208,22 +310,29 @@ export async function executeStreamingRequest(params: {
 
       recordSuccess(offering.offeringId);
 
-      // Send completed event
-      const completedEvent = {
-        requestId: params.requestId,
-        executionId: `exec_${params.requestId}`,
-        chosenOfferingId: offering.offeringId,
-        fallbackUsed: offering !== shuffled[0],
-        provider: offering.providerType,
-        realModel: offering.realModel,
-        usage: result.usage,
-        timing: {
-          routeMs: 0,
-          providerLatencyMs: Date.now() - startTime,
-          totalMs: Date.now() - startTime
-        }
+      // Send OpenAI-compatible finish + usage chunks
+      const finishChunk = {
+        id: `exec_${params.requestId}`,
+        object: "chat.completion.chunk",
+        model: offering.realModel,
+        choices: [{ index: 0, delta: {}, finish_reason: result.finishReason || "stop" }]
       };
-      params.onSseWrite(`event: completed\ndata: ${JSON.stringify(completedEvent)}\n\n`);
+      params.onSseWrite(`data: ${JSON.stringify(finishChunk)}\n\n`);
+
+      if (result.usage.totalTokens > 0) {
+        const usageChunk = {
+          id: `exec_${params.requestId}`,
+          object: "chat.completion.chunk",
+          model: offering.realModel,
+          choices: [],
+          usage: {
+            prompt_tokens: result.usage.inputTokens,
+            completion_tokens: result.usage.outputTokens,
+            total_tokens: result.usage.totalTokens
+          }
+        };
+        params.onSseWrite(`data: ${JSON.stringify(usageChunk)}\n\n`);
+      }
       params.onSseWrite("data: [DONE]\n\n");
 
       return {

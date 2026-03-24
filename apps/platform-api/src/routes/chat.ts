@@ -9,7 +9,7 @@ import type {
 import { stripThinking, trimToContextWindow } from "@xllmapi/core";
 import { cacheService } from "../cache.js";
 import { config } from "../config.js";
-import { executeStreamingRequest, executeRequest } from "../core/provider-executor.js";
+import { executeStreamingRequest, executeRequest, proxyApiRequest } from "../core/provider-executor.js";
 import {
   json,
   read_json,
@@ -409,29 +409,20 @@ export async function handleChatRoutes(
     return true;
   }
 
+  // ── OpenAI-compatible API proxy ──────────────────────────────────────
+  // Pure transparent proxy: forwards the entire request body to the provider,
+  // pipes the raw response (including tools, tool_calls, etc.) back to the client.
+  // No message transformation, no stripping — the client gets exactly what the
+  // provider returns, as if talking to OpenAI directly.
   if (req.method === "POST" && url.pathname === "/v1/chat/completions") {
-    const body = await read_json<PublicChatCompletionsRequest>(req);
+    const body = await read_json<Record<string, unknown>>(req);
     const auth = await authenticate_request_(req);
 
-    if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) {
-      const response = json(400, {
-        error: {
-          message: "model and messages are required",
-          requestId
-        }
-      });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
-      return true;
-    }
-    if (has_legacy_model_prefix_(body.model)) {
-      const response = json(400, {
-        error: {
-          code: "invalid_model_name",
-          message: "legacy model prefix xllm/ is no longer supported",
-          requestId
-        }
-      });
+    const model = body.model as string | undefined;
+    const messages = body.messages as unknown[] | undefined;
+
+    if (!model || !Array.isArray(messages) || messages.length === 0) {
+      const response = json(400, { error: { message: "model and messages are required", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -455,11 +446,7 @@ export async function handleChatRoutes(
     if (!rateLimit.ok) {
       metricsService.increment("rateLimitHits");
       const response = json(429, {
-        error: {
-          message: "chat rate limit exceeded",
-          requestId,
-          resetAt: new Date(rateLimit.resetAt).toISOString()
-        }
+        error: { message: "chat rate limit exceeded", requestId, resetAt: new Date(rateLimit.resetAt).toISOString() }
       });
       res.writeHead(response.statusCode, {
         ...response.headers,
@@ -471,189 +458,69 @@ export async function handleChatRoutes(
       return true;
     }
 
-    const requesterUserId = auth.userId;
-    const idempotencyKey = typeof req.headers["idempotency-key"] === "string"
-      ? req.headers["idempotency-key"].trim()
-      : null;
-
-    if (!body.stream && idempotencyKey) {
-      const cacheKey = `${requesterUserId}:${idempotencyKey}`;
-      const cachedReplay = await cacheService.getCachedResponse(cacheKey);
-      if (cachedReplay) {
-        metricsService.increment("cacheHits");
-        metricsService.increment("idempotentReplays");
-        const cachedBody = JSON.parse(cachedReplay.value);
-        const response = json(200, cachedBody);
-        res.writeHead(response.statusCode, {
-          ...response.headers,
-          "x-idempotent-replay": "true",
-          "x-cache-source": cachedReplay.source
-        });
-        res.end(response.payload);
-        return true;
-      }
-
-      const cachedResponse = await platformService.findCachedResponse({
-        requesterUserId,
-        idempotencyKey
-      });
-      if (cachedResponse) {
-        metricsService.increment("cacheHits");
-        metricsService.increment("idempotentReplays");
-        const response = json(200, cachedResponse);
-        await cacheService.setCachedResponse({
-          key: cacheKey,
-          value: JSON.stringify(cachedResponse)
-        });
-        res.writeHead(response.statusCode, {
-          ...response.headers,
-          "x-idempotent-replay": "true"
-        });
-        res.end(response.payload);
-        return true;
-      }
-
-      metricsService.increment("cacheMisses");
-    }
-
-    const walletBalance = await platformService.getWallet(requesterUserId);
+    const walletBalance = await platformService.getWallet(auth.userId);
     if (walletBalance <= 0) {
-      const response = json(402, {
-        error: {
-          message: "insufficient token credit",
-          requestId
-        }
-      });
+      const response = json(402, { error: { message: "insufficient token credit", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
     }
 
-    const candidateOfferings = await findOfferingsIncludingNodes(body.model, true, requesterUserId);
+    const candidateOfferings = await findOfferingsIncludingNodes(model, true, auth.userId);
     if (candidateOfferings.length === 0) {
-      const response = json(404, {
-        error: {
-          message: `no offering available for ${body.model}`,
-          requestId
-        }
-      });
+      const response = json(404, { error: { message: `no offering available for ${model}`, requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
-      return true;
-    }
-
-    // Strip thinking from assistant messages before forwarding to LLM
-    const cleanedMessages = body.messages
-      .map(m => ({
-        ...m,
-        content: m.role === 'assistant' ? stripThinking(m.content) : m.content
-      }))
-      .filter(m => m.content);
-
-    if (body.stream) {
-      res.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-cache",
-        connection: "keep-alive"
-      });
-
-      try {
-        const result = await executeStreamingRequest({
-          requestId,
-          offerings: candidateOfferings,
-          messages: cleanedMessages,
-          temperature: body.temperature,
-          maxTokens: body.max_tokens,
-          onSseWrite: (chunk) => { res.write(chunk); }
-        });
-
-        await platformService.recordChatSettlement({
-          requestId,
-          requesterUserId,
-          supplierUserId: result.chosenOffering.ownerUserId,
-          logicalModel: body.model,
-          idempotencyKey,
-          offeringId: result.chosenOffering.offeringId,
-          provider: result.chosenOffering.providerType,
-          realModel: result.chosenOffering.realModel,
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
-          fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0
-        });
-      } catch (err) {
-        console.error(`[chat/completions stream] error:`, err);
-        metricsService.increment("coreErrors");
-      }
-
-      res.end();
       return true;
     }
 
     try {
-      const result = await executeRequest({
+      const { Readable } = await import("node:stream");
+
+      const proxyResult = await proxyApiRequest({
         requestId,
         offerings: candidateOfferings,
-        messages: cleanedMessages,
-        temperature: body.temperature,
-        maxTokens: body.max_tokens
-      });
-
-      await platformService.recordChatSettlement({
-        requestId,
-        requesterUserId,
-        supplierUserId: result.chosenOffering.ownerUserId,
-        logicalModel: body.model,
-        idempotencyKey,
-        offeringId: result.chosenOffering.offeringId,
-        provider: result.chosenOffering.providerType,
-        realModel: result.chosenOffering.realModel,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
-        totalTokens: result.usage.totalTokens,
-        fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
-        fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0
-      });
-
-      const publicResponse: PublicChatCompletionsResponse = {
-        id: `exec_${requestId}`,
-        object: "chat.completion",
-        created: Math.floor(Date.now() / 1000),
-        model: body.model,
-        choices: [{
-          index: 0,
-          message: { role: "assistant", content: result.content },
-          finish_reason: "stop"
-        }],
-        usage: {
-          prompt_tokens: result.usage.inputTokens,
-          completion_tokens: result.usage.outputTokens,
-          total_tokens: result.usage.totalTokens
-        },
-        route: {
-          offering_id: result.chosenOffering.offeringId,
-          provider: result.chosenOffering.providerType,
-          real_model: result.chosenOffering.realModel,
-          fallback_used: false
+        body, // pass raw body — tools, tool_choice, messages all forwarded as-is
+        onResponse(status, headers, responseBody) {
+          res.writeHead(status, headers);
+          if (typeof responseBody === "string") {
+            res.end(responseBody);
+          } else {
+            // Pipe the ReadableStream (web) → Node writable (res)
+            const nodeStream = Readable.fromWeb(responseBody as import("stream/web").ReadableStream);
+            nodeStream.pipe(res);
+          }
         }
-      };
+      });
 
-      const response = json(200, publicResponse);
-      if (idempotencyKey) {
-        await cacheService.setCachedResponse({
-          key: `${requesterUserId}:${idempotencyKey}`,
-          value: response.payload
+      // Background settlement (don't block the response)
+      // Fire-and-forget settlement
+      try {
+        await platformService.recordChatSettlement({
+          requestId,
+          requesterUserId: auth.userId,
+          supplierUserId: proxyResult.chosenOffering.ownerUserId,
+          logicalModel: model,
+          offeringId: proxyResult.chosenOffering.offeringId,
+          provider: proxyResult.chosenOffering.providerType,
+          realModel: proxyResult.chosenOffering.realModel,
+          inputTokens: proxyResult.usage?.inputTokens ?? 0,
+          outputTokens: proxyResult.usage?.outputTokens ?? 0,
+          totalTokens: proxyResult.usage?.totalTokens ?? 0,
+          fixedPricePer1kInput: proxyResult.chosenOffering.fixedPricePer1kInput ?? 0,
+          fixedPricePer1kOutput: proxyResult.chosenOffering.fixedPricePer1kOutput ?? 0
         });
+      } catch (settlementErr) {
+        console.error(`[api-proxy] settlement error:`, settlementErr);
       }
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
     } catch (err) {
       metricsService.increment("coreErrors");
       const errorMsg = err instanceof Error ? err.message : "provider execution failed";
-      const response = json(502, { error: { message: errorMsg, requestId } });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
+      if (!res.headersSent) {
+        const response = json(502, { error: { message: errorMsg, requestId } });
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+      }
     }
     return true;
   }

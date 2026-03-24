@@ -2151,6 +2151,45 @@ export const postgresPlatformRepository: PlatformRepository = {
     return Number(result.rows[0]?.count ?? 0);
   },
 
+  // --- Platform API Key Methods ---
+
+  async createApiKey(params: { userId: string; label: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const id = `pak_${randomUUID().replace(/-/g, "").slice(0, 24)}`;
+    const rawKey = `xk-${randomBytes(32).toString("hex")}`;
+    const hashed = hashApiKey(rawKey);
+    await currentPool.query(
+      `INSERT INTO platform_api_keys (id, user_id, label, hashed_key, status) VALUES ($1, $2, $3, $4, 'active')`,
+      [id, params.userId, params.label, hashed]
+    );
+    return { id, rawKey };
+  },
+
+  async listApiKeys(userId: string) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query<{
+      id: string; label: string; keyPrefix: string; status: string; createdAt: string;
+    }>(`
+      SELECT id, label, LEFT(hashed_key, 8) AS "keyPrefix", status, created_at::text AS "createdAt"
+      FROM platform_api_keys
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `, [userId]);
+    return result.rows;
+  },
+
+  async revokeApiKey(params: { userId: string; keyId: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(
+      `DELETE FROM platform_api_keys WHERE id = $1 AND user_id = $2`,
+      [params.keyId, params.userId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  },
+
   // --- Node Token Methods ---
 
   async createNodeToken(params: { userId: string; label: string }) {

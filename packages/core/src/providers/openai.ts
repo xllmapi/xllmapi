@@ -19,8 +19,12 @@ export async function streamOpenAI(params: {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  tools?: unknown[];
+  toolChoice?: unknown;
+  extraBody?: Record<string, unknown>;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
+  onRawChunk?: (parsed: Record<string, unknown>) => void;
 }): Promise<StreamResult> {
   const base = params.baseUrl.replace(/\/+$/, "");
   const url = base.endsWith("/v1") ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
@@ -29,10 +33,13 @@ export async function streamOpenAI(params: {
     model: params.model,
     messages: params.messages,
     stream: true,
-    stream_options: { include_usage: true }
+    stream_options: { include_usage: true },
+    ...(params.extraBody ?? {})
   };
   if (params.temperature !== undefined) body.temperature = params.temperature;
-  if (params.maxTokens !== undefined) body.max_tokens = params.maxTokens;
+  if (params.maxTokens !== undefined) body.max_tokens = Math.min(params.maxTokens, 8192);
+  if (params.tools && params.tools.length > 0) body.tools = params.tools;
+  if (params.toolChoice !== undefined) body.tool_choice = params.toolChoice;
 
   const response = await fetch(url, {
     method: "POST",
@@ -129,7 +136,7 @@ export async function callOpenAI(params: {
     stream: false
   };
   if (params.temperature !== undefined) body.temperature = params.temperature;
-  if (params.maxTokens !== undefined) body.max_tokens = params.maxTokens;
+  if (params.maxTokens !== undefined) body.max_tokens = Math.min(params.maxTokens, 8192);
 
   const response = await fetch(url2, {
     method: "POST",

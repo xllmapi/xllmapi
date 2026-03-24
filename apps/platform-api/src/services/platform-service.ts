@@ -708,6 +708,17 @@ export const platformService = {
     return platformRepository.getUnreadCount(userId);
   },
 
+  // Platform API Keys
+  async createApiKey(userId: string, label: string) {
+    return platformRepository.createApiKey({ userId, label });
+  },
+  async listApiKeys(userId: string) {
+    return platformRepository.listApiKeys(userId);
+  },
+  async revokeApiKey(userId: string, keyId: string) {
+    return platformRepository.revokeApiKey({ userId, keyId });
+  },
+
   // Node tokens
   async createNodeToken(userId: string, label: string) {
     return platformRepository.createNodeToken({ userId, label });

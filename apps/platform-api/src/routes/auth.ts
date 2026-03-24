@@ -164,5 +164,57 @@ export async function handleAuthRoutes(
     return true;
   }
 
+  // --- API Key Management ---
+
+  if (req.method === "GET" && url.pathname === "/v1/me/api-keys") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth) {
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const keys = await platformService.listApiKeys(auth.userId);
+    const response = json(200, { ok: true, requestId, data: keys });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/v1/me/api-keys") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth) {
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const body = await read_json<{ label?: string }>(req);
+    const label = body.label || "API Key";
+    const result = await platformService.createApiKey(auth.userId, label);
+    const response = json(201, { ok: true, requestId, data: result });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "DELETE" && url.pathname.startsWith("/v1/me/api-keys/")) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth) {
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const keyId = url.pathname.slice("/v1/me/api-keys/".length);
+    const ok = await platformService.revokeApiKey(auth.userId, keyId);
+    const response = ok
+      ? json(200, { ok: true, requestId })
+      : json(404, { error: { message: "API key not found", requestId } });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   return false;
 }

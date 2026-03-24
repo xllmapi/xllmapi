@@ -49,6 +49,7 @@ const messages: Record<string, Record<string, string>> = {
     "sidebar.account": "账户",
     "sidebar.profile": "基础信息",
     "sidebar.security": "安全",
+    "sidebar.apiKeys": "API Key",
 
     // Admin sidebar
     "admin.sidebar.management": "管理",
@@ -153,6 +154,24 @@ const messages: Record<string, Record<string, string>> = {
     "security.save": "修改密码",
     "security.saving": "修改中…",
     "security.saved": "密码已修改",
+
+    // API Keys
+    "apiKeys.title": "API Key 管理",
+    "apiKeys.description": "使用 API Key 通过 OpenAI 兼容接口访问你已连接的模型。",
+    "apiKeys.create": "创建 API Key",
+    "apiKeys.label": "名称",
+    "apiKeys.labelPlaceholder": "输入 Key 名称",
+    "apiKeys.creating": "创建中…",
+    "apiKeys.created": "API Key 已创建，请立即复制，关闭后将无法再次查看。",
+    "apiKeys.copy": "复制",
+    "apiKeys.copied": "已复制",
+    "apiKeys.close": "关闭",
+    "apiKeys.revoke": "删除",
+    "apiKeys.revokeConfirm": "确认删除此 API Key？使用此 Key 的应用将立即失效。",
+    "apiKeys.empty": "暂无 API Key",
+    "apiKeys.status": "状态",
+    "apiKeys.createdAt": "创建时间",
+    "apiKeys.active": "活跃",
 
     // Chat
     "chat.newChat": "+ 新对话",
@@ -602,6 +621,7 @@ const messages: Record<string, Record<string, string>> = {
     "sidebar.account": "Account",
     "sidebar.profile": "Profile",
     "sidebar.security": "Security",
+    "sidebar.apiKeys": "API Keys",
 
     // Admin sidebar
     "admin.sidebar.management": "Management",
@@ -706,6 +726,24 @@ const messages: Record<string, Record<string, string>> = {
     "security.save": "Change Password",
     "security.saving": "Saving…",
     "security.saved": "Password changed",
+
+    // API Keys
+    "apiKeys.title": "API Keys",
+    "apiKeys.description": "Use API Keys to access your connected models via OpenAI-compatible API.",
+    "apiKeys.create": "Create API Key",
+    "apiKeys.label": "Label",
+    "apiKeys.labelPlaceholder": "Enter key label",
+    "apiKeys.creating": "Creating…",
+    "apiKeys.created": "API Key created. Copy it now — it won't be shown again.",
+    "apiKeys.copy": "Copy",
+    "apiKeys.copied": "Copied",
+    "apiKeys.close": "Close",
+    "apiKeys.revoke": "Delete",
+    "apiKeys.revokeConfirm": "Delete this API Key? Applications using it will stop working immediately.",
+    "apiKeys.empty": "No API Keys",
+    "apiKeys.status": "Status",
+    "apiKeys.createdAt": "Created",
+    "apiKeys.active": "Active",
 
     // Chat
     "chat.newChat": "+ New Chat",

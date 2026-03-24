@@ -50,6 +50,7 @@ const OverviewPage = lazy(() => import("@/pages/app/OverviewPage").then((m) => (
 const InvitationsPage = lazy(() => import("@/pages/app/InvitationsPage").then((m) => ({ default: m.InvitationsPage })));
 const ProfilePage = lazy(() => import("@/pages/app/ProfilePage").then((m) => ({ default: m.ProfilePage })));
 const SecurityPage = lazy(() => import("@/pages/app/SecurityPage").then((m) => ({ default: m.SecurityPage })));
+const ApiKeysPage = lazy(() => import("@/pages/app/ApiKeysPage").then((m) => ({ default: m.ApiKeysPage })));
 const NotificationsPage = lazy(() => import("@/pages/app/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const AdminOverviewPage = lazy(() => import("@/pages/admin/AdminOverviewPage").then((m) => ({ default: m.AdminOverviewPage })));
 const UsersPage = lazy(() => import("@/pages/admin/UsersPage").then((m) => ({ default: m.UsersPage })));
@@ -108,6 +109,7 @@ export function App() {
             <Route path="invitations" element={<InvitationsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="security" element={<SecurityPage />} />
+            <Route path="api-keys" element={<ApiKeysPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
           </Route>
 
