@@ -13,6 +13,7 @@ import { platformService } from "./services/platform-service.js";
 import {
   handleAuthRoutes,
   handleUserRoutes,
+  handleApiProxyRoutes,
   handleChatRoutes,
   handleProviderRoutes,
   handleUsageRoutes,
@@ -154,6 +155,7 @@ const server = createServer(async (req, res) => {
     // --- Route dispatch ---
     if (await handleAuthRoutes(req, res, url, requestId)) return;
     if (await handleUserRoutes(req, res, url, requestId)) return;
+    if (await handleApiProxyRoutes(req, res, url, requestId)) return;
     if (await handleChatRoutes(req, res, url, requestId)) return;
     if (await handleNetworkRoutes(req, res, url, requestId)) return;
     if (await handleMarketRoutes(req, res, url, requestId)) return;

@@ -74,55 +74,100 @@ function resolveBaseUrl(offering: CandidateOffering): string {
   }
 }
 
+import type { ApiFormatId, ProxyUsage } from "./adapters/index.js";
+import { getAdapter, convertRequestBody } from "./adapters/index.js";
+
+/** Check if an offering has an endpoint for a given format */
+function hasEndpoint(offering: CandidateOffering, format: ApiFormatId): boolean {
+  if (format === "anthropic") {
+    return !!offering.anthropicBaseUrl || offering.providerType === "anthropic";
+  }
+  // OpenAI: any offering with a baseUrl or OpenAI-compatible provider
+  return !!offering.baseUrl || offering.providerType !== "anthropic";
+}
+
+/** Resolve which format endpoint to use and its base URL */
+function resolveEndpoint(offering: CandidateOffering, clientFormat: ApiFormatId): { targetFormat: ApiFormatId; baseUrl: string } {
+  // Prefer same-format endpoint
+  if (clientFormat === "anthropic") {
+    // Try Anthropic endpoint first
+    if (offering.anthropicBaseUrl) {
+      return { targetFormat: "anthropic", baseUrl: offering.anthropicBaseUrl };
+    }
+    if (offering.providerType === "anthropic") {
+      return { targetFormat: "anthropic", baseUrl: resolveBaseUrl(offering) };
+    }
+    // Fallback to OpenAI endpoint with format conversion
+    return { targetFormat: "openai", baseUrl: resolveBaseUrl(offering) };
+  }
+
+  // Client wants OpenAI format
+  if (offering.providerType !== "anthropic" || offering.baseUrl) {
+    return { targetFormat: "openai", baseUrl: resolveBaseUrl(offering) };
+  }
+  // Provider only has Anthropic endpoint — convert
+  return { targetFormat: "anthropic", baseUrl: resolveBaseUrl(offering) };
+}
+
 /**
- * Proxy an OpenAI-compatible API request to the best available offering.
- * Transparently forwards the entire request body (including tools, tool_choice, etc.)
- * and pipes the provider's raw response back to the client.
- * This is the "API layer" — no message transformation, no stripping, no wrapping.
+ * Proxy an API request to the best available offering.
+ * Supports OpenAI and Anthropic formats, with automatic format routing:
+ * - Same format → transparent proxy (preferred)
+ * - Cross format → body conversion + proxy to available endpoint
+ *
+ * Extracts usage from the response for settlement.
  */
 export async function proxyApiRequest(params: {
   requestId: string;
   offerings: CandidateOffering[];
-  /** Raw request body from client — forwarded as-is to provider (with model swapped) */
   body: Record<string, unknown>;
+  /** Client-side API format: "openai" for /chat/completions, "anthropic" for /messages */
+  clientFormat: ApiFormatId;
   signal?: AbortSignal;
-  onResponse: (status: number, headers: Record<string, string>, body: ReadableStream<Uint8Array> | string) => void;
-}): Promise<{ chosenOffering: CandidateOffering; usage?: { inputTokens: number; outputTokens: number; totalTokens: number } }> {
+  writeHead: (status: number, headers: Record<string, string>) => void;
+  res: import("node:http").ServerResponse;
+}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage }> {
   const available = params.offerings.filter((o) => isAvailable(o.offeringId));
   const candidates = available.length > 0 ? available : params.offerings;
-  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+  const isStreaming = params.body.stream === true;
+
+  // Sort offerings: prefer those with a matching endpoint for the client format
+  const sorted = [...candidates].sort((a, b) => {
+    const aHas = hasEndpoint(a, params.clientFormat) ? 0 : 1;
+    const bHas = hasEndpoint(b, params.clientFormat) ? 0 : 1;
+    if (aHas !== bHas) return aHas - bHas;
+    return Math.random() - 0.5; // Random among same-priority
+  });
 
   let lastError: unknown;
-  for (const offering of shuffled) {
-    if (offering.dailyTokenLimit && offering.dailyTokenLimit > 0) {
-      const exceeded = await isDailyLimitExceeded(offering.offeringId, offering.dailyTokenLimit);
-      if (exceeded) continue;
+  let skippedDailyLimit = 0;
+  let skippedConcurrency = 0;
+
+  for (const offering of sorted) {
+    if (offering.dailyTokenLimit && Number(offering.dailyTokenLimit) > 0) {
+      const exceeded = await isDailyLimitExceeded(offering.offeringId, Number(offering.dailyTokenLimit));
+      if (exceeded) { skippedDailyLimit++; continue; }
     }
-    if (!acquireSlot(offering.offeringId, offering.maxConcurrency ?? 0)) continue;
+    if (!acquireSlot(offering.offeringId, offering.maxConcurrency ?? 0)) { skippedConcurrency++; continue; }
 
     const release = await limiter.acquire();
     try {
       const apiKey = resolveApiKey(offering);
-      const rawBase = resolveBaseUrl(offering);
-      const base = rawBase.replace(/\/+$/, "");
-      const url = base.endsWith("/v1") ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
 
-      // Build provider body: swap model, clamp max_tokens, keep everything else
-      const providerBody: Record<string, unknown> = { ...params.body, model: offering.realModel };
-      if (typeof providerBody.max_tokens === "number") {
-        providerBody.max_tokens = Math.min(providerBody.max_tokens as number, 8192);
-      }
+      // Determine target format and base URL
+      const { targetFormat, baseUrl } = resolveEndpoint(offering, params.clientFormat);
+      const adapter = getAdapter(targetFormat);
 
-      const headers: Record<string, string> = {
-        "content-type": "application/json",
-        "user-agent": "xllmapi/1.0",
-      };
-      if (offering.providerType === "anthropic") {
-        headers["x-api-key"] = apiKey;
-        headers["anthropic-version"] = "2023-06-01";
-      } else {
-        headers["authorization"] = `Bearer ${apiKey}`;
-      }
+      // Build request
+      const url = adapter.buildUrl(baseUrl);
+      const headers = adapter.buildHeaders(apiKey);
+
+      // If client format differs from target, convert the body
+      const rawBody = (params.clientFormat === targetFormat)
+        ? params.body
+        : convertRequestBody(params.clientFormat, targetFormat, params.body);
+
+      const providerBody = adapter.prepareBody(rawBody, offering.realModel);
 
       const resp = await fetch(url, {
         method: "POST",
@@ -140,7 +185,6 @@ export async function proxyApiRequest(params: {
 
       recordSuccess(offering.offeringId);
 
-      // Pipe response headers + body back to client
       const respHeaders: Record<string, string> = {
         "content-type": resp.headers.get("content-type") ?? "application/json",
       };
@@ -148,25 +192,57 @@ export async function proxyApiRequest(params: {
         respHeaders["cache-control"] = resp.headers.get("cache-control")!;
       }
 
-      if (resp.body) {
-        params.onResponse(resp.status, respHeaders, resp.body);
+      let usage: ProxyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+      if (isStreaming && resp.body) {
+        params.writeHead(resp.status, respHeaders);
+        const { Readable } = await import("node:stream");
+        const nodeStream = Readable.fromWeb(resp.body as import("stream/web").ReadableStream);
+        const TAIL_SIZE = 4096;
+        let tailBuf = "";
+
+        await new Promise<void>((resolve, reject) => {
+          nodeStream.on("data", (chunk: Buffer) => {
+            params.res.write(chunk);
+            const str = chunk.toString();
+            tailBuf += str;
+            if (tailBuf.length > TAIL_SIZE * 2) tailBuf = tailBuf.slice(-TAIL_SIZE);
+          });
+          nodeStream.on("end", () => { params.res.end(); resolve(); });
+          nodeStream.on("error", (err: Error) => { params.res.end(); reject(err); });
+        });
+
+        usage = adapter.extractUsageFromStream(tailBuf) ?? usage;
       } else {
-        const text = await resp.text();
-        params.onResponse(resp.status, respHeaders, text);
+        const bodyText = await resp.text();
+        params.writeHead(resp.status, respHeaders);
+        params.res.end(bodyText);
+
+        try {
+          const parsed = JSON.parse(bodyText);
+          usage = adapter.extractUsageFromJson(parsed) ?? usage;
+        } catch { /* ignore */ }
       }
 
-      return { chosenOffering: offering };
+      return { chosenOffering: offering, usage };
     } catch (err) {
       recordFailure(offering.offeringId);
       lastError = err;
-      console.error(`[proxy] offering=${offering.offeringId} error:`, err);
+      console.error(`[proxy] offering=${offering.offeringId} provider=${offering.providerType} error:`, err instanceof Error ? err.message : err);
     } finally {
       releaseSlot(offering.offeringId);
       release();
     }
   }
 
-  throw lastError ?? new Error("all offerings failed");
+  if (!lastError) {
+    const reasons: string[] = [];
+    if (skippedDailyLimit > 0) reasons.push(`${skippedDailyLimit} offering(s) exceeded daily token limit`);
+    if (skippedConcurrency > 0) reasons.push(`${skippedConcurrency} offering(s) at max concurrency`);
+    const detail = reasons.length > 0 ? `: ${reasons.join(", ")}` : "";
+    throw new Error(`all ${sorted.length} offerings unavailable${detail}`);
+  }
+  throw lastError;
 }
 
 /**

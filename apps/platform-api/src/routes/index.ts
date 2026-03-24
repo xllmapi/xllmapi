@@ -1,5 +1,6 @@
 export { handleAuthRoutes } from "./auth.js";
 export { handleUserRoutes } from "./user.js";
+export { handleApiProxyRoutes } from "./api-proxy.js";
 export { handleChatRoutes } from "./chat.js";
 export { handleProviderRoutes } from "./provider.js";
 export { handleUsageRoutes } from "./usage.js";

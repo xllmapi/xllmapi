@@ -1222,6 +1222,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         c.provider_type AS "providerType",
         c.id AS "credentialId",
         c.base_url AS "baseUrl",
+        c.anthropic_base_url AS "anthropicBaseUrl",
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
         o.real_model AS "realModel",
@@ -1271,7 +1272,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         c.provider_type AS "providerType",
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
-        c.base_url AS "baseUrl"
+        c.base_url AS "baseUrl",
+        c.anthropic_base_url AS "anthropicBaseUrl"
       FROM offerings o
       JOIN offering_favorites f ON f.offering_id = o.id AND f.user_id = $1
       LEFT JOIN provider_credentials c ON c.id = o.credential_id

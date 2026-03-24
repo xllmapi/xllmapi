@@ -8,6 +8,7 @@ export interface CandidateOffering {
   apiKeyEnvName?: string;
   encryptedSecret?: string;
   baseUrl?: string;
+  anthropicBaseUrl?: string;
   realModel: string;
   pricingMode: PricingMode;
   fixedPricePer1kInput?: number;
