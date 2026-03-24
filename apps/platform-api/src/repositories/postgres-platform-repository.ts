@@ -1237,7 +1237,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.enabled AS enabled,
         o.logical_model AS "logicalModel",
         o.daily_token_limit AS "dailyTokenLimit",
-        o.max_concurrency AS "maxConcurrency"
+        o.max_concurrency AS "maxConcurrency",
+        o.context_length AS "contextLength"
       , o.execution_mode AS "executionMode"
       , o.node_id AS "nodeId"
       FROM offerings o
@@ -1266,6 +1267,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.enabled,
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency",
+        o.context_length AS "contextLength",
         c.provider_type AS "providerType",
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
@@ -1433,7 +1435,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         execution_mode AS "executionMode",
         node_id AS "nodeId",
         daily_token_limit AS "dailyTokenLimit",
-        max_concurrency AS "maxConcurrency"
+        max_concurrency AS "maxConcurrency",
+        context_length AS "contextLength"
       FROM offerings
       WHERE owner_user_id = $1
       ORDER BY created_at DESC
@@ -2404,7 +2407,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         enabled,
         review_status AS "reviewStatus",
         fixed_price_per_1k_input AS "fixedPricePer1kInput",
-        fixed_price_per_1k_output AS "fixedPricePer1kOutput"
+        fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        context_length AS "contextLength"
       FROM offerings
       WHERE node_id = $1 AND execution_mode = 'node'
       ORDER BY created_at DESC
@@ -2426,6 +2430,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
+        o.context_length AS "contextLength",
         n.status AS "nodeStatus",
         n.last_heartbeat_at AS "nodeLastHeartbeatAt"
       FROM offerings o
@@ -2459,6 +2464,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency",
+        o.context_length AS "contextLength",
         o.enabled, o.review_status AS "reviewStatus",
         o.node_id AS "nodeId",
         u.display_name AS "ownerDisplayName",
@@ -2735,6 +2741,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         MIN(o.fixed_price_per_1k_input)::int AS "minInputPrice",
         MIN(o.fixed_price_per_1k_output)::int AS "minOutputPrice",
         MAX(o.execution_mode) AS "executionMode",
+        MAX(o.context_length)::int AS "contextLength",
         bool_and(o.enabled) AS "enabled",
         bool_and(f.paused) AS "paused",
         COUNT(DISTINCT ar.id)::int AS "totalRequests",
@@ -2824,6 +2831,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.review_status AS "reviewStatus",
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency",
+        o.context_length AS "contextLength",
         o.public_node_id AS "publicNodeId",
         o.created_at AS "createdAt",
         u.display_name AS "ownerDisplayName",

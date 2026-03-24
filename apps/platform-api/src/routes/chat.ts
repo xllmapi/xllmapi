@@ -112,6 +112,12 @@ const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "gpt-4o": 128000,
   "gpt-4o-mini": 128000,
   "claude": 200000,
+  "kimi-for-coding": 262_144,
+  "kimi": 128_000,
+  "moonshot-v1-8k": 8_000,
+  "moonshot-v1-32k": 32_000,
+  "moonshot-v1-128k": 128_000,
+  "moonshot": 128_000,
 };
 const DEFAULT_CONTEXT_LIMIT = 64000;
 
@@ -128,6 +134,15 @@ function getContextLimit(model: string): number {
 }
 
 type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
+
+/** Strip <think>...</think> blocks from assistant messages before sending to LLM.
+ *  Handles both closed tags and unclosed tags (streaming artifacts in DB). */
+function stripThinking(content: string): string {
+  return content
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/<think>[\s\S]*$/g, '')
+    .trim();
+}
 
 /** Trim messages to fit within 80% of model's context window, keeping most recent */
 function trimToContextWindow(messages: ChatMsg[], model: string): ChatMsg[] {
@@ -398,10 +413,14 @@ export async function handleChatRoutes(
     }
 
     // Build messages with context window management
+    // Strip thinking from assistant messages before sending to LLM (DB keeps full content)
     const allMessages = [
-      ...history.map((item: { role: "system" | "user" | "assistant"; content: string }) => ({ role: item.role, content: item.content })),
+      ...history.map((item: { role: "system" | "user" | "assistant"; content: string }) => ({
+        role: item.role,
+        content: item.role === 'assistant' ? stripThinking(item.content) : item.content
+      })),
       { role: "user" as const, content: body.content.trim() }
-    ];
+    ].filter(m => m.content); // Remove empty messages after stripping
     const contextMessages = trimToContextWindow(allMessages, logicalModel);
 
     const mappedBody: PublicChatCompletionsRequest = {
@@ -600,6 +619,14 @@ export async function handleChatRoutes(
       return true;
     }
 
+    // Strip thinking from assistant messages before forwarding to LLM
+    const cleanedMessages = body.messages
+      .map(m => ({
+        ...m,
+        content: m.role === 'assistant' ? stripThinking(m.content) : m.content
+      }))
+      .filter(m => m.content);
+
     if (body.stream) {
       res.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
@@ -611,7 +638,7 @@ export async function handleChatRoutes(
         const result = await executeStreamingRequest({
           requestId,
           offerings: candidateOfferings,
-          messages: body.messages,
+          messages: cleanedMessages,
           temperature: body.temperature,
           maxTokens: body.max_tokens,
           onSseWrite: (chunk) => { res.write(chunk); }
@@ -645,7 +672,7 @@ export async function handleChatRoutes(
       const result = await executeRequest({
         requestId,
         offerings: candidateOfferings,
-        messages: body.messages,
+        messages: cleanedMessages,
         temperature: body.temperature,
         maxTokens: body.max_tokens
       });

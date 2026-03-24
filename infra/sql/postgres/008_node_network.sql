@@ -108,3 +108,6 @@ ALTER TABLE offerings ADD COLUMN IF NOT EXISTS public_node_id TEXT UNIQUE;
 
 -- auto-approve config for node offerings
 INSERT INTO platform_config (key, value, updated_at) VALUES ('offering_auto_approve', 'false', NOW()) ON CONFLICT DO NOTHING;
+
+-- context_length for per-offering context window size
+ALTER TABLE offerings ADD COLUMN IF NOT EXISTS context_length INT NOT NULL DEFAULT 64000;
