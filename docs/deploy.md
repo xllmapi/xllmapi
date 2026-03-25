@@ -254,7 +254,6 @@ sudo systemctl enable --now xllmapi-platform
 6. `test:e2e:sharing`（仅 `main` 分支）
 7. production container smoke（`/healthz`、`/readyz`、`/version`）
 
-<<<<<<< HEAD
 也可以在手工发布或 staging 验收时复用同一套检查：
 
 ```bash
