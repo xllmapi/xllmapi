@@ -1,0 +1,10 @@
+[Unit]
+Description=xllmapi settlement retry
+After=network.target
+
+[Service]
+Type=oneshot
+User=xllmapi
+WorkingDirectory=/opt/xllmapi
+Environment=XLLMAPI_SETTLEMENT_RETRY_ACTOR_ID=admin_demo
+ExecStart=/usr/bin/npm run ops:retry:settlement-failures

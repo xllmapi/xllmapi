@@ -134,6 +134,16 @@ export const cacheService = {
     });
   },
 
+  async close() {
+    const redis = await getRedisClient();
+    if (redis) {
+      try {
+        await redis.quit();
+      } catch { /* ignore */ }
+    }
+    memoryResponseCache.clear();
+  },
+
   async getStatus() {
     const redis = await getRedisClient();
     return {

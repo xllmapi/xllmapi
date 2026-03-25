@@ -59,7 +59,7 @@ export function AuthPage() {
         method: "POST",
         body: JSON.stringify({ email, code }),
       });
-      await login(result.token, result.initialApiKey);
+      await login({ apiKey: result.initialApiKey ?? null });
       navigate(result.redirectTo ?? "/app", { replace: true });
     } catch (err: unknown) {
       setError(extractError(err));
@@ -77,7 +77,7 @@ export function AuthPage() {
         "/v1/auth/login",
         { method: "POST", body: JSON.stringify({ email, password }) },
       );
-      await login(result.token);
+      await login();
       navigate(result.redirectTo ?? "/app", { replace: true });
     } catch (err: unknown) {
       setError(extractError(err));

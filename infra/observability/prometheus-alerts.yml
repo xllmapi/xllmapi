@@ -1,0 +1,62 @@
+groups:
+  - name: xllmapi-platform
+    rules:
+      - alert: XllmapiInstanceDown
+        expr: up{job="xllmapi-platform"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: xllmapi-platform
+        annotations:
+          summary: xllmapi platform instance is down
+          description: Prometheus cannot scrape the xllmapi platform target for more than 2 minutes.
+
+      - alert: XllmapiSettlementFailuresDetected
+        expr: increase(xllmapi_settlement_failures{job="xllmapi-platform"}[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: xllmapi-platform
+        annotations:
+          summary: settlement failures detected
+          description: Settlement failures increased in the last 10 minutes. Check admin settlement failures queue and retry workflow.
+
+      - alert: XllmapiCoreErrorsHigh
+        expr: increase(xllmapi_core_errors{job="xllmapi-platform"}[5m]) >= 5
+        for: 5m
+        labels:
+          severity: critical
+          service: xllmapi-platform
+        annotations:
+          summary: provider/core errors are elevated
+          description: Provider execution errors increased by at least 5 in the last 5 minutes.
+
+      - alert: XllmapiAuthRateLimitBurst
+        expr: increase(xllmapi_auth_rate_limit_hits{job="xllmapi-platform"}[15m]) >= 20
+        for: 10m
+        labels:
+          severity: warning
+          service: xllmapi-platform
+        annotations:
+          summary: authentication rate-limit burst
+          description: Authentication rate-limit hits are elevated. Investigate login abuse or misconfigured clients.
+
+      - alert: XllmapiChatRateLimitBurst
+        expr: increase(xllmapi_rate_limit_hits{job="xllmapi-platform"}[15m]) >= 50
+        for: 10m
+        labels:
+          severity: warning
+          service: xllmapi-platform
+        annotations:
+          summary: chat rate-limit burst
+          description: Chat rate-limit hits are elevated. Investigate abusive traffic or insufficient quota settings.
+
+      - alert: XllmapiMetricsMissing
+        expr: absent(xllmapi_total_requests{job="xllmapi-platform"})
+        for: 10m
+        labels:
+          severity: critical
+          service: xllmapi-platform
+        annotations:
+          summary: xllmapi metrics are missing
+          description: Prometheus has not observed xllmapi_total_requests for 10 minutes. Check scrape config and application health.

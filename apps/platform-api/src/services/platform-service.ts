@@ -333,6 +333,14 @@ export const platformService = {
     return platformRepository.authenticateSession(sessionToken);
   },
 
+  revokeSession(sessionId: string) {
+    return platformRepository.revokeSession(sessionId);
+  },
+
+  checkHealth() {
+    return platformRepository.checkHealth();
+  },
+
   requestLoginCode(email: string) {
     return platformRepository.requestLoginCode(email);
   },
@@ -648,6 +656,15 @@ export const platformService = {
   },
 
   recordChatSettlement: platformRepository.recordChatSettlement,
+  recordSettlementFailure: platformRepository.recordSettlementFailure,
+
+  getAdminSettlementFailures(params: { page: number; limit: number; status?: "open" | "resolved" | "all" }) {
+    return platformRepository.getAdminSettlementFailures(params);
+  },
+
+  retrySettlementFailure(params: { failureId: string; actorUserId: string }) {
+    return platformRepository.retrySettlementFailure(params);
+  },
 
   async getSupplyRecent(userId: string, days?: number, limit?: number): Promise<any[]> {
     return platformRepository.getSupplyRecent(userId, days, limit);

@@ -13,6 +13,8 @@
     "dev:platform-api": "npm run dev --workspace @xllmapi/platform-api",
     "build:platform-api": "npm run build --workspace @xllmapi/platform-api",
     "build:shared-types": "npm run build --workspace @xllmapi/shared-types",
+    "ops:retry:settlement-failures": "npm run ops:retry:settlement-failures --workspace @xllmapi/platform-api",
+    "smoke:release": "bash scripts/release-smoke.sh",
     "test:platform-api": "npm run test --workspace @xllmapi/platform-api",
     "test:e2e:sharing": "node scripts/e2e-sharing-flow.mjs",
     "test:e2e:mvp": "node scripts/e2e-mvp-flow.mjs",

@@ -15,7 +15,7 @@ import type {
 } from "@xllmapi/shared-types";
 import { config } from "./config.js";
 import { DEFAULT_AVATAR_URL, DEFAULT_INITIAL_TOKEN_CREDIT, DEV_ADMIN_API_KEY, DEV_USER_API_KEY } from "./constants.js";
-import { encryptSecret, hashApiKey, hashPassword } from "./crypto-utils.js";
+import { encryptSecret, hashApiKey, hashPassword, passwordNeedsRehash, verifyPassword } from "./crypto-utils.js";
 
 const defaultDbPath = resolve(process.cwd(), ".data/xllmapi.db");
 const dbPath = process.env.XLLMAPI_DB_PATH ?? defaultDbPath;
@@ -148,6 +148,24 @@ db.exec(`
     supplier_reward INTEGER NOT NULL,
     platform_margin INTEGER NOT NULL,
     created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS settlement_failures (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL UNIQUE,
+    requester_user_id TEXT NOT NULL,
+    supplier_user_id TEXT NOT NULL,
+    logical_model TEXT NOT NULL,
+    offering_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    real_model TEXT NOT NULL,
+    error_message TEXT NOT NULL,
+    settlement_payload TEXT NOT NULL,
+    failure_count INTEGER NOT NULL DEFAULT 1,
+    first_failed_at TEXT NOT NULL,
+    last_failed_at TEXT NOT NULL,
+    resolved_at TEXT,
+    resolved_by TEXT
   );
 
   CREATE TABLE IF NOT EXISTS audit_logs (
@@ -655,6 +673,11 @@ export const find_user_by_session_token = (
   return row ?? null;
 };
 
+export const revoke_session = (sessionId: string) => {
+  const result = db.prepare("DELETE FROM auth_sessions WHERE id = ?").run(sessionId);
+  return result.changes > 0;
+};
+
 export const request_login_code = (email: string) => {
   const normalizedEmail = normalize_email_(email);
   const identity = get_identity_by_email_(normalizedEmail);
@@ -794,7 +817,7 @@ export const login_with_password = (email: string, password: string): VerifyLogi
     LIMIT 1
   `).get(identity.userId) as { passwordHash: string } | undefined;
 
-  if (!passwordRow || passwordRow.passwordHash !== hashPassword(password)) {
+  if (!passwordRow || !verifyPassword(password, passwordRow.passwordHash)) {
     return { ok: false, code: "invalid_credentials", message: "invalid email or password" };
   }
 
@@ -807,6 +830,13 @@ export const login_with_password = (email: string, password: string): VerifyLogi
   const sessionToken = `sess_${randomUUID().replaceAll("-", "")}`;
   db.prepare("UPDATE user_identities SET last_login_at = ? WHERE user_id = ?").run(now, me.id);
   db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(now, me.id);
+  if (passwordNeedsRehash(passwordRow.passwordHash)) {
+    db.prepare(`
+      UPDATE user_passwords
+      SET password_hash = ?, updated_at = ?
+      WHERE user_id = ?
+    `).run(hashPassword(password), now, me.id);
+  }
   db.prepare(`
     INSERT INTO auth_sessions (id, user_id, token_hash, expires_at, created_at)
     VALUES (?, ?, ?, ?, ?)
@@ -860,7 +890,7 @@ export const update_me_password = (params: {
     LIMIT 1
   `).get(params.userId) as { passwordHash: string } | undefined;
 
-  if (!current || current.passwordHash !== hashPassword(params.currentPassword)) {
+  if (!current || !verifyPassword(params.currentPassword, current.passwordHash)) {
     return { ok: false as const, code: "invalid_password", message: "current password is invalid" };
   }
 
@@ -1754,6 +1784,197 @@ export const record_chat_settlement = (params: {
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
+  }
+};
+
+export const record_settlement_failure = (params: {
+  requestId: string;
+  requesterUserId: string;
+  supplierUserId: string;
+  logicalModel: string;
+  idempotencyKey?: string | null;
+  offeringId: string;
+  provider: string;
+  realModel: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  fixedPricePer1kInput: number;
+  fixedPricePer1kOutput: number;
+  responseBody?: unknown;
+  errorMessage: string;
+}) => {
+  const now = now_iso_();
+  db.prepare(`
+    INSERT INTO settlement_failures (
+      id,
+      request_id,
+      requester_user_id,
+      supplier_user_id,
+      logical_model,
+      offering_id,
+      provider,
+      real_model,
+      error_message,
+      settlement_payload,
+      failure_count,
+      first_failed_at,
+      last_failed_at,
+      resolved_at,
+      resolved_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, NULL, NULL)
+    ON CONFLICT(request_id) DO UPDATE SET
+      requester_user_id = excluded.requester_user_id,
+      supplier_user_id = excluded.supplier_user_id,
+      logical_model = excluded.logical_model,
+      offering_id = excluded.offering_id,
+      provider = excluded.provider,
+      real_model = excluded.real_model,
+      error_message = excluded.error_message,
+      settlement_payload = excluded.settlement_payload,
+      failure_count = settlement_failures.failure_count + 1,
+      last_failed_at = excluded.last_failed_at,
+      resolved_at = NULL,
+      resolved_by = NULL
+  `).run(
+    `settlefail_${randomUUID().replaceAll("-", "")}`,
+    params.requestId,
+    params.requesterUserId,
+    params.supplierUserId,
+    params.logicalModel,
+    params.offeringId,
+    params.provider,
+    params.realModel,
+    params.errorMessage,
+    JSON.stringify({
+      requestId: params.requestId,
+      requesterUserId: params.requesterUserId,
+      supplierUserId: params.supplierUserId,
+      logicalModel: params.logicalModel,
+      idempotencyKey: params.idempotencyKey ?? null,
+      offeringId: params.offeringId,
+      provider: params.provider,
+      realModel: params.realModel,
+      inputTokens: params.inputTokens,
+      outputTokens: params.outputTokens,
+      totalTokens: params.totalTokens,
+      fixedPricePer1kInput: params.fixedPricePer1kInput,
+      fixedPricePer1kOutput: params.fixedPricePer1kOutput,
+      responseBody: params.responseBody ?? null
+    }),
+    now,
+    now
+  );
+};
+
+export const list_admin_settlement_failures = (params: {
+  page: number;
+  limit: number;
+  status?: "open" | "resolved" | "all";
+}) => {
+  const conditions: string[] = [];
+  const values: Array<string | number> = [];
+
+  if (!params.status || params.status === "open") {
+    conditions.push("sf.resolved_at IS NULL");
+  } else if (params.status === "resolved") {
+    conditions.push("sf.resolved_at IS NOT NULL");
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const offset = (params.page - 1) * params.limit;
+
+  const data = db.prepare(`
+    SELECT
+      sf.id,
+      sf.request_id AS requestId,
+      sf.requester_user_id AS requesterUserId,
+      sf.supplier_user_id AS supplierUserId,
+      sf.logical_model AS logicalModel,
+      sf.offering_id AS offeringId,
+      sf.provider,
+      sf.real_model AS realModel,
+      sf.error_message AS errorMessage,
+      sf.failure_count AS failureCount,
+      sf.first_failed_at AS firstFailedAt,
+      sf.last_failed_at AS lastFailedAt,
+      sf.resolved_at AS resolvedAt,
+      sf.resolved_by AS resolvedBy,
+      ui.email AS requesterEmail,
+      si.email AS supplierEmail
+    FROM settlement_failures sf
+    LEFT JOIN user_identities ui ON ui.user_id = sf.requester_user_id
+    LEFT JOIN user_identities si ON si.user_id = sf.supplier_user_id
+    ${whereClause}
+    ORDER BY sf.last_failed_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...values, params.limit, offset);
+
+  const totalRow = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM settlement_failures sf
+    ${whereClause}
+  `).get(...values) as { total: number };
+
+  return { data, total: Number(totalRow?.total ?? 0) };
+};
+
+export const retry_settlement_failure = (params: {
+  failureId: string;
+  actorUserId: string;
+}) => {
+  const failure = db.prepare(`
+    SELECT id, request_id AS requestId, settlement_payload AS settlementPayload
+    FROM settlement_failures
+    WHERE id = ?
+    LIMIT 1
+  `).get(params.failureId) as { id: string; requestId: string; settlementPayload: string } | undefined;
+
+  if (!failure) {
+    return { ok: false as const, code: "not_found", message: "settlement failure not found" };
+  }
+
+  const existingSettlement = db.prepare("SELECT 1 FROM settlement_records WHERE request_id = ? LIMIT 1").get(failure.requestId);
+  if (existingSettlement) {
+    db.prepare(`
+      UPDATE settlement_failures
+      SET resolved_at = ?, resolved_by = ?
+      WHERE id = ?
+    `).run(now_iso_(), params.actorUserId, failure.id);
+    return { ok: true as const, data: { status: "already_settled" } };
+  }
+
+  const payload = JSON.parse(failure.settlementPayload) as {
+    requestId: string;
+    requesterUserId: string;
+    supplierUserId: string;
+    logicalModel: string;
+    idempotencyKey?: string | null;
+    offeringId: string;
+    provider: string;
+    realModel: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    fixedPricePer1kInput: number;
+    fixedPricePer1kOutput: number;
+    responseBody?: unknown;
+  };
+
+  try {
+    record_chat_settlement(payload);
+    db.prepare(`
+      UPDATE settlement_failures
+      SET resolved_at = ?, resolved_by = ?
+      WHERE id = ?
+    `).run(now_iso_(), params.actorUserId, failure.id);
+    return { ok: true as const, data: { status: "retried" } };
+  } catch (error) {
+    record_settlement_failure({
+      ...payload,
+      errorMessage: error instanceof Error ? error.message : String(error)
+    });
+    return { ok: false as const, code: "retry_failed", message: error instanceof Error ? error.message : "retry failed" };
   }
 };
 

@@ -42,6 +42,8 @@ export type VerifyLoginCodeResult =
 export type PlatformRepository = {
   authenticate(apiKey: string): MaybePromise<AuthRecord>;
   authenticateSession(sessionToken: string): MaybePromise<SessionAuthRecord>;
+  revokeSession(sessionId: string): MaybePromise<boolean>;
+  checkHealth(): MaybePromise<boolean>;
   requestLoginCode(email: string): MaybePromise<{
     eligible: boolean;
     firstLogin: boolean;
@@ -180,6 +182,32 @@ export type PlatformRepository = {
     fixedPricePer1kOutput: number;
     responseBody?: unknown;
   }): MaybePromise<void>;
+  recordSettlementFailure(params: {
+    requestId: string;
+    requesterUserId: string;
+    supplierUserId: string;
+    logicalModel: string;
+    idempotencyKey?: string | null;
+    offeringId: string;
+    provider: string;
+    realModel: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    fixedPricePer1kInput: number;
+    fixedPricePer1kOutput: number;
+    responseBody?: unknown;
+    errorMessage: string;
+  }): MaybePromise<void>;
+  getAdminSettlementFailures(params: {
+    page: number;
+    limit: number;
+    status?: "open" | "resolved" | "all";
+  }): MaybePromise<{ data: any[]; total: number }>;
+  retrySettlementFailure(params: {
+    failureId: string;
+    actorUserId: string;
+  }): MaybePromise<{ ok: boolean; code?: string; message?: string; data?: any }>;
   createChatConversation(params: {
     id: string;
     ownerUserId: string;

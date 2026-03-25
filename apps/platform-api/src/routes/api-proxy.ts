@@ -179,6 +179,27 @@ async function handleProxyRequest(
         fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0,
       });
     } catch (settlementErr) {
+      metricsService.increment("settlementFailures");
+      try {
+        await platformService.recordSettlementFailure({
+          requestId,
+          requesterUserId: validated.userId,
+          supplierUserId: result.chosenOffering.ownerUserId,
+          logicalModel: model,
+          offeringId: result.chosenOffering.offeringId,
+          provider: result.chosenOffering.providerType,
+          realModel: result.chosenOffering.realModel,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
+          fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0,
+          responseBody: body,
+          errorMessage: settlementErr instanceof Error ? settlementErr.message : String(settlementErr)
+        });
+      } catch (failureRecordErr) {
+        console.error(`[api-proxy] settlement failure record error:`, failureRecordErr);
+      }
       console.error(`[api-proxy] settlement error:`, settlementErr);
     }
   } catch (err) {

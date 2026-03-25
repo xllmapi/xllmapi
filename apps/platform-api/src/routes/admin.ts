@@ -280,6 +280,52 @@ export async function handleAdminRoutes(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/v1/admin/settlement-failures") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const page = Number(url.searchParams.get("page") ?? 1);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
+    const statusParam = url.searchParams.get("status");
+    const status = statusParam === "resolved" || statusParam === "all" ? statusParam : "open";
+    const result = await platformService.getAdminSettlementFailures({ page, limit, status });
+    const response = json(200, { requestId, ...result });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  const settlementFailureRetryMatch = req.method === "POST"
+    ? url.pathname.match(/^\/v1\/admin\/settlement-failures\/([^/]+)\/retry$/)
+    : null;
+  if (settlementFailureRetryMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const failureId = decodeURIComponent(settlementFailureRetryMatch[1]);
+    const result = await platformService.retrySettlementFailure({ failureId, actorUserId: auth.userId });
+    const response = result.ok
+      ? json(200, { requestId, data: result.data })
+      : json(result.code === "not_found" ? 404 : 409, {
+          error: {
+            code: result.code,
+            message: result.message,
+            requestId
+          }
+        });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/v1/admin/audit-logs") {
     const auth = await authenticate_session_only_(req);
     if (!auth || auth.role !== "admin") {

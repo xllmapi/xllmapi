@@ -8,6 +8,7 @@ const messages: Record<string, Record<string, string>> = {
     "nav.admin": "管理",
     "nav.signIn": "登录",
     "nav.logout": "退出",
+    "common.actions": "操作",
 
     // HomePage
     "home.badge": "Open Beta",
@@ -64,6 +65,7 @@ const messages: Record<string, Record<string, string>> = {
     "admin.sidebar.notifications": "通知管理",
     "admin.sidebar.requests": "请求明细",
     "admin.sidebar.settlements": "结算记录",
+    "admin.sidebar.settlementFailures": "结算失败",
     "admin.sidebar.audit": "审计日志",
 
     // Overview
@@ -378,6 +380,20 @@ const messages: Record<string, Record<string, string>> = {
     "admin.settlements.supplierPayout": "供应付款",
     "admin.settlements.platformProfit": "平台利润",
     "admin.settlements.count": "结算笔数",
+    "admin.settlementFailures.title": "结算失败队列",
+    "admin.settlementFailures.lastFailedAt": "最近失败时间",
+    "admin.settlementFailures.requester": "请求方",
+    "admin.settlementFailures.supplier": "供应方",
+    "admin.settlementFailures.error": "错误",
+    "admin.settlementFailures.failures": "失败次数",
+    "admin.settlementFailures.retry": "重试",
+    "admin.settlementFailures.total": "失败记录",
+    "admin.settlementFailures.open": "待处理",
+    "admin.settlementFailures.resolved": "已恢复",
+    "admin.settlementFailures.page": "页码",
+    "admin.settlementFailures.filter.open": "待处理",
+    "admin.settlementFailures.filter.resolved": "已恢复",
+    "admin.settlementFailures.filter.all": "全部",
 
     "admin.audit.title": "审计日志",
     "admin.audit.time": "时间",
@@ -386,6 +402,10 @@ const messages: Record<string, Record<string, string>> = {
     "admin.audit.targetType": "目标类型",
     "admin.audit.targetId": "目标 ID",
     "admin.audit.details": "详情",
+    "admin.overview.openSettlementFailures": "待补偿结算",
+    "admin.overview.recentSettlementFailures": "最近结算失败",
+    "admin.overview.viewAllFailures": "查看全部",
+    "admin.overview.noOpenSettlementFailures": "当前没有待处理的结算失败",
 
     "admin.settings.title": "系统设置",
     "admin.settings.economy": "经济参数",
@@ -627,6 +647,7 @@ const messages: Record<string, Record<string, string>> = {
     "nav.admin": "Admin",
     "nav.signIn": "Sign In",
     "nav.logout": "Logout",
+    "common.actions": "Actions",
 
     // HomePage
     "home.badge": "Open Beta",
@@ -683,6 +704,7 @@ const messages: Record<string, Record<string, string>> = {
     "admin.sidebar.notifications": "Notifications",
     "admin.sidebar.requests": "Request Logs",
     "admin.sidebar.settlements": "Settlements",
+    "admin.sidebar.settlementFailures": "Failures",
     "admin.sidebar.audit": "Audit Logs",
 
     // Overview
@@ -997,6 +1019,20 @@ const messages: Record<string, Record<string, string>> = {
     "admin.settlements.supplierPayout": "Supplier Payout",
     "admin.settlements.platformProfit": "Platform Profit",
     "admin.settlements.count": "Settlement Count",
+    "admin.settlementFailures.title": "Settlement Failures",
+    "admin.settlementFailures.lastFailedAt": "Last Failed",
+    "admin.settlementFailures.requester": "Requester",
+    "admin.settlementFailures.supplier": "Supplier",
+    "admin.settlementFailures.error": "Error",
+    "admin.settlementFailures.failures": "Failures",
+    "admin.settlementFailures.retry": "Retry",
+    "admin.settlementFailures.total": "Failure Records",
+    "admin.settlementFailures.open": "Open",
+    "admin.settlementFailures.resolved": "Resolved",
+    "admin.settlementFailures.page": "Page",
+    "admin.settlementFailures.filter.open": "Open",
+    "admin.settlementFailures.filter.resolved": "Resolved",
+    "admin.settlementFailures.filter.all": "All",
 
     "admin.audit.title": "Audit Logs",
     "admin.audit.time": "Time",
@@ -1005,6 +1041,10 @@ const messages: Record<string, Record<string, string>> = {
     "admin.audit.targetType": "Target Type",
     "admin.audit.targetId": "Target ID",
     "admin.audit.details": "Details",
+    "admin.overview.openSettlementFailures": "Open Settlement Failures",
+    "admin.overview.recentSettlementFailures": "Recent Settlement Failures",
+    "admin.overview.viewAllFailures": "View All",
+    "admin.overview.noOpenSettlementFailures": "No open settlement failures right now",
 
     "admin.settings.title": "Settings",
     "admin.settings.economy": "Economy",

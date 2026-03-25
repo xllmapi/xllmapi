@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getAuthHeaders } from "@/lib/api";
 
 export interface UserOffering {
   offeringId: string;
@@ -52,13 +53,14 @@ function notifyListeners() {
 
 async function fetchUserModels(): Promise<{ models: string[]; offerings: UserOffering[] }> {
   const baseUrl = "";
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const token = localStorage.getItem("xllmapi_session_token") || sessionStorage.getItem("xllmapi_session_token");
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...getAuthHeaders()
+  };
 
   try {
     // Try user's usage list first
-    const poolRes = await fetch(`${baseUrl}/v1/me/connection-pool`, { headers });
+    const poolRes = await fetch(`${baseUrl}/v1/me/connection-pool`, { headers, credentials: "include" });
     if (poolRes.ok) {
       const poolData: PoolResponse = await poolRes.json();
       const allOfferings = poolData.data ?? [];
@@ -82,7 +84,7 @@ async function fetchUserModels(): Promise<{ models: string[]; offerings: UserOff
 
   // Fallback: all network models (for users without usage list)
   try {
-    const netRes = await fetch(`${baseUrl}/v1/network/models`, { headers });
+    const netRes = await fetch(`${baseUrl}/v1/network/models`, { headers, credentials: "include" });
     if (netRes.ok) {
       const netData: NetworkModelsResponse = await netRes.json();
       const models = (netData.data ?? []).map((m) => m.logicalModel);

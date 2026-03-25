@@ -22,22 +22,23 @@
  *   Logout
  *
  * Requires:
- *   XLLMAPI_DEEPSEEK_API_KEY  — real provider key
  *   Running: postgres, redis
+ *   Optional: XLLMAPI_DEEPSEEK_API_KEY for real-provider mode
  */
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { startMockOpenAIProvider } from "./lib/mock-openai-provider.mjs";
 
 // --------------- config ---------------
 const DEEPSEEK_API_KEY = process.env.XLLMAPI_DEEPSEEK_API_KEY || "";
-if (!DEEPSEEK_API_KEY) {
-  console.error("XLLMAPI_DEEPSEEK_API_KEY is required");
-  process.exit(1);
-}
+const USE_MOCK_PROVIDER = !DEEPSEEK_API_KEY;
 
 const PORT = Number(process.env.XLLMAPI_E2E_PORT || "3311");
 const BASE_URL = `http://127.0.0.1:${PORT}`;
+const MOCK_PROVIDER_PORT = Number(process.env.XLLMAPI_MOCK_PROVIDER_PORT || String(PORT + 200));
+let PROVIDER_BASE_URL = "https://api.deepseek.com";
+let PROVIDER_API_KEY = DEEPSEEK_API_KEY || "mock-provider-key";
 
 // --------------- helpers ---------------
 const randomId = () => `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -51,6 +52,23 @@ const assert = (condition, message) => {
 const pass = (label) => {
   passCount++;
   console.log(`  ✓ ${label}`);
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const eventually = async (fn, { retries = 30, delayMs = 250 } = {}) => {
+  let lastError;
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries - 1) {
+        await sleep(delayMs);
+      }
+    }
+  }
+  throw lastError;
 };
 
 const waitForHealth = async (url, tries = 120) => {
@@ -103,6 +121,15 @@ const createSessionByEmail = async (email) => {
 const hdr = (token) => ({ Authorization: `Bearer ${token}` });
 const jsonHdr = (token) => ({ ...hdr(token), "content-type": "application/json" });
 
+const setAdminConfig = async (adminToken, key, value) => {
+  const body = await expectOk("/v1/admin/config", {
+    method: "PUT",
+    headers: jsonHdr(adminToken),
+    body: JSON.stringify({ key, value }),
+  });
+  assert(body.data?.ok === true, `admin config ${key} update failed`);
+};
+
 // ======================================================================
 // TEST SECTIONS
 // ======================================================================
@@ -112,23 +139,33 @@ async function testHealthAndFrontendRoutes() {
 
   await waitForHealth(`${BASE_URL}/healthz`);
   pass("platform healthy");
+  await waitForHealth(`${BASE_URL}/readyz`);
+  pass("platform ready");
 
   // All 6 page routes should return 200 HTML
   for (const path of ["/", "/auth", "/chat", "/app", "/app/apis", "/app/consumption",
     "/app/invitations", "/app/settings", "/admin", "/admin/users",
-    "/admin/invitations", "/admin/reviews", "/admin/usage", "/docs"]) {
+    "/admin/invitations", "/admin/reviews", "/admin/usage", "/admin/settlement-failures", "/docs"]) {
     const resp = await fetch(`${BASE_URL}${path}`);
     assert(resp.ok, `route ${path} returned ${resp.status}`);
     const ct = resp.headers.get("content-type") || "";
     assert(ct.includes("text/html"), `route ${path} content-type: ${ct}`);
   }
-  pass("all 14 SPA routes return HTML");
+  pass("all admin and SPA routes return HTML");
 
   // Static assets (from Vite build) should be served
   const indexHtml = await (await fetch(`${BASE_URL}/`)).text();
   assert(indexHtml.includes("<div id=\"root\">"), "index.html contains root div");
   assert(indexHtml.includes("script"), "index.html contains script tag");
   pass("index.html has React root");
+
+  const versionResp = await expectOk("/version");
+  assert(versionResp.releaseId, "version endpoint returns releaseId");
+  pass("version endpoint works");
+
+  const missingAssetResp = await fetch(`${BASE_URL}/assets/does-not-exist.js`);
+  assert(missingAssetResp.status === 404, `missing asset status ${missingAssetResp.status}`);
+  pass("missing asset returns 404");
 }
 
 async function testPublicEndpoints() {
@@ -256,8 +293,8 @@ async function testSupplierFlow(supplierToken, logicalModel) {
     method: "POST", headers,
     body: JSON.stringify({
       providerType: "openai_compatible",
-      baseUrl: "https://api.deepseek.com",
-      apiKey: DEEPSEEK_API_KEY,
+      baseUrl: PROVIDER_BASE_URL,
+      apiKey: PROVIDER_API_KEY,
     }),
   });
   const credentialId = cred.data?.id;
@@ -419,15 +456,19 @@ async function testDashboard(supplierToken, consumerToken, logicalModel) {
   pass("GET /v1/me works");
 
   // Supplier: supply usage
-  const supplyUsage = await expectOk("/v1/usage/supply", { headers: hdr(supplierToken) });
-  const supplyItem = (supplyUsage.data?.items || []).find((i) => i.logicalModel === logicalModel);
-  assert(Number(supplyItem?.requestCount || 0) >= 1, "supplier usage tracked");
+  await eventually(async () => {
+    const supplyUsage = await expectOk("/v1/usage/supply", { headers: hdr(supplierToken) });
+    const supplyItem = (supplyUsage.data?.items || []).find((i) => i.logicalModel === logicalModel);
+    assert(Number(supplyItem?.requestCount || 0) >= 1, "supplier usage tracked");
+  });
   pass("supplier supply usage recorded");
 
   // Consumer: consumption usage
-  const consumeUsage = await expectOk("/v1/usage/consumption", { headers: hdr(consumerToken) });
-  const consumeItem = (consumeUsage.data?.items || []).find((i) => i.logicalModel === logicalModel);
-  assert(Number(consumeItem?.requestCount || 0) >= 1, "consumer usage tracked");
+  await eventually(async () => {
+    const consumeUsage = await expectOk("/v1/usage/consumption", { headers: hdr(consumerToken) });
+    const consumeItem = (consumeUsage.data?.items || []).find((i) => i.logicalModel === logicalModel);
+    assert(Number(consumeItem?.requestCount || 0) >= 1, "consumer usage tracked");
+  });
   pass("consumer consumption usage recorded");
 
   // Consumer: wallet
@@ -526,10 +567,33 @@ async function testAdminReviews(adminToken) {
   const usage = await expectOk("/v1/admin/usage", { headers: hdr(adminToken) });
   assert(usage.data !== undefined, "admin usage summary returned");
   pass("admin usage summary works");
+
+  const stats = await expectOk("/v1/admin/stats", { headers: hdr(adminToken) });
+  assert(stats.data !== undefined, "admin stats returned");
+  assert(typeof stats.data?.openSettlementFailures === "number", "admin stats expose open settlement failures");
+  pass("admin stats expose settlement failure count");
+}
+
+async function testAdminRequestSettlementVisibility(adminToken, logicalModel) {
+  console.log("\n[11] Admin: Request Settlement Visibility");
+
+  const requests = await expectOk(`/v1/admin/requests?model=${encodeURIComponent(logicalModel)}&limit=5`, {
+    headers: hdr(adminToken)
+  });
+  const matchingRequest = (requests.data || []).find((item) => item.logicalModel === logicalModel);
+  assert(matchingRequest, "admin requests include the test model");
+  assert(matchingRequest.chosenOfferingId, "admin request exposes chosen offering");
+  assert(matchingRequest.settlementStatus === "settled", "admin request settlement status is settled");
+  assert(Number(matchingRequest.consumerCost || 0) >= 0, "admin request exposes consumer cost");
+  pass("admin request settlement fields visible");
+
+  const settlements = await expectOk("/v1/admin/settlements?limit=10", { headers: hdr(adminToken) });
+  assert(Number(settlements.summary?.count || 0) >= 1, "admin settlements summary count updated");
+  pass("admin settlements summary works");
 }
 
 async function testPublicSupplierProfile(supplierToken, logicalModel) {
-  console.log("\n[11] Public Supplier Profile");
+  console.log("\n[12] Public Supplier Profile");
 
   const me = await expectOk("/v1/me", { headers: hdr(supplierToken) });
   const handle = me.data?.handle;
@@ -548,7 +612,7 @@ async function testPublicSupplierProfile(supplierToken, logicalModel) {
 }
 
 async function testLogout(consumerToken) {
-  console.log("\n[12] Logout");
+  console.log("\n[13] Logout");
 
   const resp = await requestJson("/v1/auth/logout", {
     method: "POST",
@@ -559,7 +623,7 @@ async function testLogout(consumerToken) {
 }
 
 async function testDocsFrontend() {
-  console.log("\n[13] Docs Page");
+  console.log("\n[14] Docs Page");
 
   const resp = await fetch(`${BASE_URL}/docs`);
   assert(resp.ok, "docs route returns 200");
@@ -572,6 +636,13 @@ async function testDocsFrontend() {
 // MAIN
 // ======================================================================
 const main = async () => {
+  const mockProvider = USE_MOCK_PROVIDER
+    ? await startMockOpenAIProvider({ port: MOCK_PROVIDER_PORT })
+    : null;
+  if (mockProvider) {
+    PROVIDER_BASE_URL = mockProvider.baseUrl;
+  }
+
   console.log("╔════════════════════════════════════════╗");
   console.log("║     xllmapi MVP E2E Test Suite         ║");
   console.log("╚════════════════════════════════════════╝");
@@ -609,11 +680,13 @@ const main = async () => {
     // [2] Public endpoints
     await testPublicEndpoints();
 
-    // [3] Auth flow
-    const adminSession = await testAuthFlow();
+  // [3] Auth flow
+  const adminSession = await testAuthFlow();
+  await setAdminConfig(adminSession.token, "invitation_enabled", "true");
+  await setAdminConfig(adminSession.token, "offering_auto_approve", "true");
 
-    // [4] Admin invitations + users
-    const supplierSession = await testAdminInvitationsAndUsers(
+  // [4] Admin invitations + users
+  const supplierSession = await testAdminInvitationsAndUsers(
       adminSession.token, supplierEmail, consumerEmail,
     );
 
@@ -635,13 +708,16 @@ const main = async () => {
     // [10] Admin reviews
     await testAdminReviews(adminSession.token);
 
-    // [11] Public supplier profile
+    // [11] Admin request settlement visibility
+    await testAdminRequestSettlementVisibility(adminSession.token, logicalModel);
+
+    // [12] Public supplier profile
     await testPublicSupplierProfile(supplierSession.token, logicalModel);
 
-    // [12] Logout
+    // [13] Logout
     await testLogout(consumerSession.token);
 
-    // [13] Docs
+    // [14] Docs
     await testDocsFrontend();
 
     console.log("\n╔════════════════════════════════════════╗");
@@ -650,6 +726,9 @@ const main = async () => {
   } finally {
     apiProc.kill("SIGTERM");
     await once(apiProc, "exit");
+    if (mockProvider) {
+      await mockProvider.close();
+    }
   }
 };
 

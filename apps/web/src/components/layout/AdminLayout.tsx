@@ -43,6 +43,7 @@ export function AdminLayout() {
         <SidebarLink to="/admin/usage" label={t("admin.sidebar.usage")} />
         <SidebarLink to="/admin/requests" label={t("admin.sidebar.requests")} />
         <SidebarLink to="/admin/settlements" label={t("admin.sidebar.settlements")} />
+        <SidebarLink to="/admin/settlement-failures" label={t("admin.sidebar.settlementFailures")} />
         <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
         <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
         <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
@@ -63,6 +64,7 @@ export function AdminLayout() {
             <SidebarLink to="/admin/usage" label={t("admin.sidebar.usage")} />
             <SidebarLink to="/admin/requests" label={t("admin.sidebar.requests")} />
             <SidebarLink to="/admin/settlements" label={t("admin.sidebar.settlements")} />
+            <SidebarLink to="/admin/settlement-failures" label={t("admin.sidebar.settlementFailures")} />
 
             <p className="text-text-tertiary text-[10px] font-semibold uppercase tracking-wider px-3 py-2 mt-4">
               {t("admin.sidebar.system")}

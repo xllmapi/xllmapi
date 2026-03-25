@@ -25,7 +25,7 @@ export function setApiKey(key: string | null) {
   }
 }
 
-function authHeaders(): Record<string, string> {
+export function getAuthHeaders(): Record<string, string> {
   const token = getSessionToken();
   const apiKey = getApiKey();
   if (token) return { Authorization: `Bearer ${token}` };
@@ -42,12 +42,12 @@ export async function apiJson<T = unknown>(
   init: RequestInit = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
-    ...authHeaders(),
+    ...getAuthHeaders(),
     ...(init.body ? { "content-type": "application/json" } : {}),
     ...(init.headers as Record<string, string> | undefined),
   };
 
-  const response = await fetch(path, { ...init, headers });
+  const response = await fetch(path, { ...init, headers, credentials: init.credentials ?? "include" });
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
 
@@ -65,9 +65,9 @@ export async function apiRaw(
   init: RequestInit = {},
 ): Promise<Response> {
   const headers: Record<string, string> = {
-    ...authHeaders(),
+    ...getAuthHeaders(),
     ...(init.headers as Record<string, string> | undefined),
   };
 
-  return fetch(path, { ...init, headers });
+  return fetch(path, { ...init, headers, credentials: init.credentials ?? "include" });
 }

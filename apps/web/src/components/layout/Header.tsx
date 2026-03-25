@@ -13,9 +13,9 @@ export function Header() {
   const menuRef = useRef<HTMLDivElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setMenuOpen(false);
-    logout();
+    await logout();
     navigate("/");
   };
 

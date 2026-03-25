@@ -7,6 +7,10 @@ const loadPlatformRepository = async (): Promise<PlatformRepository> => {
     return postgresPlatformRepository;
   }
 
+  if (config.isProduction) {
+    throw new Error("SQLite repository is not allowed in production");
+  }
+
   const { sqlitePlatformRepository } = await import("./sqlite-platform-repository.js");
   return sqlitePlatformRepository;
 };

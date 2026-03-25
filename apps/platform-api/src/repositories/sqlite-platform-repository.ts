@@ -10,6 +10,7 @@ import {
   find_cached_response,
   get_chat_conversation,
   find_user_by_session_token,
+  revoke_session,
   find_user_by_api_key,
   get_admin_usage_summary,
   get_debug_state,
@@ -37,6 +38,9 @@ import {
   list_pending_offerings,
   list_provider_credentials,
   record_chat_settlement,
+  record_settlement_failure,
+  list_admin_settlement_failures,
+  retry_settlement_failure,
   append_chat_message,
   delete_chat_conversation,
   update_chat_conversation_title,
@@ -64,6 +68,14 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   authenticateSession(sessionToken) {
     return find_user_by_session_token(sessionToken);
+  },
+
+  revokeSession(sessionId) {
+    return revoke_session(sessionId);
+  },
+
+  checkHealth() {
+    return true;
   },
 
   requestLoginCode(email) {
@@ -248,6 +260,10 @@ export const sqlitePlatformRepository: PlatformRepository = {
     record_chat_settlement(params);
   },
 
+  recordSettlementFailure(params) {
+    record_settlement_failure(params);
+  },
+
   createChatConversation(params) {
     return create_chat_conversation(params);
   },
@@ -297,7 +313,8 @@ export const sqlitePlatformRepository: PlatformRepository = {
   },
 
   getAdminStats() {
-    return { activeUsers: 0 };
+    const openFailures = list_admin_settlement_failures({ page: 1, limit: 1000, status: "open" }).total;
+    return { activeUsers: 0, openSettlementFailures: openFailures };
   },
 
   updateAdminUser() {
@@ -326,6 +343,14 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   getAdminSettlements() {
     return { data: [], summary: { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 } };
+  },
+
+  getAdminSettlementFailures(params) {
+    return list_admin_settlement_failures(params);
+  },
+
+  retrySettlementFailure(params) {
+    return retry_settlement_failure(params);
   },
 
   createNotification() {

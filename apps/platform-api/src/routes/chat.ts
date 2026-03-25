@@ -6,6 +6,7 @@ import type {
   CandidateOffering
 } from "@xllmapi/shared-types";
 import { stripThinking, trimToContextWindow } from "@xllmapi/core";
+import { cacheService } from "../cache.js";
 import { config } from "../config.js";
 import { executeStreamingRequest } from "../core/provider-executor.js";
 import {
@@ -293,6 +294,39 @@ export async function handleChatRoutes(
       return true;
     }
 
+    metricsService.increment("chatRequests");
+    const rateLimit = await cacheService.consumeRateLimit({
+      key: `chat:session:${auth.userId}`,
+      limit: config.chatRateLimitPerMinute,
+      windowMs: 60_000
+    });
+    if (!rateLimit.ok) {
+      metricsService.increment("rateLimitHits");
+      const response = json(429, {
+        error: {
+          message: "chat rate limit exceeded",
+          requestId,
+          resetAt: new Date(rateLimit.resetAt).toISOString()
+        }
+      });
+      res.writeHead(response.statusCode, {
+        ...response.headers,
+        "x-ratelimit-limit": String(config.chatRateLimitPerMinute),
+        "x-ratelimit-remaining": String(rateLimit.remaining),
+        "x-ratelimit-reset": String(rateLimit.resetAt),
+      });
+      res.end(response.payload);
+      return true;
+    }
+
+    const walletBalance = await platformService.getWallet(auth.userId);
+    if (walletBalance <= 0) {
+      const response = json(402, { error: { message: "insufficient token credit", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
     const candidateOfferings = await findOfferingsIncludingNodes(logicalModel, true, auth.userId);
     if (candidateOfferings.length === 0) {
       const response = json(404, { error: { message: `no offering available for ${logicalModel}`, requestId } });
@@ -386,6 +420,27 @@ export async function handleChatRoutes(
           fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0
         });
       } catch (err) {
+        metricsService.increment("settlementFailures");
+        try {
+          await platformService.recordSettlementFailure({
+            requestId,
+            requesterUserId: auth.userId,
+            supplierUserId: result.chosenOffering.ownerUserId,
+            logicalModel,
+            offeringId: result.chosenOffering.offeringId,
+            provider: result.chosenOffering.providerType,
+            realModel: result.chosenOffering.realModel,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            totalTokens: result.usage.totalTokens,
+            fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
+            fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0,
+            responseBody: mappedBody,
+            errorMessage: err instanceof Error ? err.message : String(err)
+          });
+        } catch (failureRecordErr) {
+          console.error(`[chat-stream] settlement failure record error:`, failureRecordErr);
+        }
         console.error(`[chat-stream] settlement FAILED:`, err);
       }
 

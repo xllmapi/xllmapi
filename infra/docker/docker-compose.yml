@@ -34,6 +34,8 @@ services:
       context: ../..
       dockerfile: infra/docker/platform-api.Dockerfile
       network: host
+      args:
+        NODE_IMAGE: ${XLLMAPI_NODE_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:24-bookworm-slim}
     environment:
       XLLMAPI_ENV: development
       XLLMAPI_SECRET_KEY: local-dev-secret
@@ -48,7 +50,7 @@ services:
     ports:
       - "3000:3000"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/readyz"]
       interval: 5s
       timeout: 3s
       retries: 10

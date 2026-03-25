@@ -1,0 +1,10 @@
+[Unit]
+Description=Run xllmapi settlement retry every 5 minutes
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+Unit=xllmapi-settlement-retry.service
+
+[Install]
+WantedBy=timers.target

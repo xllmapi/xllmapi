@@ -1,21 +1,39 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { startMockOpenAIProvider } from "./lib/mock-openai-provider.mjs";
 
 const DEEPSEEK_API_KEY = process.env.XLLMAPI_DEEPSEEK_API_KEY || "";
-if (!DEEPSEEK_API_KEY) {
-  console.error("XLLMAPI_DEEPSEEK_API_KEY is required");
-  process.exit(1);
-}
+const USE_MOCK_PROVIDER = !DEEPSEEK_API_KEY;
 
 const PORT = Number(process.env.XLLMAPI_E2E_PORT || "3310");
 const BASE_URL = `http://127.0.0.1:${PORT}`;
+const MOCK_PROVIDER_PORT = Number(process.env.XLLMAPI_MOCK_PROVIDER_PORT || String(PORT + 200));
+let PROVIDER_BASE_URL = "https://api.deepseek.com";
+let PROVIDER_API_KEY = DEEPSEEK_API_KEY || "mock-provider-key";
 
 const randomId = () => `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const assert = (condition, message) => {
   if (!condition) {
     throw new Error(message);
   }
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const eventually = async (fn, { retries = 30, delayMs = 250 } = {}) => {
+  let lastError;
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries - 1) {
+        await sleep(delayMs);
+      }
+    }
+  }
+  throw lastError;
 };
 
 const waitForHealth = async (url, tries = 120) => {
@@ -62,7 +80,26 @@ const createSessionByEmail = async (email) => {
 
 const authHeader = (sessionToken) => ({ Authorization: `Bearer ${sessionToken}` });
 
+const updateAdminConfig = async (adminToken, key, value) => {
+  const body = await requestJson("/v1/admin/config", {
+    method: "PUT",
+    headers: {
+      ...authHeader(adminToken),
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ key, value })
+  });
+  assert(body.data?.ok === true, `admin config update failed for ${key}`);
+};
+
 const main = async () => {
+  const mockProvider = USE_MOCK_PROVIDER
+    ? await startMockOpenAIProvider({ port: MOCK_PROVIDER_PORT })
+    : null;
+  if (mockProvider) {
+    PROVIDER_BASE_URL = mockProvider.baseUrl;
+  }
+
   const apiProc = spawn("node", ["apps/platform-api/dist/main.js"], {
     cwd: process.cwd(),
     env: {
@@ -96,6 +133,8 @@ const main = async () => {
       ...authHeader(admin.token),
       "content-type": "application/json"
     };
+    await updateAdminConfig(admin.token, "invitation_enabled", "true");
+    await updateAdminConfig(admin.token, "offering_auto_approve", "true");
 
     const runId = randomId();
     const supplierEmail = `supplier_${runId}@xllmapi.local`;
@@ -126,8 +165,8 @@ const main = async () => {
       headers: supplierHeaders,
       body: JSON.stringify({
         providerType: "openai_compatible",
-        baseUrl: "https://api.deepseek.com",
-        apiKey: DEEPSEEK_API_KEY
+        baseUrl: PROVIDER_BASE_URL,
+        apiKey: PROVIDER_API_KEY
       })
     });
     const credentialId = createdCredential.data.id;
@@ -174,13 +213,15 @@ const main = async () => {
     assert(chatResponse.choices?.[0]?.message?.content?.includes("FLOW_OK"), "consumer chat result mismatch");
     console.log("e2e: consumer chat ok");
 
-    const supplierUsage = await requestJson("/v1/usage/supply", { headers: authHeader(supplier.token) });
-    const consumptionUsage = await requestJson("/v1/usage/consumption", { headers: authHeader(consumer.token) });
+    await eventually(async () => {
+      const supplierUsage = await requestJson("/v1/usage/supply", { headers: authHeader(supplier.token) });
+      const consumptionUsage = await requestJson("/v1/usage/consumption", { headers: authHeader(consumer.token) });
 
-    const supplierModelUsage = (supplierUsage.data?.items || []).find((item) => item.logicalModel === logicalModel);
-    const consumerModelUsage = (consumptionUsage.data?.items || []).find((item) => item.logicalModel === logicalModel);
-    assert(Number(supplierModelUsage?.requestCount || 0) >= 1, "supplier usage not updated");
-    assert(Number(consumerModelUsage?.requestCount || 0) >= 1, "consumer usage not updated");
+      const supplierModelUsage = (supplierUsage.data?.items || []).find((item) => item.logicalModel === logicalModel);
+      const consumerModelUsage = (consumptionUsage.data?.items || []).find((item) => item.logicalModel === logicalModel);
+      assert(Number(supplierModelUsage?.requestCount || 0) >= 1, "supplier usage not updated");
+      assert(Number(consumerModelUsage?.requestCount || 0) >= 1, "consumer usage not updated");
+    });
 
     const publicOfferings = await requestJson(`/v1/public/users/${supplierMe.data.handle}/offerings`);
     assert((publicOfferings.data || []).some((item) => item.logicalModel === logicalModel), "public supplier page missing offering");
@@ -189,6 +230,9 @@ const main = async () => {
   } finally {
     apiProc.kill("SIGTERM");
     await once(apiProc, "exit");
+    if (mockProvider) {
+      await mockProvider.close();
+    }
   }
 };
 

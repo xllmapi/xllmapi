@@ -1,16 +1,60 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import { cacheService } from "../cache.js";
 import { config } from "../config.js";
 import {
   json,
   read_json,
   authenticate_session_only_,
   unauthorized_,
+  get_request_ip_,
+  build_session_cookie_,
+  clear_session_cookie_,
   type AuthRequestCodeBody,
   type AuthVerifyCodeBody,
   type AuthLoginBody
 } from "../lib/http.js";
+import { metricsService } from "../metrics.js";
 import { platformService } from "../services/platform-service.js";
+
+const normalizeEmailForLimit = (email: string) => email.trim().toLowerCase();
+
+async function enforceAuthRateLimit(params: {
+  req: IncomingMessage;
+  res: ServerResponse;
+  requestId: string;
+  route: string;
+  identity: string;
+  limit: number;
+}): Promise<boolean> {
+  const rateLimit = await cacheService.consumeRateLimit({
+    key: `auth:${params.route}:${params.identity}:${get_request_ip_(params.req)}`,
+    limit: params.limit,
+    windowMs: 60_000
+  });
+
+  if (rateLimit.ok) {
+    return true;
+  }
+
+  metricsService.increment("authRateLimitHits");
+  const response = json(429, {
+    error: {
+      code: "auth_rate_limited",
+      message: "too many authentication attempts",
+      requestId: params.requestId,
+      resetAt: new Date(rateLimit.resetAt).toISOString()
+    }
+  });
+  params.res.writeHead(response.statusCode, {
+    ...response.headers,
+    "x-ratelimit-limit": String(params.limit),
+    "x-ratelimit-remaining": String(rateLimit.remaining),
+    "x-ratelimit-reset": String(rateLimit.resetAt)
+  });
+  params.res.end(response.payload);
+  return false;
+}
 
 export async function handleAuthRoutes(
   req: IncomingMessage,
@@ -25,6 +69,17 @@ export async function handleAuthRoutes(
       const response = json(400, { error: { message: "email is required", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
+      return true;
+    }
+
+    if (!(await enforceAuthRateLimit({
+      req,
+      res,
+      requestId,
+      route: "request-code",
+      identity: normalizeEmailForLimit(body.email),
+      limit: config.authRequestCodeLimitPerMinute
+    }))) {
       return true;
     }
 
@@ -60,6 +115,17 @@ export async function handleAuthRoutes(
       const response = json(400, { error: { message: "email and code are required", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
+      return true;
+    }
+
+    if (!(await enforceAuthRateLimit({
+      req,
+      res,
+      requestId,
+      route: "verify-code",
+      identity: normalizeEmailForLimit(body.email),
+      limit: config.authVerifyCodeLimitPerMinute
+    }))) {
       return true;
     }
 
@@ -103,7 +169,10 @@ export async function handleAuthRoutes(
       firstLoginCompleted: result.firstLoginCompleted,
       initialApiKey: result.initialApiKey ?? null
     });
-    res.writeHead(response.statusCode, response.headers);
+    res.writeHead(response.statusCode, {
+      ...response.headers,
+      "set-cookie": build_session_cookie_(result.token)
+    });
     res.end(response.payload);
     return true;
   }
@@ -114,6 +183,17 @@ export async function handleAuthRoutes(
       const response = json(400, { error: { message: "email and password are required", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
+      return true;
+    }
+
+    if (!(await enforceAuthRateLimit({
+      req,
+      res,
+      requestId,
+      route: "login",
+      identity: normalizeEmailForLimit(body.email),
+      limit: config.authPasswordLoginLimitPerMinute
+    }))) {
       return true;
     }
 
@@ -137,7 +217,10 @@ export async function handleAuthRoutes(
       user: result.user,
       redirectTo: result.user.role === "admin" ? "/admin" : "/app"
     });
-    res.writeHead(response.statusCode, response.headers);
+    res.writeHead(response.statusCode, {
+      ...response.headers,
+      "set-cookie": build_session_cookie_(result.token)
+    });
     res.end(response.payload);
     return true;
   }
@@ -158,8 +241,20 @@ export async function handleAuthRoutes(
   }
 
   if (req.method === "POST" && url.pathname === "/v1/auth/logout") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth) {
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    await platformService.revokeSession(auth.sessionId);
     const response = json(200, { ok: true, requestId });
-    res.writeHead(response.statusCode, response.headers);
+    res.writeHead(response.statusCode, {
+      ...response.headers,
+      "set-cookie": clear_session_cookie_()
+    });
     res.end(response.payload);
     return true;
   }

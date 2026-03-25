@@ -14,7 +14,7 @@ import type {
 
 import { config } from "../config.js";
 import { DEFAULT_AVATAR_URL, DEFAULT_INITIAL_TOKEN_CREDIT, DEV_ADMIN_API_KEY, DEV_USER_API_KEY } from "../constants.js";
-import { encryptSecret, hashApiKey, hashPassword } from "../crypto-utils.js";
+import { encryptSecret, hashApiKey, hashPassword, passwordNeedsRehash, verifyPassword } from "../crypto-utils.js";
 import type { PlatformRepository } from "./platform-repository.js";
 
 type ProviderCredentialRow = {
@@ -111,6 +111,23 @@ const providerKeyFingerprint = (params: {
 
 const generateCode = () => String(randomInt(100000, 1000000));
 
+type SettlementParams = {
+  requestId: string;
+  requesterUserId: string;
+  supplierUserId: string;
+  logicalModel: string;
+  idempotencyKey?: string | null;
+  offeringId: string;
+  provider: string;
+  realModel: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  fixedPricePer1kInput: number;
+  fixedPricePer1kOutput: number;
+  responseBody?: unknown;
+};
+
 const getMeProfile = async (userId: string): Promise<MeProfile | null> => {
   const currentPool = getPool();
   const result = await currentPool.query<{
@@ -179,6 +196,25 @@ const ensureDevSeed = (() => {
           user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
           password_hash TEXT NOT NULL,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await currentPool.query(`
+        CREATE TABLE IF NOT EXISTS settlement_failures (
+          id TEXT PRIMARY KEY,
+          request_id TEXT NOT NULL UNIQUE,
+          requester_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          supplier_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+          logical_model TEXT NOT NULL,
+          offering_id TEXT NOT NULL REFERENCES offerings(id) ON DELETE RESTRICT,
+          provider TEXT NOT NULL,
+          real_model TEXT NOT NULL,
+          error_message TEXT NOT NULL,
+          settlement_payload JSONB NOT NULL,
+          failure_count INTEGER NOT NULL DEFAULT 1,
+          first_failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          resolved_at TIMESTAMPTZ,
+          resolved_by TEXT REFERENCES users(id) ON DELETE SET NULL
         )
       `);
       await currentPool.query(`
@@ -330,6 +366,13 @@ const ensureDevSeed = (() => {
   };
 })();
 
+export async function closePool(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
+}
+
 export const postgresPlatformRepository: PlatformRepository = {
   async authenticate(apiKey) {
     await ensureDevSeed();
@@ -381,6 +424,22 @@ export const postgresPlatformRepository: PlatformRepository = {
     `, [hashApiKey(sessionToken)]);
 
     return result.rows[0] ?? null;
+  },
+
+  async revokeSession(sessionId) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(
+      "DELETE FROM auth_sessions WHERE id = $1",
+      [sessionId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  },
+
+  async checkHealth() {
+    const currentPool = getPool();
+    await currentPool.query("SELECT 1");
+    return true;
   },
 
   async requestLoginCode(email) {
@@ -532,11 +591,17 @@ export const postgresPlatformRepository: PlatformRepository = {
     `, [normalizedEmail]);
 
     const row = result.rows[0];
-    if (!row || row.passwordHash !== hashPassword(password)) {
+    if (!row || !verifyPassword(password, row.passwordHash)) {
       return { ok: false as const, code: "invalid_credentials", message: "invalid email or password" };
     }
 
     const sessionToken = `sess_${randomUUID().replaceAll("-", "")}`;
+    if (passwordNeedsRehash(row.passwordHash)) {
+      await currentPool.query(
+        "UPDATE user_passwords SET password_hash = $1, updated_at = NOW() WHERE user_id = $2",
+        [hashPassword(password), row.userId]
+      );
+    }
     await currentPool.query(`
       INSERT INTO auth_sessions (id, user_id, token_hash, expires_at, created_at)
       VALUES ($1, $2, $3, NOW() + INTERVAL '30 days', NOW())
@@ -572,7 +637,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       "SELECT password_hash AS \"passwordHash\" FROM user_passwords WHERE user_id = $1 LIMIT 1",
       [params.userId]
     );
-    if (!current.rows[0] || current.rows[0].passwordHash !== hashPassword(params.currentPassword)) {
+    if (!current.rows[0] || !verifyPassword(params.currentPassword, current.rows[0].passwordHash)) {
       return { ok: false as const, code: "invalid_password", message: "current password is invalid" };
     }
     await currentPool.query(`
@@ -658,11 +723,13 @@ export const postgresPlatformRepository: PlatformRepository = {
   async createInvitation(params) {
     await ensureDevSeed();
     const currentPool = getPool();
-    // Check if invitations are enabled
-    const enabledResult = await currentPool.query<{ value: string }>(
-      "SELECT value FROM platform_config WHERE key = 'invitation_enabled' LIMIT 1"
-    );
-    if (enabledResult.rows[0]?.value === 'false') {
+    // Check if invitations are enabled (admin bypasses this check)
+    const [enabledResult, inviterResult] = await Promise.all([
+      currentPool.query<{ value: string }>("SELECT value FROM platform_config WHERE key = 'invitation_enabled' LIMIT 1"),
+      currentPool.query<{ role: string }>("SELECT role FROM users WHERE id = $1 LIMIT 1", [params.inviterUserId])
+    ]);
+    const isAdmin = inviterResult.rows[0]?.role === "admin";
+    if (!isAdmin && enabledResult.rows[0]?.value === 'false') {
       return { ok: false as const, code: "invitations_disabled", message: "invitations are currently disabled" };
     }
     const normalizedEmail = normalizeEmail(params.invitedEmail);
@@ -1739,6 +1806,71 @@ export const postgresPlatformRepository: PlatformRepository = {
     }
   },
 
+  async recordSettlementFailure(params) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO settlement_failures (
+        id,
+        request_id,
+        requester_user_id,
+        supplier_user_id,
+        logical_model,
+        offering_id,
+        provider,
+        real_model,
+        error_message,
+        settlement_payload,
+        failure_count,
+        first_failed_at,
+        last_failed_at,
+        resolved_at,
+        resolved_by
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, 1, NOW(), NOW(), NULL, NULL
+      )
+      ON CONFLICT (request_id) DO UPDATE SET
+        requester_user_id = EXCLUDED.requester_user_id,
+        supplier_user_id = EXCLUDED.supplier_user_id,
+        logical_model = EXCLUDED.logical_model,
+        offering_id = EXCLUDED.offering_id,
+        provider = EXCLUDED.provider,
+        real_model = EXCLUDED.real_model,
+        error_message = EXCLUDED.error_message,
+        settlement_payload = EXCLUDED.settlement_payload,
+        failure_count = settlement_failures.failure_count + 1,
+        last_failed_at = NOW(),
+        resolved_at = NULL,
+        resolved_by = NULL
+    `, [
+      `settlefail_${randomUUID().replaceAll("-", "")}`,
+      params.requestId,
+      params.requesterUserId,
+      params.supplierUserId,
+      params.logicalModel,
+      params.offeringId,
+      params.provider,
+      params.realModel,
+      params.errorMessage,
+      JSON.stringify({
+        requestId: params.requestId,
+        requesterUserId: params.requesterUserId,
+        supplierUserId: params.supplierUserId,
+        logicalModel: params.logicalModel,
+        idempotencyKey: params.idempotencyKey ?? null,
+        offeringId: params.offeringId,
+        provider: params.provider,
+        realModel: params.realModel,
+        inputTokens: params.inputTokens,
+        outputTokens: params.outputTokens,
+        totalTokens: params.totalTokens,
+        fixedPricePer1kInput: params.fixedPricePer1kInput,
+        fixedPricePer1kOutput: params.fixedPricePer1kOutput,
+        responseBody: params.responseBody ?? null
+      })
+    ]);
+  },
+
   async createChatConversation(params) {
     await ensureDevSeed();
     const currentPool = getPool();
@@ -2046,11 +2178,22 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     const result = await currentPool.query(`
-      SELECT COUNT(DISTINCT requester_user_id) AS "activeUsers"
-      FROM api_requests
-      WHERE created_at > NOW() - INTERVAL '7 days'
+      SELECT
+        (
+          SELECT COUNT(DISTINCT requester_user_id)
+          FROM api_requests
+          WHERE created_at > NOW() - INTERVAL '7 days'
+        ) AS "activeUsers",
+        (
+          SELECT COUNT(*)
+          FROM settlement_failures
+          WHERE resolved_at IS NULL
+        ) AS "openSettlementFailures"
     `);
-    return { activeUsers: Number(result.rows[0]?.activeUsers ?? 0) };
+    return {
+      activeUsers: Number(result.rows[0]?.activeUsers ?? 0),
+      openSettlementFailures: Number(result.rows[0]?.openSettlementFailures ?? 0)
+    };
   },
 
   async updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number }) {
@@ -2165,10 +2308,19 @@ export const postgresPlatformRepository: PlatformRepository = {
           ar.output_tokens AS "outputTokens",
           ar.total_tokens AS "totalTokens",
           ar.status,
-          ar.chosen_offering_id AS "chosenOfferingId"
+          ar.chosen_offering_id AS "chosenOfferingId",
+          sr.consumer_cost AS "consumerCost",
+          sr.supplier_reward AS "supplierReward",
+          sr.platform_margin AS "platformMargin",
+          sr.created_at AS "settledAt",
+          CASE
+            WHEN sr.request_id IS NULL THEN 'missing'
+            ELSE 'settled'
+          END AS "settlementStatus"
         FROM api_requests ar
         LEFT JOIN users u ON u.id = ar.requester_user_id
         LEFT JOIN user_identities i ON i.user_id = ar.requester_user_id
+        LEFT JOIN settlement_records sr ON sr.request_id = ar.id
         ${whereClause}
         ORDER BY ar.created_at DESC
         LIMIT $${idx} OFFSET $${idx + 1}
@@ -2234,6 +2386,108 @@ export const postgresPlatformRepository: PlatformRepository = {
         count: Number(summaryResult.rows[0]?.count ?? 0)
       }
     };
+  },
+
+  async getAdminSettlementFailures(params: { page: number; limit: number; status?: "open" | "resolved" | "all" }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (params.status === "open" || !params.status) {
+      conditions.push("sf.resolved_at IS NULL");
+    } else if (params.status === "resolved") {
+      conditions.push("sf.resolved_at IS NOT NULL");
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const offset = (params.page - 1) * params.limit;
+
+    const [dataResult, countResult] = await Promise.all([
+      currentPool.query(`
+        SELECT
+          sf.id,
+          sf.request_id AS "requestId",
+          sf.requester_user_id AS "requesterUserId",
+          sf.supplier_user_id AS "supplierUserId",
+          sf.logical_model AS "logicalModel",
+          sf.offering_id AS "offeringId",
+          sf.provider,
+          sf.real_model AS "realModel",
+          sf.error_message AS "errorMessage",
+          sf.failure_count AS "failureCount",
+          sf.first_failed_at AS "firstFailedAt",
+          sf.last_failed_at AS "lastFailedAt",
+          sf.resolved_at AS "resolvedAt",
+          sf.resolved_by AS "resolvedBy",
+          ui.email AS "requesterEmail",
+          si.email AS "supplierEmail"
+        FROM settlement_failures sf
+        LEFT JOIN user_identities ui ON ui.user_id = sf.requester_user_id
+        LEFT JOIN user_identities si ON si.user_id = sf.supplier_user_id
+        ${whereClause}
+        ORDER BY sf.last_failed_at DESC
+        LIMIT $${idx} OFFSET $${idx + 1}
+      `, [...values, params.limit, offset]),
+      currentPool.query(`
+        SELECT COUNT(*)::text AS total
+        FROM settlement_failures sf
+        ${whereClause}
+      `, values)
+    ]);
+
+    return { data: dataResult.rows, total: Number(countResult.rows[0]?.total ?? 0) };
+  },
+
+  async retrySettlementFailure(params: { failureId: string; actorUserId: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query<{
+      id: string;
+      requestId: string;
+      settlementPayload: SettlementParams;
+    }>(`
+      SELECT
+        id,
+        request_id AS "requestId",
+        settlement_payload AS "settlementPayload"
+      FROM settlement_failures
+      WHERE id = $1
+      LIMIT 1
+    `, [params.failureId]);
+
+    const failure = result.rows[0];
+    if (!failure) {
+      return { ok: false as const, code: "not_found", message: "settlement failure not found" };
+    }
+
+    const settled = await currentPool.query(
+      "SELECT 1 FROM settlement_records WHERE request_id = $1 LIMIT 1",
+      [failure.requestId]
+    );
+    if (settled.rowCount && settled.rowCount > 0) {
+      await currentPool.query(
+        "UPDATE settlement_failures SET resolved_at = NOW(), resolved_by = $2 WHERE id = $1",
+        [failure.id, params.actorUserId]
+      );
+      return { ok: true as const, data: { status: "already_settled" } };
+    }
+
+    try {
+      await this.recordChatSettlement(failure.settlementPayload);
+      await currentPool.query(
+        "UPDATE settlement_failures SET resolved_at = NOW(), resolved_by = $2 WHERE id = $1",
+        [failure.id, params.actorUserId]
+      );
+      return { ok: true as const, data: { status: "retried" } };
+    } catch (error) {
+      await this.recordSettlementFailure({
+        ...failure.settlementPayload,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      });
+      return { ok: false as const, code: "retry_failed", message: error instanceof Error ? error.message : "retry failed" };
+    }
   },
 
   async createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }) {

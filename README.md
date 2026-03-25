@@ -94,11 +94,22 @@ XLLMAPI_SECRET_KEY=<secret for AES-256-GCM key encryption>
 XLLMAPI_DB_DRIVER=postgres
 DATABASE_URL=postgresql://user:pass@host:5432/xllmapi
 REDIS_URL=redis://host:6379
+XLLMAPI_CORS_ORIGINS=https://app.example.com
 
 # Optional
 PORT=3000
+XLLMAPI_RELEASE_ID=<git sha or deploy timestamp>
 XLLMAPI_DEEPSEEK_API_KEY=<for platform-owned offerings>
+XLLMAPI_NODE_IMAGE=<optional docker base image override for compose builds>
 ```
+
+Production notes:
+
+- `sqlite` is development-only and should not be used in production.
+- `GET /healthz` is liveness, `GET /readyz` is readiness.
+- `GET /version` reports the current release identifier.
+- Browser sign-in now uses an HttpOnly session cookie by default; Bearer session tokens and API keys remain supported for programmatic clients.
+- frontend assets can be built under `/_releases/<release-id>/...` to support safer rolling upgrades.
 
 ## API
 
@@ -116,6 +127,7 @@ Key endpoints:
 - `GET /v1/me` — User profile
 - `GET /v1/wallet` — Token balance
 - `GET /v1/usage/consumption` — Usage stats
+- `GET /v1/admin/settlement-failures` — Admin settlement failure queue
 
 ## Testing
 
@@ -123,10 +135,29 @@ Key endpoints:
 # Unit tests
 npm run test:platform-api
 
-# E2E (requires postgres + redis + XLLMAPI_DEEPSEEK_API_KEY)
+# E2E (runs against a real provider when XLLMAPI_DEEPSEEK_API_KEY is set,
+# otherwise falls back to a local mock OpenAI-compatible provider)
 npm run test:e2e:mvp
+npm run test:e2e:sharing
+
+# Ops: retry persisted settlement failures
+npm run ops:retry:settlement-failures
+
+# Release smoke (expects a running instance on http://127.0.0.1:3000 by default)
+npm run smoke:release
 ```
+
+CI release gates:
+
+- TypeScript build + platform build
+- Docker image build
+- platform-api test suite
+- `test:e2e:mvp` on every PR / push
+- `test:e2e:sharing` on `main`
+- production container smoke against `/healthz`, `/readyz`, and `/version`
 
 ## Docs
 
-See [.agents/docs/v0.0.1/](/.agents/docs/v0.0.1/) for detailed architecture and deployment documentation.
+- [Deployment guide](/home/speak/workspace/github/xllmapi/xllmapi/docs/deploy.md)
+- [Production readiness plan](/home/speak/workspace/github/xllmapi/xllmapi/docs/production-readiness-and-zero-downtime-plan.md)
+- [Observability assets](/home/speak/workspace/github/xllmapi/xllmapi/infra/observability/README.md)

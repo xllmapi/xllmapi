@@ -303,6 +303,17 @@ class NodeConnectionManager {
     }
   }
 
+  shutdown(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    for (const [nodeId] of this.connections) {
+      this.disconnectNode(nodeId);
+    }
+    this.wss.close();
+  }
+
   isNodeOnline(nodeId: string): boolean {
     return this.connections.has(nodeId);
   }
