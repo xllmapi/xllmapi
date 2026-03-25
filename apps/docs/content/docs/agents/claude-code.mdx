@@ -1,0 +1,50 @@
+---
+title: Claude Code 配置
+description: 在 Claude Code 中配置 xllmapi 作为 API 后端
+---
+
+## 配置方式
+
+Claude Code 通过环境变量配置自定义 API 端点。在 Claude Code 的 `settings.json` 中添加环境变量配置。
+
+## settings.json 配置
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.xllmapi.com/anthropic/v1",
+    "ANTHROPIC_AUTH_TOKEN": "xk-your-api-key",
+    "ANTHROPIC_MODEL": "MiniMax-Text-01"
+  }
+}
+```
+
+## 环境变量说明
+
+| 变量 | 说明 | 示例 |
+|---|---|---|
+| `ANTHROPIC_BASE_URL` | API 端点地址 | `https://api.xllmapi.com/anthropic/v1` |
+| `ANTHROPIC_AUTH_TOKEN` | xllmapi API Key | `xk-your-api-key` |
+| `ANTHROPIC_MODEL` | 使用的模型名称 | `MiniMax-Text-01` |
+
+## 使用 OpenAI 格式的模型
+
+如果你想使用 OpenAI 格式的模型（如 DeepSeek），可以配置：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.xllmapi.com/anthropic/v1",
+    "ANTHROPIC_AUTH_TOKEN": "xk-your-api-key",
+    "ANTHROPIC_MODEL": "deepseek-chat"
+  }
+}
+```
+
+<Callout type="info">
+Claude Code 使用 Anthropic 格式通信。如果模型本身是 OpenAI 格式，平台会自动进行格式转换。
+</Callout>
+
+## 验证配置
+
+配置完成后，启动 Claude Code，它应该会使用 xllmapi 的端点进行模型调用。你可以在 xllmapi 控制台的用量统计中确认请求是否成功。

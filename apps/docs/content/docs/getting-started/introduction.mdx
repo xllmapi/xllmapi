@@ -1,0 +1,43 @@
+---
+title: 平台介绍
+description: 了解 xllmapi 是什么，核心概念以及工作原理
+---
+
+## 什么是 xllmapi
+
+xllmapi 是一个 **LLM 共享网络**。你只需要分享一个模型的 API Key，就可以使用网络中所有其他人分享的模型。
+
+项目完全开源：[github.com/xllmapi/xllmapi](https://github.com/xllmapi/xllmapi)
+
+## 核心概念
+
+### 模型网络
+
+模型网络是 xllmapi 的核心。每个参与者既是**消费者**（使用模型），也可以是**供应者**（提供模型）。网络中的模型来自不同的供应商（DeepSeek、MiniMax、Kimi 等），通过统一的 API 接口提供服务。
+
+### 平台节点
+
+平台节点是由平台托管 API Key 的供应方式。你将自己的 API Key 加密存储在平台上，平台代为转发请求。适合不想自建服务器的用户。
+
+### 分布式节点
+
+分布式节点是由用户自行部署的供应方式。通过 WebSocket 连接到平台，你的 API Key 始终留在本地，平台无法看到你的密钥。适合注重数据隐私的用户。
+
+## 工作原理
+
+```
+用户 A 分享 DeepSeek → 网络
+用户 B 分享 MiniMax  → 网络
+用户 C 分享 Kimi     → 网络
+
+用户 A 可以使用 DeepSeek + MiniMax + Kimi
+用户 B 可以使用 DeepSeek + MiniMax + Kimi
+用户 C 可以使用 DeepSeek + MiniMax + Kimi
+```
+
+1. **注册账号**，获取 API Key
+2. **连接模型**，浏览模型网络中可用的模型并加入
+3. **使用 API**，通过标准的 OpenAI / Anthropic 格式调用任意已连接的模型
+4. **（可选）供应模型**，分享你的 API Key 赚取 xtokens
+
+所有调用通过平台统一路由，自动选择最优的供应节点。Token 消耗使用平台内部货币 **xtokens** 结算，供应者获得 85% 的收入，平台收取 15% 作为服务费。

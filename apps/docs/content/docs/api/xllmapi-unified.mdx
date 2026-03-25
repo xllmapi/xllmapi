@@ -1,0 +1,74 @@
+---
+title: xllmapi 统一格式
+description: 使用 xllmapi 统一端点自动适配 OpenAI 和 Anthropic 格式
+---
+
+## 概述
+
+xllmapi 统一格式提供一个 Base URL，自动检测并适配 OpenAI 和 Anthropic 两种请求格式。无需切换端点，一个地址搞定所有模型。
+
+## 接口地址
+
+```
+POST https://api.xllmapi.com/xllmapi/v1/chat/completions  # 自动检测为 OpenAI 格式
+POST https://api.xllmapi.com/xllmapi/v1/messages           # 自动检测为 Anthropic 格式
+```
+
+## 自动检测
+
+平台根据请求路径和内容自动判断格式：
+
+- 请求 `/xllmapi/v1/chat/completions` → 按 OpenAI 格式处理
+- 请求 `/xllmapi/v1/messages` → 按 Anthropic 格式处理
+
+## 显式指定格式
+
+你也可以通过 `x-api-format` header 显式指定格式：
+
+```http
+x-api-format: openai
+```
+
+```http
+x-api-format: anthropic
+```
+
+## 使用场景
+
+统一格式特别适合以下场景：
+
+- 在同一个应用中同时使用 OpenAI 和 Anthropic 格式的模型
+- 不想为不同格式维护不同的 Base URL
+- 客户端只支持配置一个 API 地址
+
+## 示例
+
+### OpenAI 格式（通过统一端点）
+
+```bash
+curl https://api.xllmapi.com/xllmapi/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer xk-your-api-key" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [
+      {"role": "user", "content": "你好"}
+    ]
+  }'
+```
+
+### Anthropic 格式（通过统一端点）
+
+```bash
+curl https://api.xllmapi.com/xllmapi/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: xk-your-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "MiniMax-Text-01",
+    "max_tokens": 1024,
+    "messages": [
+      {"role": "user", "content": "你好"}
+    ]
+  }'
+```

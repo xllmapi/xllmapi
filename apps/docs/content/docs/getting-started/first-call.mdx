@@ -1,0 +1,83 @@
+---
+title: 第一次调用
+description: 使用 xllmapi API 发起你的第一次模型调用
+---
+
+## 前提条件
+
+- 已注册账号并获取 API Key（`xk-xxx` 格式）
+- 已在模型网络中连接了至少一个模型
+
+## curl 示例
+
+### 非流式调用
+
+```bash
+curl https://api.xllmapi.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer xk-your-api-key" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [
+      {"role": "user", "content": "你好，请做一下自我介绍"}
+    ]
+  }'
+```
+
+### 流式调用
+
+```bash
+curl https://api.xllmapi.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer xk-your-api-key" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [
+      {"role": "user", "content": "你好"}
+    ],
+    "stream": true
+  }'
+```
+
+流式调用返回 SSE（Server-Sent Events）格式，逐 token 输出。
+
+## Python 示例
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="xk-your-api-key",
+    base_url="https://api.xllmapi.com/v1"
+)
+
+# 非流式
+response = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[
+        {"role": "user", "content": "你好，请做一下自我介绍"}
+    ]
+)
+print(response.choices[0].message.content)
+
+# 流式
+stream = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[
+        {"role": "user", "content": "你好"}
+    ],
+    stream=True
+)
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")
+```
+
+## 查看使用情况
+
+调用完成后，可以在控制台的「用量统计」页面查看：
+
+- 请求次数
+- Token 消耗（输入 / 输出）
+- xtokens 花费
+- 调用历史记录
