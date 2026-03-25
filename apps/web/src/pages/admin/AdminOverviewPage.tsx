@@ -37,7 +37,6 @@ interface SettlementFailurePreview {
   errorMessage: string;
   lastFailedAt: string;
 }
-
 export function AdminOverviewPage() {
   const { t } = useLocale();
   const [loading, setLoading] = useState(true);
