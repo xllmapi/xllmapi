@@ -42,20 +42,16 @@ const requestJson = async (baseUrl: string, path: string, init?: RequestInit) =>
 };
 
 const createAdminCookie = async (baseUrl: string) => {
-  const requestCode = await requestJson(baseUrl, "/v1/auth/request-code", {
+  const login = await requestJson(baseUrl, "/v1/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: "admin_demo@xllmapi.local" })
+    body: JSON.stringify({
+      email: "admin_demo@xllmapi.local",
+      password: "admin123456"
+    })
   });
-  assert.equal(requestCode.status, 200);
-
-  const verified = await requestJson(baseUrl, "/v1/auth/verify-code", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: "admin_demo@xllmapi.local", code: requestCode.body.devCode })
-  });
-  assert.equal(verified.status, 200);
-const setCookie = verified.headers.get("set-cookie");
+  assert.equal(login.status, 200);
+  const setCookie = login.headers.get("set-cookie");
   assert.ok(setCookie);
   return String(setCookie).split(";")[0];
 };

@@ -19,3 +19,4 @@ build/
 *.pid
 .superpowers/
 apps/web/releases/
+.platform.xllmapi.json

@@ -615,7 +615,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       firstLogin: !identity.rows[0],
       challengeId,
       email: normalizedEmail,
-      code: config.isProduction ? undefined : code
+      code
     };
   },
 

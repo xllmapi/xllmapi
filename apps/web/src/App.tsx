@@ -2,6 +2,7 @@ import { Component, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthContext, useAuthProvider } from "@/hooks/useAuth";
 import { Header } from "@/components/layout/Header";
+import { SiteBanner } from "@/components/layout/SiteBanner";
 import { ProtectedRoute } from "@/components/shared/ProtectedRoute";
 import { AdminRoute } from "@/components/shared/AdminRoute";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -69,6 +70,7 @@ const AdminRequestsPage = lazy(() => import("@/pages/admin/AdminRequestsPage").t
 const AdminSettlementsPage = lazy(() => import("@/pages/admin/AdminSettlementsPage").then((m) => ({ default: m.AdminSettlementsPage })));
 const AdminSettlementFailuresPage = lazy(() => import("@/pages/admin/AdminSettlementFailuresPage").then((m) => ({ default: m.AdminSettlementFailuresPage })));
 const AdminAuditPage = lazy(() => import("@/pages/admin/AdminAuditPage").then((m) => ({ default: m.AdminAuditPage })));
+const AdminBannerPage = lazy(() => import("@/pages/admin/AdminBannerPage").then((m) => ({ default: m.AdminBannerPage })));
 const ModelsManagePage = lazy(() => import("@/pages/app/ModelsManagePage").then((m) => ({ default: m.ModelsManagePage })));
 const NodeDetailPage = lazy(() => import("@/pages/NodeDetailPage").then((m) => ({ default: m.NodeDetailPage })));
 const MarketDetailPage = lazy(() => import("@/pages/MarketDetailPage").then((m) => ({ default: m.MarketDetailPage })));
@@ -87,6 +89,7 @@ export function App() {
       <ChatProvider>
       <BrowserRouter>
         <Header />
+        <SiteBanner />
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -147,6 +150,7 @@ export function App() {
             <Route path="settlements" element={<AdminSettlementsPage />} />
             <Route path="settlement-failures" element={<AdminSettlementFailuresPage />} />
             <Route path="audit" element={<AdminAuditPage />} />
+            <Route path="banner" element={<AdminBannerPage />} />
           </Route>
         </Routes>
         </Suspense>

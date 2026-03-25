@@ -86,6 +86,18 @@ export async function handleAuthRoutes(
     }
 
     const result = await platformService.requestLoginCode(body.email);
+    if (!result.eligible) {
+      const response = json(403, {
+        error: {
+          code: "invite_required",
+          message: "this email has not been invited",
+          requestId
+        }
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
     const response = json(200, {
       ok: true,
       requestId,
@@ -120,8 +132,22 @@ export async function handleAuthRoutes(
       return true;
     }
 
-    await platformService.requestPasswordReset(body.email);
-    const response = json(200, { ok: true, requestId });
+    const result = await platformService.requestPasswordReset(body.email);
+    if (!result.accepted) {
+      const response = json(404, {
+        error: { code: "not_found", message: "email not registered", requestId }
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const maskedEmail = body.email.replace(/^(.).+(@.*)$/, "$1***$2");
+    const response = json(200, {
+      ok: true,
+      requestId,
+      maskedEmail,
+      cooldownSeconds: config.emailSendCooldownSeconds
+    });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;

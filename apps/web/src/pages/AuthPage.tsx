@@ -15,7 +15,7 @@ export function AuthPage() {
   const [searchParams] = useSearchParams();
   const { t } = useLocale();
 
-  const [mode, setMode] = useState<Mode>("code");
+  const [mode, setMode] = useState<Mode>("password");
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -23,6 +23,7 @@ export function AuthPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [devCode, setDevCode] = useState("");
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
     const hintedEmail = searchParams.get("email");
@@ -30,6 +31,12 @@ export function AuthPage() {
       setEmail(hintedEmail);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   if (isLoggedIn) {
     navigate("/app", { replace: true });
@@ -40,11 +47,12 @@ export function AuthPage() {
     setError("");
     setLoading(true);
     try {
-      const result = await apiJson<{ devCode?: string }>(
+      const result = await apiJson<{ devCode?: string; cooldownSeconds?: number }>(
         "/v1/auth/request-code",
         { method: "POST", body: JSON.stringify({ email }) },
       );
       if (result.devCode) setDevCode(result.devCode);
+      setCooldown(result.cooldownSeconds ?? 60);
       setStep("verify");
     } catch (err: unknown) {
       setError(extractError(err));
@@ -67,12 +75,18 @@ export function AuthPage() {
         token: string;
         initialApiKey?: string;
         redirectTo?: string;
+        firstLoginCompleted?: boolean;
       }>("/v1/auth/verify-code", {
         method: "POST",
         body: JSON.stringify({ email, code }),
       });
       await login({ apiKey: result.initialApiKey ?? null });
-      navigate(result.redirectTo ?? "/app", { replace: true });
+      // First-time user → prompt to set password
+      if (result.firstLoginCompleted) {
+        navigate("/app/security?setup=1", { replace: true });
+      } else {
+        navigate(result.redirectTo ?? "/app", { replace: true });
+      }
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
@@ -106,16 +120,16 @@ export function AuthPage() {
         {/* Mode tabs */}
         <div className="flex mb-6 rounded-[var(--radius-input)] border border-line overflow-hidden">
           <button
-            onClick={() => { setMode("code"); setStep("email"); setError(""); }}
-            className={`flex-1 py-2.5 text-sm cursor-pointer transition-colors ${mode === "code" ? "bg-accent text-[#081018] font-medium" : "bg-transparent text-text-secondary hover:text-text-primary"}`}
-          >
-            {t("auth.tab.code")}
-          </button>
-          <button
             onClick={() => { setMode("password"); setError(""); }}
             className={`flex-1 py-2.5 text-sm cursor-pointer transition-colors ${mode === "password" ? "bg-accent text-[#081018] font-medium" : "bg-transparent text-text-secondary hover:text-text-primary"}`}
           >
             {t("auth.tab.password")}
+          </button>
+          <button
+            onClick={() => { setMode("code"); setStep("email"); setError(""); }}
+            className={`flex-1 py-2.5 text-sm cursor-pointer transition-colors ${mode === "code" ? "bg-accent text-[#081018] font-medium" : "bg-transparent text-text-secondary hover:text-text-primary"}`}
+          >
+            {t("auth.tab.code")}
           </button>
         </div>
 
@@ -168,9 +182,14 @@ export function AuthPage() {
             <button
               type="button"
               onClick={() => void requestCode()}
-              className="text-text-secondary text-sm hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors"
+              disabled={cooldown > 0}
+              className={`text-sm bg-transparent border-none transition-colors ${
+                cooldown > 0
+                  ? "text-text-tertiary cursor-not-allowed"
+                  : "text-text-secondary hover:text-text-primary cursor-pointer"
+              }`}
             >
-              {t("auth.resendCode")}
+              {cooldown > 0 ? `${t("auth.resendCode")} (${cooldown}s)` : t("auth.resendCode")}
             </button>
           </form>
         )}

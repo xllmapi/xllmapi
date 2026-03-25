@@ -1,0 +1,26 @@
+{
+  "env": "development",
+  "secretKey": "",
+  "database": {
+    "driver": "sqlite",
+    "url": "",
+    "sqlitePath": ""
+  },
+  "redis": {
+    "url": ""
+  },
+  "cors": {
+    "origins": ["http://localhost:3000"]
+  },
+  "releaseId": "dev",
+  "appBaseUrl": "http://localhost:3000",
+  "email": {
+    "provider": "mock",
+    "from": "noreply@example.com",
+    "replyTo": "",
+    "resendApiKey": ""
+  },
+  "session": {
+    "cookieName": "xllmapi_session"
+  }
+}

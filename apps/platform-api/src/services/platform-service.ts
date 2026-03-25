@@ -443,7 +443,7 @@ export const platformService = {
   async requestPasswordReset(email: string) {
     const result = await platformRepository.requestPasswordReset(email);
     if (!result.accepted || !result.token || !result.challengeId) {
-      return { ok: true as const };
+      return { accepted: false as const, email: result.email };
     }
 
     await send_transactional_email_({
@@ -467,7 +467,7 @@ export const platformService = {
       metricsService.increment("securityEvents");
     }
 
-    return { ok: true as const };
+    return { accepted: true as const, email: result.email };
   },
 
   async resetPassword(params: { token: string; newPassword: string }) {
