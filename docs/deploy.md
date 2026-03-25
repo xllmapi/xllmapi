@@ -201,41 +201,6 @@ Unit=xllmapi-settlement-retry.service
 [Install]
 WantedBy=timers.target
 ```
-
-仓库内已提供模板文件：
-
-- `infra/systemd/xllmapi-platform.service`
-- `infra/systemd/xllmapi-settlement-retry.service`
-- `infra/systemd/xllmapi-settlement-retry.timer`
-
-如需定时执行，可使用 systemd timer：
-
-```ini
-# /etc/systemd/system/xllmapi-settlement-retry.service
-[Unit]
-Description=xllmapi settlement retry
-After=network.target
-
-[Service]
-Type=oneshot
-User=xllmapi
-WorkingDirectory=/opt/xllmapi
-Environment=XLLMAPI_SETTLEMENT_RETRY_ACTOR_ID=admin_demo
-ExecStart=/usr/bin/npm run ops:retry:settlement-failures
-
-# /etc/systemd/system/xllmapi-settlement-retry.timer
-[Unit]
-Description=Run xllmapi settlement retry every 5 minutes
-
-[Timer]
-OnBootSec=2m
-OnUnitActiveSec=5m
-Unit=xllmapi-settlement-retry.service
-
-[Install]
-WantedBy=timers.target
-```
-
 仓库内已提供模板文件：
 
 - `infra/systemd/xllmapi-platform.service`
