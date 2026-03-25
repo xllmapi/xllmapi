@@ -592,6 +592,24 @@ async function testAdminRequestSettlementVisibility(adminToken, logicalModel) {
   pass("admin settlements summary works");
 }
 
+async function testAdminRequestSettlementVisibility(adminToken, logicalModel) {
+  console.log("\n[11] Admin: Request Settlement Visibility");
+
+  const requests = await expectOk(`/v1/admin/requests?model=${encodeURIComponent(logicalModel)}&limit=5`, {
+    headers: hdr(adminToken)
+  });
+  const matchingRequest = (requests.data || []).find((item) => item.logicalModel === logicalModel);
+  assert(matchingRequest, "admin requests include the test model");
+  assert(matchingRequest.chosenOfferingId, "admin request exposes chosen offering");
+  assert(matchingRequest.settlementStatus === "settled", "admin request settlement status is settled");
+  assert(Number(matchingRequest.consumerCost || 0) >= 0, "admin request exposes consumer cost");
+  pass("admin request settlement fields visible");
+
+  const settlements = await expectOk("/v1/admin/settlements?limit=10", { headers: hdr(adminToken) });
+  assert(Number(settlements.summary?.count || 0) >= 1, "admin settlements summary count updated");
+  pass("admin settlements summary works");
+}
+
 async function testPublicSupplierProfile(supplierToken, logicalModel) {
   console.log("\n[12] Public Supplier Profile");
 

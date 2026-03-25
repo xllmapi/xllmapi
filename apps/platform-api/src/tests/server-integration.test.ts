@@ -53,6 +53,7 @@ const createAdminCookie = async (baseUrl: string) => {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email: "admin_demo@xllmapi.local", code: requestCode.body.devCode })
+    body: JSON.stringify({ email: "admin_demo@xllmapi.local", code: requestCode.body.devCode })
   });
   assert.equal(verified.status, 200);
   const setCookie = verified.headers.get("set-cookie");
@@ -160,6 +161,7 @@ test("logout revokes the current session and ready/version endpoints stay availa
     const logout = await requestJson(server.baseUrl, "/v1/auth/logout", {
       method: "POST",
       headers: { cookie: cookieHeader }
+      headers: { cookie: cookieHeader }
     });
     assert.equal(logout.status, 200);
     assert.equal(logout.body?.ok, true);
@@ -167,6 +169,7 @@ test("logout revokes the current session and ready/version endpoints stay availa
 
     const afterLogout = await requestJson(server.baseUrl, "/v1/auth/session", {
       headers: { cookie: cookieHeader }
+    });
     });
     assert.equal(afterLogout.status, 401);
   } finally {
@@ -191,7 +194,6 @@ test("missing assets return 404 JSON while SPA routes still return HTML", async 
     await server.stop();
   }
 });
-
 test("legacy password hashes still login and are rehashed on success", async () => {
   const server = await startServer();
 
