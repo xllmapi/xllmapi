@@ -62,9 +62,9 @@ export function Header() {
           <Link to="/mnetwork" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.models")}
           </Link>
-          <a href={__XLLMAPI_DOCS_URL__} className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+          <Link to="/docs" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.docs")}
-          </a>
+          </Link>
           <Link to="/chat" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.chat")}
           </Link>
