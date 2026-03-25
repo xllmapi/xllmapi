@@ -55,7 +55,7 @@ const createAdminCookie = async (baseUrl: string) => {
     body: JSON.stringify({ email: "admin_demo@xllmapi.local", code: requestCode.body.devCode })
   });
   assert.equal(verified.status, 200);
-  const setCookie = verified.headers.get("set-cookie");
+const setCookie = verified.headers.get("set-cookie");
   assert.ok(setCookie);
   return String(setCookie).split(";")[0];
 };

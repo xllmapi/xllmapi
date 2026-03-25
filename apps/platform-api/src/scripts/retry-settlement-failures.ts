@@ -7,7 +7,6 @@ const EXIT_SUCCESS = 0;
 const EXIT_INVALID_CONFIG = 2;
 const EXIT_RETRY_FAILURES = 3;
 const EXIT_OPEN_REMAINING = 4;
-
 const parsePositiveInt = (raw: string | undefined, fallback: number) => {
   if (!raw || raw.trim().length === 0) {
     return fallback;
@@ -58,7 +57,6 @@ const main = async () => {
     process.exitCode = failOnOpenRemaining && initial.total > 0 ? EXIT_OPEN_REMAINING : EXIT_SUCCESS;
     return;
   }
-
   let attempted = 0;
   let retried = 0;
   let alreadySettled = 0;
