@@ -15,4 +15,5 @@ export interface InvitationStats {
   used: number;
   remaining: number | null;
   unlimited: boolean;
+  enabled: boolean;
 }

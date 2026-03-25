@@ -81,6 +81,7 @@ export type PlatformRepository = {
     isAdmin: boolean;
   }): MaybePromise<any>;
   listAdminInvitations(): MaybePromise<any[]>;
+  getAdminAllInvitations(limit?: number): MaybePromise<any[]>;
   listAdminUsers(): MaybePromise<any[]>;
   createAdminInvitation(params: {
     inviterUserId: string;
@@ -227,6 +228,19 @@ export type PlatformRepository = {
   getAdminConfig(): MaybePromise<any[]>;
   updateAdminConfig(key: string, value: string, updatedBy: string): MaybePromise<any>;
   getAdminAuditLogs(limit: number): MaybePromise<any[]>;
+  getAdminRequests(params: {
+    model?: string;
+    provider?: string;
+    user?: string;
+    days?: number;
+    page: number;
+    limit: number;
+  }): MaybePromise<{ data: any[]; total: number }>;
+  getAdminSettlements(params: {
+    days?: number;
+    page: number;
+    limit: number;
+  }): MaybePromise<{ data: any[]; summary: { totalConsumerCost: number; totalSupplierReward: number; totalPlatformMargin: number; count: number } }>;
   createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }): MaybePromise<any>;
   listAdminNotifications(): MaybePromise<any[]>;
   listUserNotifications(userId: string): MaybePromise<any[]>;

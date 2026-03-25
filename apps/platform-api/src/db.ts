@@ -914,7 +914,8 @@ export const get_invitation_stats = (userId: string): InvitationStats => {
       limit: null,
       used: used.count,
       remaining: null,
-      unlimited: true
+      unlimited: true,
+      enabled: true
     };
   }
 
@@ -922,7 +923,8 @@ export const get_invitation_stats = (userId: string): InvitationStats => {
     limit: 10,
     used: used.count,
     remaining: Math.max(0, 10 - used.count),
-    unlimited: false
+    unlimited: false,
+    enabled: true
   };
 };
 

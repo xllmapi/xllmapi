@@ -118,6 +118,8 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return list_admin_invitations();
   },
 
+  getAdminAllInvitations() { return []; },
+
   listAdminUsers() {
     return list_admin_users();
   },
@@ -316,6 +318,14 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   getAdminAuditLogs() {
     return [];
+  },
+
+  getAdminRequests() {
+    return { data: [], total: 0 };
+  },
+
+  getAdminSettlements() {
+    return { data: [], summary: { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 } };
   },
 
   createNotification() {

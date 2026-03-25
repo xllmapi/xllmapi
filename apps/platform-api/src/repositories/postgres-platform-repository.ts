@@ -640,20 +640,31 @@ export const postgresPlatformRepository: PlatformRepository = {
   async getInvitationStats(userId) {
     await ensureDevSeed();
     const currentPool = getPool();
-    const [userResult, usedResult] = await Promise.all([
+    const [userResult, usedResult, quotaResult, enabledResult] = await Promise.all([
       currentPool.query<{ role: string }>("SELECT role FROM users WHERE id = $1 LIMIT 1", [userId]),
-      currentPool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM invitations WHERE inviter_user_id = $1", [userId])
+      currentPool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM invitations WHERE inviter_user_id = $1 AND status != 'revoked'", [userId]),
+      currentPool.query<{ value: string }>("SELECT value FROM platform_config WHERE key = 'default_invitation_quota' LIMIT 1"),
+      currentPool.query<{ value: string }>("SELECT value FROM platform_config WHERE key = 'invitation_enabled' LIMIT 1")
     ]);
     const used = Number(usedResult.rows[0]?.count ?? 0);
+    const enabled = enabledResult.rows[0]?.value !== "false";
     if (userResult.rows[0]?.role === "admin") {
-      return { limit: null, used, remaining: null, unlimited: true } satisfies InvitationStats;
+      return { limit: null, used, remaining: null, unlimited: true, enabled } satisfies InvitationStats;
     }
-    return { limit: 10, used, remaining: Math.max(0, 10 - used), unlimited: false } satisfies InvitationStats;
+    const limit = Number(quotaResult.rows[0]?.value ?? 10);
+    return { limit, used, remaining: Math.max(0, limit - used), unlimited: false, enabled } satisfies InvitationStats;
   },
 
   async createInvitation(params) {
     await ensureDevSeed();
     const currentPool = getPool();
+    // Check if invitations are enabled
+    const enabledResult = await currentPool.query<{ value: string }>(
+      "SELECT value FROM platform_config WHERE key = 'invitation_enabled' LIMIT 1"
+    );
+    if (enabledResult.rows[0]?.value === 'false') {
+      return { ok: false as const, code: "invitations_disabled", message: "invitations are currently disabled" };
+    }
     const normalizedEmail = normalizeEmail(params.invitedEmail);
     const identity = await currentPool.query("SELECT user_id FROM user_identities WHERE email = $1 LIMIT 1", [normalizedEmail]);
     if (identity.rows[0]) {
@@ -721,6 +732,23 @@ export const postgresPlatformRepository: PlatformRepository = {
       JOIN users u ON u.id = i.inviter_user_id
       ORDER BY i.created_at DESC
     `);
+    return result.rows;
+  },
+
+  async getAdminAllInvitations(limit = 100) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        i.id, i.invited_email AS "invitedEmail", i.status, i.note,
+        i.created_at::text AS "createdAt", i.expires_at::text AS "expiresAt",
+        u.display_name AS "inviterName", ui.email AS "inviterEmail"
+      FROM invitations i
+      JOIN users u ON u.id = i.inviter_user_id
+      LEFT JOIN user_identities ui ON ui.user_id = i.inviter_user_id
+      ORDER BY i.created_at DESC
+      LIMIT $1
+    `, [limit]);
     return result.rows;
   },
 
@@ -2072,7 +2100,8 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     await currentPool.query(
-      "UPDATE platform_config SET value = $2, updated_at = NOW(), updated_by = $3 WHERE key = $1",
+      `INSERT INTO platform_config (key, value, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW(), updated_by = $3`,
       [key, value, updatedBy]
     );
     return { ok: true };
@@ -2091,6 +2120,120 @@ export const postgresPlatformRepository: PlatformRepository = {
       LIMIT $1
     `, [limit]);
     return result.rows;
+  },
+
+  async getAdminRequests(params: { model?: string; provider?: string; user?: string; days?: number; page: number; limit: number }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (params.days && params.days > 0) {
+      conditions.push(`ar.created_at > NOW() - INTERVAL '${Number(params.days)} days'`);
+    }
+    if (params.model) {
+      conditions.push(`ar.logical_model ILIKE $${idx}`);
+      values.push(`%${params.model}%`);
+      idx++;
+    }
+    if (params.provider) {
+      conditions.push(`ar.provider = $${idx}`);
+      values.push(params.provider);
+      idx++;
+    }
+    if (params.user) {
+      conditions.push(`i.email ILIKE $${idx}`);
+      values.push(`%${params.user}%`);
+      idx++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const offset = (params.page - 1) * params.limit;
+
+    const [dataResult, countResult] = await Promise.all([
+      currentPool.query(`
+        SELECT
+          ar.id,
+          ar.created_at AS "createdAt",
+          u.display_name AS "userName",
+          i.email AS "userEmail",
+          ar.logical_model AS "logicalModel",
+          ar.provider,
+          ar.real_model AS "realModel",
+          ar.input_tokens AS "inputTokens",
+          ar.output_tokens AS "outputTokens",
+          ar.total_tokens AS "totalTokens",
+          ar.status,
+          ar.chosen_offering_id AS "chosenOfferingId"
+        FROM api_requests ar
+        LEFT JOIN users u ON u.id = ar.requester_user_id
+        LEFT JOIN user_identities i ON i.user_id = ar.requester_user_id
+        ${whereClause}
+        ORDER BY ar.created_at DESC
+        LIMIT $${idx} OFFSET $${idx + 1}
+      `, [...values, params.limit, offset]),
+      currentPool.query(`
+        SELECT COUNT(*)::text AS total
+        FROM api_requests ar
+        LEFT JOIN user_identities i ON i.user_id = ar.requester_user_id
+        ${whereClause}
+      `, values)
+    ]);
+
+    return { data: dataResult.rows, total: Number(countResult.rows[0]?.total ?? 0) };
+  },
+
+  async getAdminSettlements(params: { days?: number; page: number; limit: number }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const whereClause = params.days && params.days > 0
+      ? `WHERE sr.created_at > NOW() - INTERVAL '${Number(params.days)} days'`
+      : "";
+    const offset = (params.page - 1) * params.limit;
+
+    const [dataResult, summaryResult] = await Promise.all([
+      currentPool.query(`
+        SELECT
+          sr.id,
+          sr.request_id AS "requestId",
+          cu.display_name AS "consumerName",
+          ci.email AS "consumerEmail",
+          su.display_name AS "supplierName",
+          si.email AS "supplierEmail",
+          sr.consumer_cost AS "consumerCost",
+          sr.supplier_reward AS "supplierReward",
+          sr.platform_margin AS "platformMargin",
+          sr.created_at AS "createdAt"
+        FROM settlement_records sr
+        LEFT JOIN users cu ON cu.id = sr.consumer_user_id
+        LEFT JOIN user_identities ci ON ci.user_id = sr.consumer_user_id
+        LEFT JOIN users su ON su.id = sr.supplier_user_id
+        LEFT JOIN user_identities si ON si.user_id = sr.supplier_user_id
+        ${whereClause}
+        ORDER BY sr.created_at DESC
+        LIMIT $1 OFFSET $2
+      `, [params.limit, offset]),
+      currentPool.query(`
+        SELECT
+          COALESCE(SUM(sr.consumer_cost), 0)::text AS "totalConsumerCost",
+          COALESCE(SUM(sr.supplier_reward), 0)::text AS "totalSupplierReward",
+          COALESCE(SUM(sr.platform_margin), 0)::text AS "totalPlatformMargin",
+          COUNT(*)::text AS "count"
+        FROM settlement_records sr
+        ${whereClause}
+      `)
+    ]);
+
+    return {
+      data: dataResult.rows,
+      summary: {
+        totalConsumerCost: Number(summaryResult.rows[0]?.totalConsumerCost ?? 0),
+        totalSupplierReward: Number(summaryResult.rows[0]?.totalSupplierReward ?? 0),
+        totalPlatformMargin: Number(summaryResult.rows[0]?.totalPlatformMargin ?? 0),
+        count: Number(summaryResult.rows[0]?.count ?? 0)
+      }
+    };
   },
 
   async createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }) {

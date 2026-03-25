@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
+import { apiJson } from "@/lib/api";
 
 function SidebarLink({
   to,
@@ -31,6 +33,15 @@ function SidebarLink({
 
 export function DashboardLayout() {
   const { t } = useLocale();
+  const [invitationsEnabled, setInvitationsEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    apiJson<{ data: { enabled: boolean; unlimited: boolean } }>("/v1/me/invitation-stats")
+      .then((res) => {
+        setInvitationsEnabled(res.data.unlimited ? true : res.data.enabled);
+      })
+      .catch(() => setInvitationsEnabled(true));
+  }, []);
 
   return (
     <div className="mx-auto max-w-[var(--spacing-content)] px-6 pt-[72px] pb-12 min-h-screen">
@@ -39,7 +50,7 @@ export function DashboardLayout() {
         <SidebarLink to="/app" label={t("sidebar.overview")} end />
         <SidebarLink to="/app/models/connected" label={t("sidebar.connected")} />
         <SidebarLink to="/app/models/provided" label={t("sidebar.provided")} />
-        <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />
+        {invitationsEnabled && <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />}
         <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
         <SidebarLink to="/app/security" label={t("sidebar.security")} />
         <SidebarLink to="/app/api-keys" label={t("sidebar.apiKeys")} />
@@ -66,7 +77,7 @@ export function DashboardLayout() {
             <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
             <SidebarLink to="/app/security" label={t("sidebar.security")} />
             <SidebarLink to="/app/api-keys" label={t("sidebar.apiKeys")} />
-            <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />
+            {invitationsEnabled && <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />}
           </nav>
         </aside>
         <main className="flex-1 min-w-0">

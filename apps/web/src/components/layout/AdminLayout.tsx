@@ -41,9 +41,12 @@ export function AdminLayout() {
         <SidebarLink to="/admin/invitations" label={t("admin.sidebar.invitations")} />
         <SidebarLink to="/admin/reviews" label={t("admin.sidebar.reviews")} />
         <SidebarLink to="/admin/usage" label={t("admin.sidebar.usage")} />
+        <SidebarLink to="/admin/requests" label={t("admin.sidebar.requests")} />
+        <SidebarLink to="/admin/settlements" label={t("admin.sidebar.settlements")} />
         <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
         <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
         <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
+        <SidebarLink to="/admin/audit" label={t("admin.sidebar.audit")} />
       </nav>
 
       <div className="flex gap-6">
@@ -58,6 +61,8 @@ export function AdminLayout() {
             <SidebarLink to="/admin/invitations" label={t("admin.sidebar.invitations")} />
             <SidebarLink to="/admin/reviews" label={t("admin.sidebar.reviews")} />
             <SidebarLink to="/admin/usage" label={t("admin.sidebar.usage")} />
+            <SidebarLink to="/admin/requests" label={t("admin.sidebar.requests")} />
+            <SidebarLink to="/admin/settlements" label={t("admin.sidebar.settlements")} />
 
             <p className="text-text-tertiary text-[10px] font-semibold uppercase tracking-wider px-3 py-2 mt-4">
               {t("admin.sidebar.system")}
@@ -65,6 +70,7 @@ export function AdminLayout() {
             <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
             <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
             <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
+            <SidebarLink to="/admin/audit" label={t("admin.sidebar.audit")} />
           </nav>
         </aside>
         <main className="flex-1 min-w-0">

@@ -16,6 +16,7 @@ const CONFIG_GROUPS: Record<string, string[]> = {
     "supplier_reward_rate",
     "chat_rate_limit_per_minute",
     "default_invitation_quota",
+    "invitation_enabled",
   ],
   pricing: [
     "min_input_price",

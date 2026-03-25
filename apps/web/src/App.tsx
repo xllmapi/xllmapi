@@ -60,6 +60,9 @@ const UsagePage = lazy(() => import("@/pages/admin/UsagePage").then((m) => ({ de
 const SettingsPage = lazy(() => import("@/pages/admin/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const ProvidersPage = lazy(() => import("@/pages/admin/ProvidersPage").then((m) => ({ default: m.ProvidersPage })));
 const AdminNotificationsPage = lazy(() => import("@/pages/admin/AdminNotificationsPage").then((m) => ({ default: m.AdminNotificationsPage })));
+const AdminRequestsPage = lazy(() => import("@/pages/admin/AdminRequestsPage").then((m) => ({ default: m.AdminRequestsPage })));
+const AdminSettlementsPage = lazy(() => import("@/pages/admin/AdminSettlementsPage").then((m) => ({ default: m.AdminSettlementsPage })));
+const AdminAuditPage = lazy(() => import("@/pages/admin/AdminAuditPage").then((m) => ({ default: m.AdminAuditPage })));
 const ModelsManagePage = lazy(() => import("@/pages/app/ModelsManagePage").then((m) => ({ default: m.ModelsManagePage })));
 const NodeDetailPage = lazy(() => import("@/pages/NodeDetailPage").then((m) => ({ default: m.NodeDetailPage })));
 const MarketDetailPage = lazy(() => import("@/pages/MarketDetailPage").then((m) => ({ default: m.MarketDetailPage })));
@@ -129,6 +132,9 @@ export function App() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="providers" element={<ProvidersPage />} />
             <Route path="notifications" element={<AdminNotificationsPage />} />
+            <Route path="requests" element={<AdminRequestsPage />} />
+            <Route path="settlements" element={<AdminSettlementsPage />} />
+            <Route path="audit" element={<AdminAuditPage />} />
           </Route>
         </Routes>
         </Suspense>

@@ -407,6 +407,10 @@ export const platformService = {
     return platformRepository.listAdminInvitations();
   },
 
+  async getAdminAllInvitations(limit?: number) {
+    return platformRepository.getAdminAllInvitations(limit);
+  },
+
   listAdminUsers() {
     return platformRepository.listAdminUsers();
   },
@@ -687,6 +691,14 @@ export const platformService = {
 
   getAdminAuditLogs(limit: number) {
     return platformRepository.getAdminAuditLogs(limit);
+  },
+
+  getAdminRequests(params: { model?: string; provider?: string; user?: string; days?: number; page: number; limit: number }) {
+    return platformRepository.getAdminRequests(params);
+  },
+
+  getAdminSettlements(params: { days?: number; page: number; limit: number }) {
+    return platformRepository.getAdminSettlements(params);
   },
 
   createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }) {

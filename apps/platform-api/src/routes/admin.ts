@@ -49,6 +49,22 @@ export async function handleAdminRoutes(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/v1/admin/invitations/all") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const limit = Number(url.searchParams.get("limit") ?? 100);
+    const data = await platformService.getAdminAllInvitations(limit);
+    const response = json(200, { object: "list", requestId, data });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/v1/admin/invitations") {
     const auth = await authenticate_session_only_(req);
     if (!auth || auth.role !== "admin") {
@@ -218,6 +234,47 @@ export async function handleAdminRoutes(
     }
     const result = await platformService.updateAdminConfig(body.key, body.value, auth.userId);
     const response = json(200, { requestId, data: result });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/v1/admin/requests") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const page = Number(url.searchParams.get("page") ?? 1);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
+    const daysParam = url.searchParams.get("days");
+    const days = daysParam ? Number(daysParam) : undefined;
+    const model = url.searchParams.get("model") || undefined;
+    const provider = url.searchParams.get("provider") || undefined;
+    const user = url.searchParams.get("user") || undefined;
+    const result = await platformService.getAdminRequests({ model, provider, user, days, page, limit });
+    const response = json(200, { requestId, ...result });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/v1/admin/settlements") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const page = Number(url.searchParams.get("page") ?? 1);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
+    const daysParam = url.searchParams.get("days");
+    const days = daysParam ? Number(daysParam) : undefined;
+    const result = await platformService.getAdminSettlements({ days, page, limit });
+    const response = json(200, { requestId, ...result });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
