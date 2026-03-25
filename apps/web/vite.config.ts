@@ -4,9 +4,13 @@ import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 
 const releaseId = (process.env.XLLMAPI_RELEASE_ID ?? "").trim();
+const apiBase = (process.env.XLLMAPI_API_BASE ?? "https://api.xllmapi.com").replace(/\/+$/, "");
 
 export default defineConfig(({ command }) => ({
   base: command === "build" && releaseId ? `/_releases/${releaseId}/` : "/",
+  define: {
+    __XLLMAPI_API_BASE__: JSON.stringify(apiBase),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

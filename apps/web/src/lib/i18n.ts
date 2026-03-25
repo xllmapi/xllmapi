@@ -332,12 +332,14 @@ const messages: Record<string, Record<string, string>> = {
     // Docs
     "docs.title": "API 文档",
     "docs.quickStart": "快速开始",
-    "docs.quickStartDesc": "xllmapi 兼容 OpenAI API 格式。你可以使用任何 OpenAI 兼容的客户端库。",
-    "docs.chatCompletions": "Chat Completions (OpenAI 兼容)",
-    "docs.messages": "Messages (Anthropic 兼容)",
+    "docs.quickStartDesc": "xllmapi 支持 OpenAI、Anthropic 和 xllmapi 统一三种 API 格式。使用你的 API Key 即可调用。",
+    "docs.chatCompletions": "OpenAI 格式",
+    "docs.messages": "Anthropic 格式",
+    "docs.xllmapiUnified": "xllmapi 统一格式",
     "docs.pythonExample": "Python 示例",
+    "docs.agents": "Agent 配置",
     "docs.auth": "认证",
-    "docs.authDesc": "所有 API 请求需要通过 Bearer token（会话）或 x-api-key header 进行认证。登录后可在控制台查看你的 API key。",
+    "docs.authDesc": "所有 API 请求需要通过 Authorization: Bearer <key> 或 x-api-key header 进行认证。在控制台 → API Key 管理中创建。",
 
     // Admin
     "admin.overview.title": "管理总览",
@@ -1038,12 +1040,14 @@ const messages: Record<string, Record<string, string>> = {
     // Docs
     "docs.title": "API Documentation",
     "docs.quickStart": "Quick Start",
-    "docs.quickStartDesc": "xllmapi is compatible with the OpenAI API format. You can use any OpenAI-compatible client library by pointing it to your xllmapi instance.",
-    "docs.chatCompletions": "Chat Completions (OpenAI Compatible)",
-    "docs.messages": "Messages (Anthropic Compatible)",
+    "docs.quickStartDesc": "xllmapi supports OpenAI, Anthropic, and xllmapi unified API formats. Use your API Key to get started.",
+    "docs.chatCompletions": "OpenAI Format",
+    "docs.messages": "Anthropic Format",
+    "docs.xllmapiUnified": "xllmapi Unified",
     "docs.pythonExample": "Python Example",
+    "docs.agents": "Agent Config",
     "docs.auth": "Authentication",
-    "docs.authDesc": "All API requests require authentication via either a Bearer token (session-based) or an API key passed in the x-api-key header. You can find your API key in the Dashboard after logging in.",
+    "docs.authDesc": "All API requests require authentication via Authorization: Bearer <key> or x-api-key header. Create keys in Dashboard → API Key Management.",
 
     // Admin
     "admin.overview.title": "Admin Overview",
