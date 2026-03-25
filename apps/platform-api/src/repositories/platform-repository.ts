@@ -39,18 +39,46 @@ export type VerifyLoginCodeResult =
       message: string;
     };
 
+export type RequestLoginCodeResult = {
+  eligible: boolean;
+  firstLogin: boolean;
+  code?: string;
+  challengeId?: string | null;
+  email: string;
+};
+
+export type RequestPasswordResetResult = {
+  accepted: boolean;
+  email: string;
+  token?: string;
+  challengeId?: string | null;
+  userId?: string | null;
+};
+
 export type PlatformRepository = {
   authenticate(apiKey: string): MaybePromise<AuthRecord>;
   authenticateSession(sessionToken: string): MaybePromise<SessionAuthRecord>;
   revokeSession(sessionId: string): MaybePromise<boolean>;
   checkHealth(): MaybePromise<boolean>;
-  requestLoginCode(email: string): MaybePromise<{
-    eligible: boolean;
-    firstLogin: boolean;
-    code?: string;
-  }>;
+  requestLoginCode(email: string): MaybePromise<RequestLoginCodeResult>;
   verifyLoginCode(email: string, code: string): MaybePromise<VerifyLoginCodeResult>;
   loginWithPassword(email: string, password: string): MaybePromise<VerifyLoginCodeResult>;
+  requestPasswordReset(email: string): MaybePromise<RequestPasswordResetResult>;
+  resetPassword(params: {
+    token: string;
+    newPassword: string;
+  }): MaybePromise<{ ok: boolean; code?: string; message?: string; data?: { userId: string; sessionsRevoked: number } }>;
+  requestEmailChange(params: {
+    userId: string;
+    newEmail: string;
+    currentPassword?: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): MaybePromise<{ ok: boolean; code?: string; message?: string; data?: { requestId: string; oldEmail: string; newEmail: string; token?: string; challengeId: string } }>;
+  confirmEmailChange(params: {
+    token: string;
+    sessionId?: string | null;
+  }): MaybePromise<{ ok: boolean; code?: string; message?: string; data?: { profile: MeProfile | null; oldEmail: string; newEmail: string } }>;
   updateMeProfile(params: {
     userId: string;
     displayName?: string;
@@ -58,9 +86,10 @@ export type PlatformRepository = {
   }): MaybePromise<MeProfile | null>;
   updateMePassword(params: {
     userId: string;
+    currentSessionId?: string | null;
     currentPassword: string;
     newPassword: string;
-  }): MaybePromise<{ ok: boolean; code?: string; message?: string }>;
+  }): MaybePromise<{ ok: boolean; code?: string; message?: string; data?: { sessionsRevoked: number } }>;
   updateMeEmail(params: {
     userId: string;
     newEmail: string;
@@ -109,6 +138,30 @@ export type PlatformRepository = {
     targetId: string;
     payload: unknown;
   }): MaybePromise<void>;
+  recordEmailDeliveryAttempt(params: {
+    id: string;
+    provider: string;
+    templateKey: string;
+    toEmail: string;
+    subject: string;
+    challengeId?: string | null;
+    status: "queued" | "sent" | "failed" | "delivered" | "bounced" | "complained";
+    providerMessageId?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    payload?: unknown;
+  }): MaybePromise<void>;
+  recordSecurityEvent(params: {
+    id: string;
+    userId: string;
+    type: string;
+    severity: "info" | "warning" | "critical";
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    payload?: unknown;
+  }): MaybePromise<void>;
+  listAdminEmailDeliveries(limit: number): MaybePromise<any[]>;
+  listAdminSecurityEvents(limit: number): MaybePromise<any[]>;
   findOfferingForModel(logicalModel: string): MaybePromise<any>;
   findOfferingsForModel(logicalModel: string): MaybePromise<any[]>;
   findUserOfferingsForModel(params: { userId: string; logicalModel: string }): MaybePromise<any[]>;

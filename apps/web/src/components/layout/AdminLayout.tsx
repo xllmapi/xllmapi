@@ -47,6 +47,8 @@ export function AdminLayout() {
         <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
         <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
         <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
+        <SidebarLink to="/admin/email-deliveries" label={t("admin.sidebar.emailDeliveries")} />
+        <SidebarLink to="/admin/security-events" label={t("admin.sidebar.securityEvents")} />
         <SidebarLink to="/admin/audit" label={t("admin.sidebar.audit")} />
       </nav>
 
@@ -72,6 +74,8 @@ export function AdminLayout() {
             <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
             <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
             <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
+            <SidebarLink to="/admin/email-deliveries" label={t("admin.sidebar.emailDeliveries")} />
+            <SidebarLink to="/admin/security-events" label={t("admin.sidebar.securityEvents")} />
             <SidebarLink to="/admin/audit" label={t("admin.sidebar.audit")} />
           </nav>
         </aside>

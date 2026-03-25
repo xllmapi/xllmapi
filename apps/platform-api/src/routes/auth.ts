@@ -12,7 +12,9 @@ import {
   clear_session_cookie_,
   type AuthRequestCodeBody,
   type AuthVerifyCodeBody,
-  type AuthLoginBody
+  type AuthLoginBody,
+  type AuthRequestPasswordResetBody,
+  type AuthResetPasswordBody
 } from "../lib/http.js";
 import { metricsService } from "../metrics.js";
 import { platformService } from "../services/platform-service.js";
@@ -84,26 +86,95 @@ export async function handleAuthRoutes(
     }
 
     const result = await platformService.requestLoginCode(body.email);
-    if (!result.eligible) {
-      const response = json(403, {
-        error: {
-          code: "invite_required",
-          message: "email has not been invited",
-          requestId
-        }
-      });
+    const response = json(200, {
+      ok: true,
+      requestId,
+      channel: "email",
+      firstLogin: result.firstLogin,
+      maskedEmail: body.email.replace(/^(.).+(@.*)$/, "$1***$2"),
+      cooldownSeconds: config.emailSendCooldownSeconds,
+      ...(config.isProduction ? {} : { devCode: result.code })
+    });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/v1/auth/request-password-reset") {
+    const body = await read_json<AuthRequestPasswordResetBody>(req);
+    if (!body.email) {
+      const response = json(400, { error: { message: "email is required", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
     }
 
-    const response = json(200, {
-      ok: true,
+    if (!(await enforceAuthRateLimit({
+      req,
+      res,
       requestId,
-      eligible: true,
-      firstLogin: result.firstLogin,
-      ...(config.isProduction ? {} : { devCode: result.code })
+      route: "request-password-reset",
+      identity: normalizeEmailForLimit(body.email),
+      limit: config.authRequestCodeLimitPerMinute
+    }))) {
+      return true;
+    }
+
+    await platformService.requestPasswordReset(body.email);
+    const response = json(200, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/v1/auth/reset-password") {
+    const body = await read_json<AuthResetPasswordBody>(req);
+    if (!body.token || !body.newPassword || body.newPassword.length < 8) {
+      const response = json(400, { error: { message: "token and newPassword(min 8) are required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const result = await platformService.resetPassword({
+      token: body.token,
+      newPassword: body.newPassword
     });
+    if (!result.ok) {
+      const response = json(400, { error: { code: result.code, message: result.message, requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const response = json(200, { ok: true, requestId, data: result.data });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/v1/auth/confirm-email-change") {
+    const body = await read_json<{ token: string }>(req);
+    if (!body.token) {
+      const response = json(400, { error: { message: "token is required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const auth = await authenticate_session_only_(req);
+    const result = await platformService.confirmMeEmailChange({
+      token: body.token,
+      sessionId: auth?.sessionId ?? null
+    });
+    if (!result.ok) {
+      const response = json(400, { error: { code: result.code, message: result.message, requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const response = json(200, { ok: true, requestId, data: result.data });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;

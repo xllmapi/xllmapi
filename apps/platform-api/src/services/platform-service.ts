@@ -4,6 +4,9 @@ import type {
   CandidateOffering
 } from "@xllmapi/shared-types";
 
+import { config } from "../config.js";
+import { renderTransactionalEmail, emailSender, type TransactionalEmailTemplateKey } from "../email.js";
+import { metricsService } from "../metrics.js";
 import { platformRepository } from "../repositories/index.js";
 
 type ProviderPreset = {
@@ -118,6 +121,75 @@ const with_timeout_ = async <T>(task: Promise<T>, ms = 8000): Promise<T> => {
     return await task;
   } finally {
     clearTimeout(timer);
+  }
+};
+
+const resolveLocale_ = (email?: string | null): "zh" | "en" => {
+  return email?.endsWith(".cn") ? "zh" : "en";
+};
+
+const send_transactional_email_ = async (params: {
+  templateKey: TransactionalEmailTemplateKey;
+  toEmail: string;
+  challengeId?: string | null;
+  locale?: "zh" | "en";
+  metadata?: Record<string, unknown>;
+  variables: Record<string, unknown>;
+}) => {
+  const rendered = renderTransactionalEmail(params.templateKey, {
+    locale: params.locale ?? resolveLocale_(params.toEmail),
+    ...params.variables
+  });
+  const deliveryId = `mail_${crypto.randomUUID()}`;
+
+  try {
+    const sendResult = await emailSender.send({
+      templateKey: params.templateKey,
+      toEmail: params.toEmail,
+      locale: params.locale ?? resolveLocale_(params.toEmail),
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+      metadata: {
+        ...params.metadata,
+        ...params.variables
+      }
+    });
+    await platformRepository.recordEmailDeliveryAttempt({
+      id: deliveryId,
+      provider: sendResult.provider,
+      templateKey: params.templateKey,
+      toEmail: params.toEmail,
+      subject: rendered.subject,
+      challengeId: params.challengeId ?? null,
+      status: "sent",
+      providerMessageId: sendResult.providerMessageId ?? null,
+      payload: {
+        preview: sendResult.preview ?? null,
+        metadata: params.metadata ?? null,
+        variables: params.variables
+      }
+    });
+    metricsService.increment("emailSends");
+    return { ok: true as const };
+  } catch (error) {
+    await platformRepository.recordEmailDeliveryAttempt({
+      id: deliveryId,
+      provider: "email",
+      templateKey: params.templateKey,
+      toEmail: params.toEmail,
+      subject: rendered.subject,
+      challengeId: params.challengeId ?? null,
+      status: "failed",
+      errorCode: "send_failed",
+      errorMessage: String(error),
+      payload: {
+        metadata: params.metadata ?? null,
+        variables: params.variables
+      }
+    });
+    metricsService.increment("emailSendFailures");
+    return { ok: false as const, message: String(error) };
   }
 };
 
@@ -341,8 +413,23 @@ export const platformService = {
     return platformRepository.checkHealth();
   },
 
-  requestLoginCode(email: string) {
-    return platformRepository.requestLoginCode(email);
+  async requestLoginCode(email: string) {
+    const result = await platformRepository.requestLoginCode(email);
+    if (!result.eligible || !result.challengeId || !result.code) {
+      return result;
+    }
+
+    await send_transactional_email_({
+      templateKey: "login_code",
+      toEmail: result.email,
+      challengeId: result.challengeId,
+      variables: {
+        code: result.code,
+        expiresInMinutes: Math.ceil(config.authCodeTtlSeconds / 60)
+      }
+    });
+
+    return result;
   },
 
   verifyLoginCode(email: string, code: string) {
@@ -353,6 +440,63 @@ export const platformService = {
     return platformRepository.loginWithPassword(email, password);
   },
 
+  async requestPasswordReset(email: string) {
+    const result = await platformRepository.requestPasswordReset(email);
+    if (!result.accepted || !result.token || !result.challengeId) {
+      return { ok: true as const };
+    }
+
+    await send_transactional_email_({
+      templateKey: "password_reset",
+      toEmail: result.email,
+      challengeId: result.challengeId,
+      variables: {
+        actionUrl: `${config.appBaseUrl || "http://127.0.0.1:3000"}/reset-password?token=${encodeURIComponent(result.token)}`,
+        expiresInMinutes: Math.ceil(config.passwordResetTtlSeconds / 60)
+      }
+    });
+
+    if (result.userId) {
+      await platformRepository.recordSecurityEvent({
+        id: `se_${crypto.randomUUID()}`,
+        userId: result.userId,
+        type: "password_reset_requested",
+        severity: "warning",
+        payload: { email: result.email }
+      });
+      metricsService.increment("securityEvents");
+    }
+
+    return { ok: true as const };
+  },
+
+  async resetPassword(params: { token: string; newPassword: string }) {
+    const result = await platformRepository.resetPassword(params);
+    if (!result.ok || !result.data) {
+      return result;
+    }
+
+    const me = await platformRepository.getMe(result.data.userId);
+    if (me && config.securityNotifyEmailEnabled) {
+      await send_transactional_email_({
+        templateKey: "password_changed_notice",
+        toEmail: me.email,
+        variables: {}
+      });
+    }
+
+    await platformRepository.recordSecurityEvent({
+      id: `se_${crypto.randomUUID()}`,
+      userId: result.data.userId,
+      type: "password_reset_completed",
+      severity: "warning",
+      payload: { sessionsRevoked: result.data.sessionsRevoked }
+    });
+    metricsService.increment("securityEvents");
+
+    return result;
+  },
+
   updateMeProfile(params: {
     userId: string;
     displayName?: string;
@@ -361,19 +505,139 @@ export const platformService = {
     return platformRepository.updateMeProfile(params);
   },
 
-  updateMePassword(params: {
+  async updateMePassword(params: {
     userId: string;
+    currentSessionId?: string | null;
     currentPassword: string;
     newPassword: string;
   }) {
-    return platformRepository.updateMePassword(params);
+    const result = await platformRepository.updateMePassword(params);
+    if (!result.ok) {
+      return result;
+    }
+
+    const me = await platformRepository.getMe(params.userId);
+    if (me && config.securityNotifyEmailEnabled) {
+      await send_transactional_email_({
+        templateKey: "password_changed_notice",
+        toEmail: me.email,
+        variables: {}
+      });
+    }
+
+    await platformRepository.recordSecurityEvent({
+      id: `se_${crypto.randomUUID()}`,
+      userId: params.userId,
+      type: "password_changed",
+      severity: "warning",
+      payload: {
+        sessionsRevoked: result.data?.sessionsRevoked ?? 0
+      }
+    });
+    metricsService.increment("securityEvents");
+
+    return result;
   },
 
-  updateMeEmail(params: {
+  async updateMeEmail(params: {
     userId: string;
     newEmail: string;
+    currentPassword?: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
   }) {
-    return platformRepository.updateMeEmail(params);
+    const result = await platformRepository.requestEmailChange(params);
+    if (!result.ok || !result.data) {
+      return result;
+    }
+
+    await Promise.all([
+      send_transactional_email_({
+        templateKey: "email_change_confirm",
+        toEmail: result.data.newEmail,
+        challengeId: result.data.challengeId,
+        variables: {
+          newEmail: result.data.newEmail,
+          actionUrl: `${config.appBaseUrl || "http://127.0.0.1:3000"}/auth/confirm-email-change?token=${encodeURIComponent(result.data.token ?? "")}`,
+          expiresInMinutes: Math.ceil(config.emailChangeTtlSeconds / 60)
+        }
+      }),
+      send_transactional_email_({
+        templateKey: "email_change_requested_notice",
+        toEmail: result.data.oldEmail,
+        variables: {
+          oldEmail: result.data.oldEmail,
+          newEmail: result.data.newEmail
+        }
+      }),
+      Promise.resolve(platformRepository.recordSecurityEvent({
+        id: `se_${crypto.randomUUID()}`,
+        userId: params.userId,
+        type: "email_change_requested",
+        severity: "warning",
+        ipAddress: params.ipAddress ?? null,
+        userAgent: params.userAgent ?? null,
+        payload: {
+          oldEmail: result.data.oldEmail,
+          newEmail: result.data.newEmail
+        }
+      })).then(() => {
+        metricsService.increment("securityEvents");
+      })
+    ]);
+
+    return result;
+  },
+
+  async confirmMeEmailChange(params: {
+    token: string;
+    sessionId?: string | null;
+  }) {
+    const result = await platformRepository.confirmEmailChange(params);
+    if (!result.ok || !result.data) {
+      return result;
+    }
+
+    const tasks: Promise<unknown>[] = [
+      send_transactional_email_({
+        templateKey: "email_changed_notice",
+        toEmail: result.data.oldEmail,
+        variables: {
+          oldEmail: result.data.oldEmail,
+          newEmail: result.data.newEmail
+        }
+      }),
+      send_transactional_email_({
+        templateKey: "email_changed_notice",
+        toEmail: result.data.newEmail,
+        variables: {
+          oldEmail: result.data.oldEmail,
+          newEmail: result.data.newEmail
+        }
+      })
+    ];
+    if (result.data.profile?.id) {
+      tasks.push(
+        Promise.resolve(platformRepository.recordSecurityEvent({
+          id: `se_${crypto.randomUUID()}`,
+          userId: result.data.profile.id,
+          type: "email_changed",
+          severity: "warning",
+          payload: {
+            oldEmail: result.data.oldEmail,
+            newEmail: result.data.newEmail
+          }
+        })).then(() => {
+          metricsService.increment("securityEvents");
+        })
+      );
+    }
+    await Promise.all(tasks);
+
+    return {
+      ok: true as const,
+      data: result.data.profile
+    };
   },
 
   updateMePhone(params: {
@@ -395,12 +659,29 @@ export const platformService = {
     return platformRepository.getInvitationStats(userId);
   },
 
-  createInvitation(params: {
+  async createInvitation(params: {
     inviterUserId: string;
     invitedEmail: string;
     note?: string;
   }) {
-    return platformRepository.createInvitation(params);
+    const result = await platformRepository.createInvitation(params);
+    if (!result.ok) {
+      return result;
+    }
+    const inviter = await platformRepository.getMe(params.inviterUserId);
+    await send_transactional_email_({
+      templateKey: "invite",
+      toEmail: params.invitedEmail,
+      variables: {
+        inviterName: inviter?.displayName || inviter?.email || "xllmapi",
+        invitationNote: params.note ?? null,
+        actionUrl: `${config.appBaseUrl || "http://127.0.0.1:3000"}/auth?email=${encodeURIComponent(params.invitedEmail)}`
+      },
+      metadata: {
+        invitationId: result.data?.id ?? null
+      }
+    });
+    return result;
   },
 
   revokeInvitation(params: {
@@ -423,12 +704,29 @@ export const platformService = {
     return platformRepository.listAdminUsers();
   },
 
-  createAdminInvitation(params: {
+  async createAdminInvitation(params: {
     inviterUserId: string;
     invitedEmail: string;
     note?: string;
   }) {
-    return platformRepository.createAdminInvitation(params);
+    const result = await platformRepository.createAdminInvitation(params);
+    if (!result.ok) {
+      return result;
+    }
+    const inviter = await platformRepository.getMe(params.inviterUserId);
+    await send_transactional_email_({
+      templateKey: "invite",
+      toEmail: params.invitedEmail,
+      variables: {
+        inviterName: inviter?.displayName || inviter?.email || "xllmapi",
+        invitationNote: params.note ?? null,
+        actionUrl: `${config.appBaseUrl || "http://127.0.0.1:3000"}/auth?email=${encodeURIComponent(params.invitedEmail)}`
+      },
+      metadata: {
+        invitationId: result.data?.id ?? null
+      }
+    });
+    return result;
   },
 
   listMarketModels() {
@@ -708,6 +1006,14 @@ export const platformService = {
 
   getAdminAuditLogs(limit: number) {
     return platformRepository.getAdminAuditLogs(limit);
+  },
+
+  listAdminEmailDeliveries(limit: number) {
+    return platformRepository.listAdminEmailDeliveries(limit);
+  },
+
+  listAdminSecurityEvents(limit: number) {
+    return platformRepository.listAdminSecurityEvents(limit);
   },
 
   getAdminRequests(params: { model?: string; provider?: string; user?: string; days?: number; page: number; limit: number }) {

@@ -340,6 +340,36 @@ export async function handleAdminRoutes(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/v1/admin/email-deliveries") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const limit = Number(url.searchParams.get("limit") ?? 100);
+    const response = json(200, { requestId, data: await platformService.listAdminEmailDeliveries(limit) });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/v1/admin/security-events") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const limit = Number(url.searchParams.get("limit") ?? 100);
+    const response = json(200, { requestId, data: await platformService.listAdminSecurityEvents(limit) });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/v1/admin/notifications") {
     const auth = await authenticate_session_only_(req);
     if (!auth || auth.role !== "admin") {

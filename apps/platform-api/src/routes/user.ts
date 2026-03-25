@@ -5,6 +5,7 @@ import {
   read_json,
   authenticate_session_only_,
   unauthorized_,
+  get_request_ip_,
   type UpdateMeProfileBody,
   type UpdateMePasswordBody,
   type UpdateMeEmailBody,
@@ -65,15 +66,16 @@ export async function handleUserRoutes(
       return true;
     }
     const body = await read_json<UpdateMePasswordBody>(req);
-    if (!body.currentPassword || !body.newPassword || body.newPassword.length < 8) {
-      const response = json(400, { error: { message: "currentPassword and newPassword(min 8) are required", requestId } });
+    if (!body.newPassword || body.newPassword.length < 8) {
+      const response = json(400, { error: { message: "newPassword(min 8) is required", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
     }
     const result = await platformService.updateMePassword({
       userId: auth.userId,
-      currentPassword: body.currentPassword,
+      currentSessionId: auth.sessionId,
+      currentPassword: body.currentPassword ?? "",
       newPassword: body.newPassword
     });
     if (!result.ok) {
@@ -105,7 +107,10 @@ export async function handleUserRoutes(
     }
     const result = await platformService.updateMeEmail({
       userId: auth.userId,
-      newEmail: body.newEmail
+      newEmail: body.newEmail,
+      currentPassword: body.currentPassword,
+      ipAddress: get_request_ip_(req),
+      userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null
     });
     if (!result.ok) {
       const response = json(409, { error: { code: result.code, message: result.message, requestId } });
@@ -113,7 +118,18 @@ export async function handleUserRoutes(
       res.end(response.payload);
       return true;
     }
-    const response = json(200, { ok: true, requestId, data: result.data ?? null });
+    const response = json(202, {
+      ok: true,
+      requestId,
+      data: result.data
+        ? {
+            requestId: result.data.requestId,
+            oldEmail: result.data.oldEmail,
+            newEmail: result.data.newEmail,
+            challengeId: result.data.challengeId
+          }
+        : null
+    });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;

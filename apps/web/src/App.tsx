@@ -40,6 +40,9 @@ import { ChatProvider } from "@/hooks/useChatContext";
 // Eager: landing + auth (first paint)
 import { HomePage } from "@/pages/HomePage";
 import { AuthPage } from "@/pages/AuthPage";
+const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
+const ConfirmEmailChangePage = lazy(() => import("@/pages/ConfirmEmailChangePage").then((m) => ({ default: m.ConfirmEmailChangePage })));
 
 // Lazy: everything else
 const DocsPage = lazy(() => import("@/pages/DocsPage").then((m) => ({ default: m.DocsPage })));
@@ -60,6 +63,8 @@ const UsagePage = lazy(() => import("@/pages/admin/UsagePage").then((m) => ({ de
 const SettingsPage = lazy(() => import("@/pages/admin/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const ProvidersPage = lazy(() => import("@/pages/admin/ProvidersPage").then((m) => ({ default: m.ProvidersPage })));
 const AdminNotificationsPage = lazy(() => import("@/pages/admin/AdminNotificationsPage").then((m) => ({ default: m.AdminNotificationsPage })));
+const AdminEmailDeliveriesPage = lazy(() => import("@/pages/admin/AdminEmailDeliveriesPage").then((m) => ({ default: m.AdminEmailDeliveriesPage })));
+const AdminSecurityEventsPage = lazy(() => import("@/pages/admin/AdminSecurityEventsPage").then((m) => ({ default: m.AdminSecurityEventsPage })));
 const AdminRequestsPage = lazy(() => import("@/pages/admin/AdminRequestsPage").then((m) => ({ default: m.AdminRequestsPage })));
 const AdminSettlementsPage = lazy(() => import("@/pages/admin/AdminSettlementsPage").then((m) => ({ default: m.AdminSettlementsPage })));
 const AdminSettlementFailuresPage = lazy(() => import("@/pages/admin/AdminSettlementFailuresPage").then((m) => ({ default: m.AdminSettlementFailuresPage })));
@@ -86,6 +91,9 @@ export function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/auth/confirm-email-change" element={<ConfirmEmailChangePage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/mnetwork" element={<ModelsPage />} />
           <Route path="/mnetwork/node/:publicNodeId" element={<NodeDetailPage />} />
@@ -133,6 +141,8 @@ export function App() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="providers" element={<ProvidersPage />} />
             <Route path="notifications" element={<AdminNotificationsPage />} />
+            <Route path="email-deliveries" element={<AdminEmailDeliveriesPage />} />
+            <Route path="security-events" element={<AdminSecurityEventsPage />} />
             <Route path="requests" element={<AdminRequestsPage />} />
             <Route path="settlements" element={<AdminSettlementsPage />} />
             <Route path="settlement-failures" element={<AdminSettlementFailuresPage />} />

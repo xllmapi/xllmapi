@@ -53,18 +53,32 @@ export type AuthLoginBody = {
   password: string;
 };
 
+export type AuthRequestPasswordResetBody = {
+  email: string;
+};
+
+export type AuthResetPasswordBody = {
+  token: string;
+  newPassword: string;
+};
+
 export type UpdateMeProfileBody = {
   displayName?: string;
   avatarUrl?: string;
 };
 
 export type UpdateMePasswordBody = {
-  currentPassword: string;
+  currentPassword?: string;
   newPassword: string;
 };
 
 export type UpdateMeEmailBody = {
   newEmail: string;
+  currentPassword?: string;
+};
+
+export type ConfirmEmailChangeBody = {
+  token: string;
 };
 
 export type UpdateMePhoneBody = {
