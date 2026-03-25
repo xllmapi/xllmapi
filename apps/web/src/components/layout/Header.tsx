@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/hooks/useLocale";
 import { apiJson } from "@/lib/api";
-import { LogOut, LayoutDashboard, Bell } from "lucide-react";
+import { LogOut, LayoutDashboard, Bell, Github } from "lucide-react";
 
 export function Header() {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
@@ -78,6 +78,16 @@ export function Header() {
               )}
             </>
           )}
+
+          {/* GitHub */}
+          <a
+            href="https://github.com/xllmapi/xllmapi"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-text-tertiary hover:text-text-primary transition-colors"
+          >
+            <Github className="w-4 h-4" />
+          </a>
 
           {/* Locale toggle */}
           <button
