@@ -91,6 +91,10 @@ jobs:
           DATABASE_URL: postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi
           REDIS_URL: redis://127.0.0.1:6379
           LOG_LEVEL: warn
+          XLLMAPI_AUTH_PASSWORD_LOGIN_LIMIT_PER_MINUTE: 100
+          XLLMAPI_AUTH_REQUEST_CODE_LIMIT_PER_MINUTE: 100
+          XLLMAPI_AUTH_VERIFY_CODE_LIMIT_PER_MINUTE: 100
+          XLLMAPI_CHAT_RATE_LIMIT_PER_MINUTE: 200
 
   e2e:
     runs-on: ubuntu-latest
@@ -183,17 +187,20 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build production image
-        run: docker build -f infra/docker/platform-api.Dockerfile -t xllmapi-platform-api:ci .
+        run: docker build --build-arg NODE_IMAGE=node:24-bookworm-slim --build-arg APT_MIRROR=deb.debian.org -f infra/docker/platform-api.Dockerfile -t xllmapi-platform-api:ci .
 
       - name: Apply migrations
         run: |
           docker run --rm --network host \
             -e XLLMAPI_ENV=production \
             -e XLLMAPI_SECRET_KEY=ci-test-secret \
+            -e XLLMAPI_APP_BASE_URL=http://127.0.0.1:3000 \
             -e XLLMAPI_DB_DRIVER=postgres \
             -e DATABASE_URL=postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi \
             -e REDIS_URL=redis://127.0.0.1:6379 \
             -e XLLMAPI_CORS_ORIGINS=http://127.0.0.1:3000 \
+            -e XLLMAPI_EMAIL_PROVIDER=mock \
+            -e XLLMAPI_EMAIL_FROM=no-reply@example.test \
             xllmapi-platform-api:ci \
             node apps/platform-api/dist/scripts/apply-postgres-migrations.js
 
@@ -204,11 +211,28 @@ jobs:
             -e XLLMAPI_ENV=production \
             -e XLLMAPI_SECRET_KEY=ci-test-secret \
             -e XLLMAPI_RELEASE_ID=ci-smoke \
+            -e XLLMAPI_APP_BASE_URL=http://127.0.0.1:3000 \
             -e XLLMAPI_DB_DRIVER=postgres \
             -e DATABASE_URL=postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi \
             -e REDIS_URL=redis://127.0.0.1:6379 \
             -e XLLMAPI_CORS_ORIGINS=http://127.0.0.1:3000 \
+            -e XLLMAPI_EMAIL_PROVIDER=mock \
+            -e XLLMAPI_EMAIL_FROM=no-reply@example.test \
             xllmapi-platform-api:ci
+
+      - name: Wait for container startup
+        run: |
+          for i in $(seq 1 15); do
+            if curl -sf http://127.0.0.1:3000/healthz > /dev/null 2>&1; then
+              echo "Container healthy after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Container logs (debug)
+        if: always()
+        run: docker logs xllmapi-platform-api-ci 2>&1 | tail -30 || true
 
       - name: Smoke probe container
         run: XLLMAPI_EXPECT_RELEASE_ID=ci-smoke bash scripts/release-smoke.sh
