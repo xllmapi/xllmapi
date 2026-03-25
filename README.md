@@ -139,7 +139,6 @@ npm run test:platform-api
 # otherwise falls back to a local mock OpenAI-compatible provider)
 npm run test:e2e:mvp
 npm run test:e2e:sharing
-
 # Ops: retry persisted settlement failures
 npm run ops:retry:settlement-failures
 

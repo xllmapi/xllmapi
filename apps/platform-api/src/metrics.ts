@@ -72,6 +72,10 @@ export const metricsService = {
       "# HELP xllmapi_settlement_failures Total settlement failures after provider success.",
       "# TYPE xllmapi_settlement_failures counter",
       `xllmapi_settlement_failures${labelSuffix} ${metrics.settlementFailures}`
+      `xllmapi_core_errors${labelSuffix} ${metrics.coreErrors}`,
+      "# HELP xllmapi_settlement_failures Total settlement failures after provider success.",
+      "# TYPE xllmapi_settlement_failures counter",
+      `xllmapi_settlement_failures${labelSuffix} ${metrics.settlementFailures}`
     ].join("\n");
   }
 };

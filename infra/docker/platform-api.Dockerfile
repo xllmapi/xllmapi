@@ -23,6 +23,7 @@ COPY packages/logger packages/logger
 COPY packages/shared-types packages/shared-types
 
 RUN npm run build
+RUN npm prune --omit=dev
 
 FROM ${NODE_IMAGE}
 

@@ -72,4 +72,7 @@ export const config = {
   assetRetentionCount: parsePositiveInt("XLLMAPI_ASSET_RETENTION_COUNT", 3),
   sessionCookieName: process.env.XLLMAPI_SESSION_COOKIE_NAME?.trim() || "xllmapi_session",
   sessionMaxAgeSeconds: parsePositiveInt("XLLMAPI_SESSION_MAX_AGE_SECONDS", 30 * 24 * 60 * 60)
+  assetRetentionCount: parsePositiveInt("XLLMAPI_ASSET_RETENTION_COUNT", 3),
+  sessionCookieName: process.env.XLLMAPI_SESSION_COOKIE_NAME?.trim() || "xllmapi_session",
+  sessionMaxAgeSeconds: parsePositiveInt("XLLMAPI_SESSION_MAX_AGE_SECONDS", 30 * 24 * 60 * 60)
 };
