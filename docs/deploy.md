@@ -236,6 +236,12 @@ Unit=xllmapi-settlement-retry.service
 WantedBy=timers.target
 ```
 
+仓库内已提供模板文件：
+
+- `infra/systemd/xllmapi-platform.service`
+- `infra/systemd/xllmapi-settlement-retry.service`
+- `infra/systemd/xllmapi-settlement-retry.timer`
+
 ### 5. 使用 systemd 管理（生产推荐）
 
 ```ini
