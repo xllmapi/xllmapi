@@ -5,6 +5,8 @@ import { useLocale } from "@/hooks/useLocale";
 import { apiJson } from "@/lib/api";
 import { LogOut, LayoutDashboard, Bell } from "lucide-react";
 
+declare const __XLLMAPI_DOCS_URL__: string;
+
 export function Header() {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
   const { locale, setLocale, t } = useLocale();
@@ -60,9 +62,9 @@ export function Header() {
           <Link to="/mnetwork" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.models")}
           </Link>
-          <Link to="/docs" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+          <a href={__XLLMAPI_DOCS_URL__} className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.docs")}
-          </Link>
+          </a>
           <Link to="/chat" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.chat")}
           </Link>

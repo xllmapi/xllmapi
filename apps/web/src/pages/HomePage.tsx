@@ -192,7 +192,9 @@ function AgentTabs() {
 
 // ── API endpoint box — single row with icon tabs ──────────────────
 declare const __XLLMAPI_API_BASE__: string;
+declare const __XLLMAPI_DOCS_URL__: string;
 const _BASE = __XLLMAPI_API_BASE__;
+const _DOCS = __XLLMAPI_DOCS_URL__;
 
 const API_FORMATS = [
   {
@@ -281,12 +283,12 @@ export function HomePage() {
           >
             {t("home.cta.getStarted")}
           </Link>
-          <Link
-            to="/docs"
+          <a
+            href={_DOCS}
             className="text-accent text-sm font-medium no-underline hover:no-underline hover:opacity-80 transition-opacity"
           >
             {t("home.cta.readDocs")}
-          </Link>
+          </a>
         </div>
 
         {/* API box with format tabs */}
