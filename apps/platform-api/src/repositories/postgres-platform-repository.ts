@@ -2489,7 +2489,6 @@ export const postgresPlatformRepository: PlatformRepository = {
       return { ok: false as const, code: "retry_failed", message: error instanceof Error ? error.message : "retry failed" };
     }
   },
-
   async createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }) {
     await ensureDevSeed();
     const currentPool = getPool();

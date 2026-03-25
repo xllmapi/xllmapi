@@ -325,7 +325,6 @@ export async function handleAdminRoutes(
     res.end(response.payload);
     return true;
   }
-
   if (req.method === "GET" && url.pathname === "/v1/admin/audit-logs") {
     const auth = await authenticate_session_only_(req);
     if (!auth || auth.role !== "admin") {

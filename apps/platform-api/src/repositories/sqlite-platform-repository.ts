@@ -352,7 +352,6 @@ export const sqlitePlatformRepository: PlatformRepository = {
   retrySettlementFailure(params) {
     return retry_settlement_failure(params);
   },
-
   createNotification() {
     return { id: "" };
   },
