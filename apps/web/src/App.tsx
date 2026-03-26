@@ -46,7 +46,6 @@ const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage").then((m
 const ConfirmEmailChangePage = lazy(() => import("@/pages/ConfirmEmailChangePage").then((m) => ({ default: m.ConfirmEmailChangePage })));
 
 // Lazy: everything else
-const DocsPage = lazy(() => import("@/pages/DocsPage").then((m) => ({ default: m.DocsPage })));
 const ChatPage = lazy(() => import("@/pages/chat/ChatPage").then((m) => ({ default: m.ChatPage })));
 const ModelsPage = lazy(() => import("@/pages/ModelsPage").then((m) => ({ default: m.ModelsPage })));
 const ModelDetailPage = lazy(() => import("@/pages/ModelDetailPage").then((m) => ({ default: m.ModelDetailPage })));
@@ -97,7 +96,6 @@ export function App() {
           <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/auth/confirm-email-change" element={<ConfirmEmailChangePage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/docs" element={<DocsPage />} />
           <Route path="/mnetwork" element={<ModelsPage />} />
           <Route path="/mnetwork/node/:publicNodeId" element={<NodeDetailPage />} />
           <Route path="/mnetwork/:logicalModel" element={<ModelDetailPage />} />
