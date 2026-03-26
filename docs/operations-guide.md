@@ -8,6 +8,7 @@
 | API | https://api.xllmapi.com | 运行中 |
 | 文档 | https://docs.xllmapi.com/docs | 运行中 |
 | 管理后台 | https://xllmapi.com/admin | 管理员可访问 |
+| 监控 | https://sunrisepeak.grafana.net | Grafana Cloud |
 
 **服务器**：腾讯云轻量应用服务器 东京
 **配置**：2C4G 60G SSD 30M 带宽 1.5TB/月流量
@@ -83,6 +84,7 @@ PostgreSQL  Redis
 | xlings | 0.4.2 | 官方安装脚本 | 项目依赖管理 |
 | PostgreSQL | 17 | Docker | 主数据库 |
 | Redis | 7 (Alpine) | Docker | 缓存/限流/幂等 |
+| Grafana Alloy | 1.14.2 | apt (grafana源) | Prometheus metrics 采集推送 |
 
 ## 3.3 代码仓库
 
@@ -195,6 +197,27 @@ PostgreSQL  Redis
 ## 5.3 数据库容器 `docker-compose.db.yml`
 
 PostgreSQL 17 + Redis 7，仅监听 127.0.0.1，数据持久化到 /data/
+
+## 5.4 Grafana Alloy `/etc/alloy/config.alloy`
+
+```hcl
+prometheus.scrape "xllmapi" {
+  targets         = [{ __address__ = "127.0.0.1:3000" }]
+  metrics_path    = "/metrics"
+  scrape_interval = "30s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = "https://prometheus-prod-49-prod-ap-northeast-0.grafana.net/api/prom/push"
+    basic_auth {
+      username = "3070888"
+      password = "<Grafana Cloud API Token>"
+    }
+  }
+}
+```
 
 ---
 
@@ -350,7 +373,70 @@ crontab -e
 
 ---
 
-# 九、日常运维命令
+# 九、Grafana Cloud 监控
+
+## 9.1 架构
+
+```
+xllmapi (:3000/metrics) → Grafana Alloy (每30s抓取) → Grafana Cloud (remote write)
+```
+
+## 9.2 服务信息
+
+| 项目 | 值 |
+|------|-----|
+| Grafana 面板 | https://sunrisepeak.grafana.net |
+| Prometheus endpoint | https://prometheus-prod-49-prod-ap-northeast-0.grafana.net |
+| Username | 3070888 |
+| Agent | Grafana Alloy 1.14.2 |
+| 配置文件 | `/etc/alloy/config.alloy` |
+| 采集间隔 | 30 秒 |
+| 数据留存 | 14 天（Free 计划） |
+
+## 9.3 可用指标
+
+| 指标名 | 类型 | 说明 |
+|--------|------|------|
+| `xllmapi_total_requests` | counter | 总 HTTP 请求数 |
+| `xllmapi_chat_requests` | counter | Chat 请求数 |
+| `xllmapi_auth_failures` | counter | 认证失败次数 |
+| `xllmapi_auth_rate_limit_hits` | counter | 认证限流触发 |
+| `xllmapi_rate_limit_hits` | counter | Chat 限流触发 |
+| `xllmapi_settlement_failures` | counter | 结算失败次数 |
+| `xllmapi_core_errors` | counter | 核心错误数 |
+| `xllmapi_idempotent_replays` | counter | 幂等重放次数 |
+| `xllmapi_cache_hits` | counter | 缓存命中次数 |
+
+## 9.4 Alloy 管理
+
+```bash
+# 状态
+systemctl status alloy
+
+# 重启
+systemctl restart alloy
+
+# 日志
+journalctl -u alloy -f
+
+# 配置文件
+cat /etc/alloy/config.alloy
+```
+
+## 9.5 告警建议
+
+在 Grafana Cloud → Alerting 中创建以下告警规则：
+
+| 告警 | 条件 | 说明 |
+|------|------|------|
+| 实例不可达 | `up == 0` 持续 2 分钟 | 平台进程挂了 |
+| 核心错误激增 | `rate(xllmapi_core_errors[5m]) > 1` | 5 分钟内多次错误 |
+| 认证限流异常 | `rate(xllmapi_auth_rate_limit_hits[15m]) > 1` | 可能被暴力攻击 |
+| 结算失败 | `increase(xllmapi_settlement_failures[10m]) > 0` | 需要人工介入 |
+
+---
+
+# 十、日常运维命令
 
 ## 9.1 服务状态
 
@@ -443,14 +529,14 @@ du -sh /data/postgres /data/redis /var/log/xllmapi /var/log/caddy
 
 ## 短期（1-3 个月）
 
-| 优先级 | 项目 | 说明 |
-|--------|------|------|
-| P0 | **Resend 域名验证** | 当前发件用 send.xllmapi.com 子域名，需完成主域名验证提高送达率 |
-| P0 | **自动备份 cron** | 配置每日自动 pg_dump |
-| P1 | **Grafana Cloud 监控** | 接入 Prometheus metrics，配置告警 |
-| P1 | **PM2 startup** | 确保服务器重启后 PM2 自动恢复进程 |
-| P1 | **前端 SSE 断线重试** | 升级时流式对话可能中断，前端加自动重连 |
-| P2 | **节点客户端自动重连** | 分布式节点 WebSocket 断线后自动重连 |
+| 优先级 | 项目 | 状态 | 说明 |
+|--------|------|------|------|
+| P0 | ~~Resend 域名验证~~ | 已完成 | xllmapi.com 主域名已 Verified |
+| P0 | ~~自动备份 cron~~ | 已完成 | 每日凌晨 3 点 pg_dump，保留 7 天 |
+| P1 | ~~Grafana Cloud 监控~~ | 已完成 | Alloy agent 每 30s 推送到 sunrisepeak.grafana.net |
+| P1 | ~~PM2 startup~~ | 已完成 | 服务器重启后自动恢复 |
+| P1 | **前端 SSE 断线重试** | 待做 | 升级时流式对话可能中断，前端加自动重连 |
+| P2 | **节点客户端自动重连** | 待做 | 分布式节点 WebSocket 断线后自动重连 |
 
 ## 中期（3-6 个月）
 
@@ -530,9 +616,23 @@ pm2 save
 
 systemctl restart caddy
 
-# 9. 验证
+# 9. 安装 Grafana Alloy 监控
+apt install -y gpg
+mkdir -p /etc/apt/keyrings/
+curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/keyrings/grafana.gpg
+echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
+apt update && apt install -y alloy
+# 配置 /etc/alloy/config.alloy（见上文 5.4 节）
+systemctl enable --now alloy
+
+# 10. 配置自动备份
+mkdir -p /var/backups/xllmapi
+(crontab -l 2>/dev/null; echo '0 3 * * * cd /opt/xllmapi/app && DATABASE_URL="postgresql://xllmapi:<密码>@127.0.0.1:5432/xllmapi" bash scripts/backup-db.sh >> /var/log/xllmapi/backup.log 2>&1') | crontab -
+
+# 11. 验证
 curl https://xllmapi.com/healthz
 curl https://docs.xllmapi.com/docs
+systemctl status alloy
 ```
 
 ---
@@ -615,9 +715,9 @@ systemctl restart sshd
 
 # 十六、Resend 邮件配置
 
-当前状态：发件域名使用 `send.xllmapi.com` 子域名（已配置 SPF + DKIM + DMARC）。
+**状态：已验证** — 主域名 `xllmapi.com` 已在 Resend 控制台验证通过（Verified，区域 ap-northeast-1 Tokyo）。
 
-**需要完成的**：在 Resend 控制台验证主域名 `xllmapi.com`，需要在 CF DNS 添加 Resend 要求的验证记录。验证后发件地址可以使用 `noreply@xllmapi.com`。
+Cloudflare DNS 中已配置 SPF + DKIM + DMARC 记录。发件地址 `noreply@xllmapi.com`。
 
 **邮件类型**：
 - 注册/登录验证码

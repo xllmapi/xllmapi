@@ -9,10 +9,14 @@
 ### 新功能
 
 - **导航栏"生态"下拉菜单** — 包含 xllmapi 论坛、开源主页、MCPP 社区、QQ 群（点击复制群号）
+- **文档站导航增强** — 添加官网（房子图标）和 GitHub（图标按钮）链接
+- **文档首页社区板块** — 论坛、QQ 内测交流群、GitHub 开源主页
 
 ### 运维
 
-- **自动数据库备份** — 配置每日凌晨 3 点 pg_dump，保留 7 天
+- **Grafana Cloud 监控** — Alloy agent 每 30s 采集 `/metrics` 推送到 sunrisepeak.grafana.net
+- **Resend 主域名验证** — `xllmapi.com` 已 Verified，发件地址 `noreply@xllmapi.com`
+- **自动数据库备份** — 每日凌晨 3 点 pg_dump，保留 7 天
 - **SSH 安全加固** — 禁用密码登录，仅允许密钥认证
 - **清理空壳账号** — 删除 admin_speak 空壳管理员
 
