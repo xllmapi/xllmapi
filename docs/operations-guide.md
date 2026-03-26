@@ -356,20 +356,61 @@ crontab -e
 
 备份文件：`/var/backups/xllmapi/xllmapi_{timestamp}.sql.gz`
 
-## 8.2 配置备份
+## 8.2 配置文件备份
+
+自动备份脚本 `/opt/xllmapi/backup-config.sh`，每周日凌晨 3:30 执行。
+
+覆盖文件：
+
+| 文件 | 内容 | 敏感度 |
+|------|------|--------|
+| `.platform.xllmapi.json` | AES 密钥、DB 密码、Resend Key | 极高 |
+| `cf-origin.pem` + `cf-origin-key.pem` | Cloudflare Origin 证书 | 高（可重新生成） |
+| `Caddyfile` | 反向代理配置 | 低 |
+| `config.alloy` | Grafana Alloy 监控配置 | 低 |
+| `docker-compose.db.yml` | 数据库容器定义 | 低 |
 
 ```bash
-# 关键配置文件（建议定期备份到安全位置）
-/opt/xllmapi/app/.platform.xllmapi.json   # 平台密钥配置
-/etc/caddy/Caddyfile                       # Caddy 配置
-/etc/caddy/cf-origin.pem                   # CF 证书
-/etc/caddy/cf-origin-key.pem              # CF 私钥
-/opt/docker-compose.db.yml                # 数据库容器定义
+# 手动执行
+bash /opt/xllmapi/backup-config.sh
+
+# 自动：每周日 3:30（cron 已配置）
+# 保留 7 天，自动清理
 ```
 
-## 8.3 代码备份
+备份文件：`/var/backups/xllmapi/config/config_{date}.tar.gz`（权限 600，仅 root 可读）
 
-代码在 GitHub 私有仓库，天然有版本控制。额外建议：定期 `git bundle` 到本地。
+> **重要**：`.platform.xllmapi.json` 中的 `secretKey` 是最关键的密钥，丢失后所有加密的 Provider API Key 无法解密。建议额外保存一份到本地密码管理器。
+
+## 8.3 系统快照（腾讯云）
+
+腾讯云轻量应用服务器支持手动快照（免费 2 个/实例），覆盖整个系统盘。
+
+**策略**：
+- **快照 1**：当前稳定基线（部署完成后创建）
+- **快照 2**：每次大版本升级前更新
+
+```
+腾讯云控制台 → 轻量应用服务器 → 实例详情 → 快照 → 创建快照
+```
+
+命名建议：`baseline-{版本号}-{日期}`，如 `baseline-v0.1.2-20260327`
+
+> 快照包含完整系统盘（代码、配置、数据库文件、所有服务），是灾难恢复的最后保障。
+
+## 8.4 代码备份
+
+代码在 GitHub 私有仓库，天然有版本控制。
+
+## 8.5 备份总览
+
+| 层级 | 内容 | 方式 | 频率 | 保留 |
+|------|------|------|------|------|
+| 数据库 | PostgreSQL 33 张表 | pg_dump + gzip | 每日 3:00 | 7 天 |
+| 配置文件 | 6 个关键文件 | tar.gz 打包 | 每周日 3:30 | 7 天 |
+| 系统盘 | 整个服务器 | 腾讯云快照 | 大版本升级前 | 2 个 |
+| 代码 | 平台 + 文档 | GitHub 仓库 | 每次 push | 永久 |
+| Redis | 限流/幂等缓存 | 不备份 | — | 临时数据，丢失无影响 |
 
 ---
 
