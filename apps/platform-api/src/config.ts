@@ -1,3 +1,37 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
+
+function loadConfigFile(): Record<string, unknown> {
+  const argIdx = process.argv.indexOf("--config");
+  if (argIdx !== -1 && process.argv[argIdx + 1]) {
+    try { return JSON.parse(readFileSync(process.argv[argIdx + 1], "utf-8")); }
+    catch (e) { throw new Error(`Failed to load config file: ${process.argv[argIdx + 1]}: ${e}`); }
+  }
+  const paths = [
+    join(process.cwd(), ".platform.xllmapi.json"),
+    join(homedir(), ".config", "xllmapi", ".platform.xllmapi.json"),
+  ];
+  for (const p of paths) {
+    if (existsSync(p)) {
+      try { return JSON.parse(readFileSync(p, "utf-8")); }
+      catch { /* skip invalid files */ }
+    }
+  }
+  return {};
+}
+
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  return path.split(".").reduce((o: unknown, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), obj);
+}
+
+const fileConfig = loadConfigFile();
+
+/** Get config value: env var > config file > default */
+function configVal(envKey: string, filePath: string, fallback?: string): string | undefined {
+  return process.env[envKey] ?? (getNestedValue(fileConfig, filePath) as string | undefined) ?? fallback;
+}
+
 const ALLOWED_DB_DRIVERS = new Set(["sqlite", "postgres"]);
 const ALLOWED_EMAIL_PROVIDERS = new Set(["mock", "resend"]);
 
@@ -38,20 +72,24 @@ const parseBoolean = (name: string, fallback: boolean) => {
   throw new Error(`${name} must be a boolean`);
 };
 
-const envMode = process.env.XLLMAPI_ENV ?? "development";
+const envMode = configVal("XLLMAPI_ENV", "env", "development")!;
 const isProduction = envMode === "production";
-const secretKey = process.env.XLLMAPI_SECRET_KEY ?? null;
-const dbDriver = process.env.XLLMAPI_DB_DRIVER ?? "sqlite";
-const databaseUrl = process.env.DATABASE_URL ?? null;
-const sqliteDbPath = process.env.XLLMAPI_DB_PATH ?? null;
-const redisUrl = process.env.REDIS_URL ?? null;
-const corsOrigins = parseCsv(process.env.XLLMAPI_CORS_ORIGINS);
-const releaseId = (process.env.XLLMAPI_RELEASE_ID ?? "dev").trim() || "dev";
-const emailProvider = (process.env.XLLMAPI_EMAIL_PROVIDER ?? (isProduction ? "resend" : "mock")).trim().toLowerCase();
-const appBaseUrl = (process.env.XLLMAPI_APP_BASE_URL ?? "").trim().replace(/\/+$/, "");
-const emailFrom = (process.env.XLLMAPI_EMAIL_FROM ?? "").trim();
-const emailReplyTo = (process.env.XLLMAPI_EMAIL_REPLY_TO ?? "").trim() || null;
-const resendApiKey = (process.env.XLLMAPI_RESEND_API_KEY ?? "").trim() || null;
+const secretKey = configVal("XLLMAPI_SECRET_KEY", "secretKey") ?? null;
+const dbDriver = configVal("XLLMAPI_DB_DRIVER", "database.driver", "sqlite")!;
+const databaseUrl = configVal("DATABASE_URL", "database.url") ?? null;
+const sqliteDbPath = configVal("XLLMAPI_DB_PATH", "database.sqlitePath") ?? null;
+const redisUrl = configVal("REDIS_URL", "redis.url") ?? null;
+const corsOrigins = process.env.XLLMAPI_CORS_ORIGINS
+  ? parseCsv(process.env.XLLMAPI_CORS_ORIGINS)
+  : Array.isArray(getNestedValue(fileConfig, "cors.origins"))
+    ? (getNestedValue(fileConfig, "cors.origins") as string[])
+    : [];
+const releaseId = (configVal("XLLMAPI_RELEASE_ID", "releaseId", "dev") ?? "dev").trim() || "dev";
+const emailProvider = (configVal("XLLMAPI_EMAIL_PROVIDER", "email.provider", isProduction ? "resend" : "mock") ?? "mock").trim().toLowerCase();
+const appBaseUrl = (configVal("XLLMAPI_APP_BASE_URL", "appBaseUrl", "") ?? "").trim().replace(/\/+$/, "");
+const emailFrom = (configVal("XLLMAPI_EMAIL_FROM", "email.from", "") ?? "").trim();
+const emailReplyTo = (configVal("XLLMAPI_EMAIL_REPLY_TO", "email.replyTo", "") ?? "").trim() || null;
+const resendApiKey = (configVal("XLLMAPI_RESEND_API_KEY", "email.resendApiKey", "") ?? "").trim() || null;
 
 if (!ALLOWED_DB_DRIVERS.has(dbDriver)) {
   throw new Error(`XLLMAPI_DB_DRIVER must be one of: ${Array.from(ALLOWED_DB_DRIVERS).join(", ")}`);
@@ -114,7 +152,7 @@ export const config = {
   authPasswordLoginLimitPerMinute: parsePositiveInt("XLLMAPI_AUTH_PASSWORD_LOGIN_LIMIT_PER_MINUTE", 10),
   requestBodyMaxBytes: parsePositiveInt("XLLMAPI_REQUEST_BODY_MAX_BYTES", 1_048_576),
   assetRetentionCount: parsePositiveInt("XLLMAPI_ASSET_RETENTION_COUNT", 3),
-  sessionCookieName: process.env.XLLMAPI_SESSION_COOKIE_NAME?.trim() || "xllmapi_session",
+  sessionCookieName: configVal("XLLMAPI_SESSION_COOKIE_NAME", "session.cookieName", "xllmapi_session")?.trim() || "xllmapi_session",
   sessionMaxAgeSeconds: parsePositiveInt("XLLMAPI_SESSION_MAX_AGE_SECONDS", 30 * 24 * 60 * 60),
   authCodeTtlSeconds: parsePositiveInt("XLLMAPI_AUTH_CODE_TTL_SECONDS", 10 * 60),
   passwordResetTtlSeconds: parsePositiveInt("XLLMAPI_PASSWORD_RESET_TTL_SECONDS", 30 * 60),

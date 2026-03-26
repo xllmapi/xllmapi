@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { useLocale } from "@/hooks/useLocale";
@@ -11,6 +11,13 @@ export function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -18,11 +25,15 @@ export function ForgotPasswordPage() {
     setError("");
     setMessage("");
     try {
-      await apiJson("/v1/auth/request-password-reset", {
-        method: "POST",
-        body: JSON.stringify({ email })
-      });
-      setMessage(t("auth.passwordResetRequested"));
+      const result = await apiJson<{ maskedEmail?: string; cooldownSeconds?: number }>(
+        "/v1/auth/request-password-reset",
+        {
+          method: "POST",
+          body: JSON.stringify({ email })
+        }
+      );
+      setMessage(t("auth.passwordResetSentTo").replace("{email}", result.maskedEmail ?? email));
+      setCooldown(result.cooldownSeconds ?? 60);
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
@@ -47,8 +58,12 @@ export function ForgotPasswordPage() {
             onChange={(event) => setEmail(event.target.value)}
             required
           />
-          <FormButton type="submit" disabled={loading}>
-            {loading ? t("common.loading") : t("auth.requestPasswordReset")}
+          <FormButton type="submit" disabled={loading || cooldown > 0}>
+            {loading
+              ? t("common.loading")
+              : cooldown > 0
+                ? `${t("auth.requestPasswordReset")} (${cooldown}s)`
+                : t("auth.requestPasswordReset")}
           </FormButton>
         </form>
 

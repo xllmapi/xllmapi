@@ -24,6 +24,10 @@ const CONFIG_GROUPS: Record<string, string[]> = {
     "min_output_price",
     "max_output_price",
   ],
+  welcome: [
+    "welcome_message_enabled",
+    "welcome_message_content",
+  ],
 };
 
 export function SettingsPage() {

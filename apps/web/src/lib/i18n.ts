@@ -13,16 +13,24 @@ const messages: Record<string, Record<string, string>> = {
     // HomePage
     "home.badge": "Open Beta",
     "home.titlePrefix": "llmapi",
-    "home.subtitle": "共享大语言模型，通过统一的 OpenAI 兼容 API 接入。连接你的 Provider 凭证，贡献到网络，使用任何模型。",
+    "home.subtitle.prefix": "一个支持",
+    "home.subtitle.platform": "平台节点",
+    "home.subtitle.and": "和",
+    "home.subtitle.distributed": "分布式节点",
+    "home.subtitle.suffix": "的大模型共享网络",
     "home.cta.getStarted": "开始使用",
     "home.cta.readDocs": "阅读文档 →",
-    "home.feature1.title": "共享网络",
-    "home.feature1.desc": "贡献你的 API Key，获得积分。用积分访问网络上的任何模型。",
-    "home.feature2.title": "OpenAI 兼容",
-    "home.feature2.desc": "无缝替换 OpenAI API。兼容所有支持 OpenAI 格式的客户端工具。",
-    "home.feature3.title": "多模型接入",
-    "home.feature3.desc": "通过统一 API 端点访问 GPT、Claude、DeepSeek、Gemini 等模型。",
-    "home.models.title": "支持的模型厂商",
+    "home.getApiKey": "获取 API Key",
+    "home.feature1.title": "共享模型网络",
+    "home.feature1.desc": "支持创建平台模型节点和分布式模型两种方式接入到模型网络。",
+    "home.feature2.title": "多 API 格式兼容",
+    "home.feature2.desc": "一个 API 自动识别 OpenAI 和 Anthropic 格式。",
+    "home.feature3.title": "共享获取收益",
+    "home.feature3.desc": "只需共享一个模型的能力，即可获取 Token 收入并访问网络上的所有模型。",
+    "home.feature4.title": "安全可控",
+    "home.feature4.desc": "用户拥有模型的完全控制权，可控制模型是否接入网络或自用，自定义使用量限制。平台只共享模型调用能力，不共享 Key。",
+    "home.agents.title": "主流 Agent 一键接入",
+    "home.agents.desc": "复制配置，即刻在你喜欢的 AI 编程助手中使用 xllmapi。",
 
     // AuthPage
     "auth.title": "登录 xllmapi",
@@ -169,6 +177,11 @@ const messages: Record<string, Record<string, string>> = {
 
     // Security
     "security.title": "安全",
+    "security.setupWelcome": "欢迎加入 xllmapi！请设置登录密码。",
+    "security.setupHint": "设置密码后可以直接用密码登录，无需每次验证码。",
+    "security.setPassword": "设置密码",
+    "security.passwordPlaceholder": "输入密码",
+    "security.skipSetup": "稍后设置 →",
     "security.changePassword": "修改密码",
     "security.currentPassword": "当前密码",
     "security.newPassword": "新密码",
@@ -319,12 +332,14 @@ const messages: Record<string, Record<string, string>> = {
     // Docs
     "docs.title": "API 文档",
     "docs.quickStart": "快速开始",
-    "docs.quickStartDesc": "xllmapi 兼容 OpenAI API 格式。你可以使用任何 OpenAI 兼容的客户端库。",
-    "docs.chatCompletions": "Chat Completions (OpenAI 兼容)",
-    "docs.messages": "Messages (Anthropic 兼容)",
+    "docs.quickStartDesc": "xllmapi 支持 OpenAI、Anthropic 和 xllmapi 统一三种 API 格式。使用你的 API Key 即可调用。",
+    "docs.chatCompletions": "OpenAI 格式",
+    "docs.messages": "Anthropic 格式",
+    "docs.xllmapiUnified": "xllmapi 统一格式",
     "docs.pythonExample": "Python 示例",
+    "docs.agents": "Agent 配置",
     "docs.auth": "认证",
-    "docs.authDesc": "所有 API 请求需要通过 Bearer token（会话）或 x-api-key header 进行认证。登录后可在控制台查看你的 API key。",
+    "docs.authDesc": "所有 API 请求需要通过 Authorization: Bearer <key> 或 x-api-key header 进行认证。在控制台 → API Key 管理中创建。",
 
     // Admin
     "admin.overview.title": "管理总览",
@@ -450,6 +465,7 @@ const messages: Record<string, Record<string, string>> = {
     "admin.settings.title": "系统设置",
     "admin.settings.economy": "经济参数",
     "admin.settings.pricing": "定价参数",
+    "admin.settings.welcome": "新用户欢迎",
     "admin.settings.other": "其他配置",
     "admin.settings.save": "保存设置",
     "admin.settings.saved": "设置已保存",
@@ -677,6 +693,19 @@ const messages: Record<string, Record<string, string>> = {
     "common.empty": "暂无数据",
     "common.copy": "复制",
     "common.copied": "已复制！",
+
+    // Password reset
+    "auth.passwordResetSentTo": "重置链接已发送至 {email}",
+
+    // Site Banner admin
+    "admin.sidebar.banner": "平台公告",
+    "admin.banner.title": "平台公告管理",
+    "admin.banner.enabled": "公告状态",
+    "admin.banner.content": "公告内容",
+    "admin.banner.type": "类型",
+    "admin.banner.preview": "预览",
+    "admin.banner.save": "保存",
+    "admin.banner.saved": "已保存",
   },
   en: {
     // Header
@@ -692,16 +721,24 @@ const messages: Record<string, Record<string, string>> = {
     // HomePage
     "home.badge": "Open Beta",
     "home.titlePrefix": "llmapi",
-    "home.subtitle": "Share and access large language models through a unified, OpenAI-compatible API. Connect your provider credentials, contribute to the network, and use any model.",
+    "home.subtitle.prefix": "An LLM sharing network powered by",
+    "home.subtitle.platform": "Platform Nodes",
+    "home.subtitle.and": "and",
+    "home.subtitle.distributed": "Distributed Nodes",
+    "home.subtitle.suffix": "",
     "home.cta.getStarted": "Get Started",
     "home.cta.readDocs": "Read Docs →",
-    "home.feature1.title": "Sharing Network",
-    "home.feature1.desc": "Contribute your API keys, earn credits. Use credits to access any model on the network.",
-    "home.feature2.title": "OpenAI Compatible",
-    "home.feature2.desc": "Drop-in replacement for OpenAI API. Works with any client library or tool that supports the OpenAI format.",
-    "home.feature3.title": "Multi-Model Access",
-    "home.feature3.desc": "Access GPT, Claude, DeepSeek, Gemini, and more through a single unified API endpoint.",
-    "home.models.title": "Supported Providers",
+    "home.getApiKey": "Get API Key",
+    "home.feature1.title": "Shared Model Network",
+    "home.feature1.desc": "Join the network by creating platform model nodes or distributed model nodes.",
+    "home.feature2.title": "Multi-API Format",
+    "home.feature2.desc": "One API auto-detects OpenAI and Anthropic formats.",
+    "home.feature3.title": "Share & Earn",
+    "home.feature3.desc": "Share one model to earn tokens and access every model on the network.",
+    "home.feature4.title": "Secure & Controlled",
+    "home.feature4.desc": "Full control — choose whether to share your model on the network or keep it private, set custom usage limits. The platform shares capabilities, never your keys.",
+    "home.agents.title": "Works with Your Favorite Agents",
+    "home.agents.desc": "Copy the config and start using xllmapi in your AI coding assistant.",
 
     // AuthPage
     "auth.title": "Sign in to xllmapi",
@@ -848,6 +885,11 @@ const messages: Record<string, Record<string, string>> = {
 
     // Security
     "security.title": "Security",
+    "security.setupWelcome": "Welcome to xllmapi! Please set your login password.",
+    "security.setupHint": "With a password you can sign in directly without a verification code each time.",
+    "security.setPassword": "Set Password",
+    "security.passwordPlaceholder": "Enter password",
+    "security.skipSetup": "Set up later →",
     "security.changePassword": "Change Password",
     "security.currentPassword": "Current password",
     "security.newPassword": "New password",
@@ -998,12 +1040,14 @@ const messages: Record<string, Record<string, string>> = {
     // Docs
     "docs.title": "API Documentation",
     "docs.quickStart": "Quick Start",
-    "docs.quickStartDesc": "xllmapi is compatible with the OpenAI API format. You can use any OpenAI-compatible client library by pointing it to your xllmapi instance.",
-    "docs.chatCompletions": "Chat Completions (OpenAI Compatible)",
-    "docs.messages": "Messages (Anthropic Compatible)",
+    "docs.quickStartDesc": "xllmapi supports OpenAI, Anthropic, and xllmapi unified API formats. Use your API Key to get started.",
+    "docs.chatCompletions": "OpenAI Format",
+    "docs.messages": "Anthropic Format",
+    "docs.xllmapiUnified": "xllmapi Unified",
     "docs.pythonExample": "Python Example",
+    "docs.agents": "Agent Config",
     "docs.auth": "Authentication",
-    "docs.authDesc": "All API requests require authentication via either a Bearer token (session-based) or an API key passed in the x-api-key header. You can find your API key in the Dashboard after logging in.",
+    "docs.authDesc": "All API requests require authentication via Authorization: Bearer <key> or x-api-key header. Create keys in Dashboard → API Key Management.",
 
     // Admin
     "admin.overview.title": "Admin Overview",
@@ -1129,6 +1173,7 @@ const messages: Record<string, Record<string, string>> = {
     "admin.settings.title": "Settings",
     "admin.settings.economy": "Economy",
     "admin.settings.pricing": "Pricing",
+    "admin.settings.welcome": "New User Welcome",
     "admin.settings.other": "Other",
     "admin.settings.save": "Save Settings",
     "admin.settings.saved": "Settings saved",
@@ -1356,6 +1401,19 @@ const messages: Record<string, Record<string, string>> = {
     "common.empty": "No data",
     "common.copy": "Copy",
     "common.copied": "Copied!",
+
+    // Password reset
+    "auth.passwordResetSentTo": "Reset link sent to {email}",
+
+    // Site Banner admin
+    "admin.sidebar.banner": "Site Banner",
+    "admin.banner.title": "Site Banner",
+    "admin.banner.enabled": "Banner Status",
+    "admin.banner.content": "Content",
+    "admin.banner.type": "Type",
+    "admin.banner.preview": "Preview",
+    "admin.banner.save": "Save",
+    "admin.banner.saved": "Saved",
   },
 };
 

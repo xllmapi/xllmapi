@@ -86,6 +86,18 @@ export async function handleAuthRoutes(
     }
 
     const result = await platformService.requestLoginCode(body.email);
+    if (!result.eligible) {
+      const response = json(403, {
+        error: {
+          code: "invite_required",
+          message: "this email has not been invited",
+          requestId
+        }
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
     const response = json(200, {
       ok: true,
       requestId,
@@ -95,6 +107,33 @@ export async function handleAuthRoutes(
       cooldownSeconds: config.emailSendCooldownSeconds,
       ...(config.isProduction ? {} : { devCode: result.code })
     });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/v1/auth/confirm-email-change") {
+    const body = await read_json<{ token: string }>(req);
+    if (!body.token) {
+      const response = json(400, { error: { message: "token is required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const auth = await authenticate_session_only_(req);
+    const result = await platformService.confirmMeEmailChange({
+      token: body.token,
+      sessionId: auth?.sessionId ?? null
+    });
+    if (!result.ok) {
+      const response = json(400, { error: { code: result.code, message: result.message, requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const response = json(200, { ok: true, requestId, data: result.data });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
@@ -120,8 +159,22 @@ export async function handleAuthRoutes(
       return true;
     }
 
-    await platformService.requestPasswordReset(body.email);
-    const response = json(200, { ok: true, requestId });
+    const result = await platformService.requestPasswordReset(body.email);
+    if (!result.accepted) {
+      const response = json(404, {
+        error: { code: "not_found", message: "email not registered", requestId }
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const maskedEmail = body.email.replace(/^(.).+(@.*)$/, "$1***$2");
+    const response = json(200, {
+      ok: true,
+      requestId,
+      maskedEmail,
+      cooldownSeconds: config.emailSendCooldownSeconds
+    });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
@@ -139,33 +192,6 @@ export async function handleAuthRoutes(
     const result = await platformService.resetPassword({
       token: body.token,
       newPassword: body.newPassword
-    });
-    if (!result.ok) {
-      const response = json(400, { error: { code: result.code, message: result.message, requestId } });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
-      return true;
-    }
-
-    const response = json(200, { ok: true, requestId, data: result.data });
-    res.writeHead(response.statusCode, response.headers);
-    res.end(response.payload);
-    return true;
-  }
-
-  if (req.method === "POST" && url.pathname === "/v1/auth/confirm-email-change") {
-    const body = await read_json<{ token: string }>(req);
-    if (!body.token) {
-      const response = json(400, { error: { message: "token is required", requestId } });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
-      return true;
-    }
-
-    const auth = await authenticate_session_only_(req);
-    const result = await platformService.confirmMeEmailChange({
-      token: body.token,
-      sessionId: auth?.sessionId ?? null
     });
     if (!result.ok) {
       const response = json(400, { error: { code: result.code, message: result.message, requestId } });

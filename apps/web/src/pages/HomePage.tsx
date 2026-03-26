@@ -1,228 +1,383 @@
 import { useEffect, useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Footer } from "@/components/layout/Footer";
 import { useLocale } from "@/hooks/useLocale";
+import { useAuth } from "@/hooks/useAuth";
+import { CopyButton } from "@/components/ui/CopyButton";
 
-const MODEL_NAMES = ["GPT", "Claude", "DeepSeek", "Gemini", "Opus", "Llama"];
+
+// Cycle: all models one by one (1s each) → X (5s) → repeat
+const MODELS = ["GPT", "Claude", "DeepSeek", "Gemini", "Kimi", "MiniMax"];
 
 function AnimatedTitle() {
-  const [index, setIndex] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [display, setDisplay] = useState("X");
+  const [isX, setIsX] = useState(true);
+  const [fading, setFading] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const queueRef = useRef<string[]>([]);
 
   useEffect(() => {
-    const cycle = () => {
-      setIsAnimating(true);
+    const showNext = () => {
+      // If queue empty, refill with all models + X at end
+      if (queueRef.current.length === 0) {
+        queueRef.current = [...MODELS, "X"];
+      }
+      const next = queueRef.current.shift()!;
+      setFading(true);
       timeoutRef.current = setTimeout(() => {
-        setIndex((i) => (i + 1) % MODEL_NAMES.length);
-        setIsAnimating(false);
-        timeoutRef.current = setTimeout(cycle, 2000);
-      }, 400);
+        setDisplay(next);
+        setIsX(next === "X");
+        setFading(false);
+      }, 350);
     };
-    timeoutRef.current = setTimeout(cycle, 2000);
+    const delay = isX ? 5000 : 1200;
+    timeoutRef.current = setTimeout(showNext, delay);
     return () => clearTimeout(timeoutRef.current);
-  }, []);
+  }, [isX, display]);
 
   return (
-    <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight tracking-tight">
-      <span className="inline-flex items-baseline">
-        <span
-          className="inline-block overflow-hidden h-[1.15em] relative align-bottom"
-          style={{ minWidth: "3ch" }}
-        >
-          <span
-            className="inline-block text-accent transition-all duration-400 ease-in-out"
-            style={{
-              transform: isAnimating ? "translateY(-110%)" : "translateY(0)",
-              opacity: isAnimating ? 0 : 1,
-            }}
-          >
-            {MODEL_NAMES[index]}
-          </span>
-        </span>
-        <span className="text-text-primary">llmapi</span>
+    <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight tracking-tight text-center">
+      <span
+        className="inline-block transition-all duration-350 ease-in-out"
+        style={{
+          opacity: fading ? 0 : 1,
+          transform: fading ? "translateY(-12%)" : "translateY(0)",
+          color: "var(--color-accent)",
+          filter: isX ? "none" : "opacity(0.45)",
+        }}
+      >
+        {display}
       </span>
+      <span className="text-text-primary">llmapi</span>
     </h1>
   );
 }
 
-const PROVIDERS: { name: string; icon: React.ReactNode }[] = [
-  {
-    name: "OpenAI",
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
-        <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.998 5.998 0 0 0-3.998 2.9 6.042 6.042 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
+// ── Infinite scroll ────────────────────────────────────────────────
+const AVAILABLE = new Set(["deepseek", "minimax", "kimi", "moonshot"]);
+
+const ROW_1 = ["GPT-4o", "Claude", "DeepSeek", "Gemini", "Kimi", "MiniMax", "Qwen", "Llama"];
+const ROW_2 = ["Moonshot", "GPT-o4", "Claude Sonnet", "DeepSeek R1", "Mistral", "Gemma", "Yi"];
+const ROW_3 = ["Claude Opus", "GPT-4o-mini", "Kimi Coding", "MiniMax M2.7", "Qwen 2.5", "Llama 3.3"];
+
+function isActive(name: string) {
+  const l = name.toLowerCase();
+  for (const m of AVAILABLE) if (l.includes(m)) return true;
+  return false;
+}
+
+function InfiniteScrollRow({ models, reverse }: { models: string[]; reverse?: boolean }) {
+  const items = [...models, ...models, ...models, ...models];
+  const dur = models.length * 5;
+  return (
+    <div className="overflow-hidden">
+      <div
+        className="flex gap-5 whitespace-nowrap"
+        style={{ width: "max-content", animation: `${reverse ? "scroll-r" : "scroll-l"} ${dur}s linear infinite` }}
+      >
+        {items.map((m, i) => (
+          <span
+            key={`${m}-${i}`}
+            className={`inline-block rounded-full border px-6 py-2.5 text-base font-semibold select-none ${
+              isActive(m) ? "border-accent/40 bg-accent/8 text-accent" : "border-line/60 bg-panel/20 text-text-tertiary/60"
+            }`}
+          >
+            {m}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Scroll arrow ───────────────────────────────────────────────────
+function ScrollDownArrow({ targetId }: { targetId: string }) {
+  return (
+    <button
+      onClick={() => document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth" })}
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-transparent border-none cursor-pointer text-text-tertiary hover:text-accent transition-colors animate-bounce"
+      aria-label="Scroll down"
+    >
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 12 15 18 9" />
       </svg>
-    ),
+    </button>
+  );
+}
+
+// ── Agent tabs ─────────────────────────────────────────────────────
+const AGENTS = [
+  {
+    name: "OpenCode",
+    code: `// ~/.config/opencode/opencode.json
+{
+  "provider": {
+    "xllmapi": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://api.xllmapi.com/xllmapi/v1",
+        "apiKey": "<YOUR_API_KEY>"
+      },
+      "models": {
+        "deepseek-chat": { "name": "DeepSeek" }
+      }
+    },
+    "xllmapi-anthropic": {
+      "npm": "@ai-sdk/anthropic",
+      "options": {
+        "baseURL": "https://api.xllmapi.com/xllmapi/v1",
+        "apiKey": "<YOUR_API_KEY>"
+      },
+      "models": {
+        "MiniMax-M2.5": { "name": "MiniMax" }
+      }
+    }
+  }
+}`,
   },
   {
-    name: "Anthropic",
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
-        <path d="M17.304 3.541h-3.672l6.696 16.918h3.672zm-10.608 0L0 20.459h3.744l1.37-3.553h7.005l1.369 3.553h3.744L10.536 3.541zm-.372 10.339l2.3-5.965 2.3 5.965z" />
-      </svg>
-    ),
+    name: "Claude Code",
+    code: `// ~/.claude/settings.json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.xllmapi.com/xllmapi/v1",
+    "ANTHROPIC_AUTH_TOKEN": "<YOUR_API_KEY>",
+    "ANTHROPIC_MODEL": "MiniMax-M2.7",
+    "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2.5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-chat"
+  }
+}`,
   },
   {
-    name: "Google",
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
-        <path d="M12 11.366v3.38h5.382c-.236 1.228-.932 2.272-1.968 2.966l3.18 2.47c1.852-1.71 2.92-4.224 2.92-7.208 0-.696-.062-1.366-.178-2.012H12z" fill="#4285F4" />
-        <path d="M5.266 14.294l-.716.548-2.538 1.976C3.836 20.148 7.614 22 12 22c2.697 0 4.952-.89 6.594-2.418l-3.18-2.47c-.882.594-2.01.95-3.414.95-2.628 0-4.852-1.776-5.648-4.164z" fill="#34A853" />
-        <path d="M2.012 6.182A10.93 10.93 0 0 0 1 12c0 1.77.366 3.446 1.012 4.966l3.254-2.524C4.886 13.538 4.636 12.8 4.636 12s.25-1.538.63-2.442z" fill="#FBBC05" />
-        <path d="M12 4.636c1.48 0 2.812.51 3.86 1.51l2.894-2.894C16.942 1.614 14.686.636 12 .636 7.614.636 3.836 2.488 2.012 5.818l3.254 2.524C6.062 6.06 8.286 4.636 12 4.636z" fill="#EA4335" />
-      </svg>
-    ),
-  },
-  {
-    name: "DeepSeek",
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
-        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 1.5a8.5 8.5 0 1 1 0 17 8.5 8.5 0 0 1 0-17zm-1.5 4a.75.75 0 0 0-.75.75v2.5h-2.5a.75.75 0 0 0 0 1.5h2.5v2.5a.75.75 0 0 0 1.5 0v-2.5h2.5v2.5a.75.75 0 0 0 1.5 0v-2.5h2.5a.75.75 0 0 0 0-1.5h-2.5v-2.5a.75.75 0 0 0-1.5 0v2.5h-2.5v-2.5a.75.75 0 0 0-.75-.75z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Meta",
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
-        <path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a4.451 4.451 0 0 0 1.694 2.587c.822.597 1.834.891 2.908.891.551 0 1.14-.1 1.76-.305.617-.203 1.283-.522 1.997-.96a19.3 19.3 0 0 0 2.49-1.874l.505-.436-.526-.403a24.7 24.7 0 0 1-2.207-1.98c-.678-.7-1.252-1.381-1.708-2.026-.457-.645-.8-1.265-1.023-1.843a4.128 4.128 0 0 1-.334-1.538c0-.564.148-1.07.444-1.496.296-.426.72-.64 1.303-.64.617 0 1.19.36 1.72 1.063.524.69 1.03 1.613 1.506 2.756.33.779.642 1.616.94 2.504.173.518.34 1.048.5 1.587.16.54.33 1.094.51 1.656.37-1.063.766-2.087 1.186-3.052.548-1.262 1.074-2.255 1.592-3.008.526-.766 1.085-1.35 1.674-1.749.588-.398 1.226-.599 1.926-.599 1.076 0 1.932.444 2.596 1.322.669.882.997 2.075.997 3.514 0 2.291-.752 4.691-2.207 6.742a.762.762 0 0 0 .166 1.054.716.716 0 0 0 1.028-.17C21.613 17.2 22.5 14.48 22.5 11.498c0-1.9-.464-3.508-1.399-4.76-.94-1.26-2.2-1.898-3.788-1.898-.92 0-1.755.274-2.525.822-.76.54-1.438 1.265-2.034 2.168a18.6 18.6 0 0 0-1.262 2.263c-.21-.56-.43-1.1-.666-1.614-.478-1.05-1.017-1.96-1.621-2.728C8.6 4.83 7.84 4.03 6.915 4.03z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Mistral",
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
-        <path d="M3 3h4v4H3zm14 0h4v4h-4zM3 7h4v4H3zm4 0h4v4H7zm6 0h4v4h-4zm4 0h4v4h-4zM3 11h4v4H3zm8 0h4v4h-4zm6 0h4v4h-4zM3 15h4v4H3zm4 0h4v4H7zm6 0h4v4h-4zm4 0h4v4h-4zM3 19h4v4H3zm14 0h4v4h-4z" />
-      </svg>
-    ),
-  },
-  {
-    name: "Alibaba",
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
-        <path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18L18.36 7.5 12 10.82 5.64 7.5 12 4.18zM5 9.06l6 3.31v6.57l-6-3.31V9.06zm8 9.88V12.37l6-3.31v6.57l-6 3.31z" />
-      </svg>
-    ),
-  },
-  {
-    name: "xAI",
-    icon: (
-      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
-        <path d="M2.3 4l7.5 8.3L2 20h1.7l6.8-6.7L15.8 20H22l-7.8-8.7L21.5 4h-1.7l-6.4 6.3L8.5 4zm2.5 1.1h2.6l12 13.8h-2.6z" />
-      </svg>
-    ),
+    name: "OpenClaw",
+    code: `# Environment variables
+OPENAI_API_BASE=https://api.xllmapi.com/v1
+OPENAI_API_KEY=<YOUR_API_KEY>`,
   },
 ];
 
-const FEATURES = [
+/** Strip leading comment lines (// or #) from code for clipboard */
+function stripComments(code: string): string {
+  const lines = code.split("\n");
+  let start = 0;
+  while (start < lines.length && /^\s*(\/\/|#)/.test(lines[start]!)) start++;
+  return lines.slice(start).join("\n").trim();
+}
+
+function AgentTabs() {
+  const [idx, setIdx] = useState(0);
+  const config = AGENTS[idx]!;
+  return (
+    <div className="rounded-[var(--radius-card)] border border-line bg-[#0d1117] overflow-hidden text-[clamp(10px,1.2vw,13px)]">
+      <div className="flex border-b border-line/50">
+        {AGENTS.map((a, i) => (
+          <button
+            key={a.name}
+            onClick={() => setIdx(i)}
+            className={`px-4 py-2 text-[1em] font-medium cursor-pointer transition-colors border-none ${
+              i === idx ? "bg-accent/10 text-accent" : "bg-transparent text-text-tertiary hover:text-text-secondary"
+            }`}
+          >
+            {a.name}
+          </button>
+        ))}
+      </div>
+      <div className="relative px-4 py-3">
+        <pre className="text-[1em] leading-relaxed text-[#c9d1d9] overflow-x-auto"><code>{config.code}</code></pre>
+        <div className="absolute top-2.5 right-3"><CopyButton text={stripComments(config.code)} /></div>
+      </div>
+    </div>
+  );
+}
+
+// ── API endpoint box — single row with icon tabs ──────────────────
+declare const __XLLMAPI_API_BASE__: string;
+declare const __XLLMAPI_DOCS_URL__: string;
+const _BASE = __XLLMAPI_API_BASE__;
+const _DOCS = __XLLMAPI_DOCS_URL__;
+
+const API_FORMATS = [
   {
-    titleKey: "home.feature1.title",
-    descKey: "home.feature1.desc",
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-        <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
-        <circle cx="16" cy="10" r="3" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="10" cy="22" r="3" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="22" cy="22" r="3" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="16" y1="13" x2="10" y2="19" stroke="currentColor" strokeWidth="1.5" opacity="0.6" />
-        <line x1="16" y1="13" x2="22" y2="19" stroke="currentColor" strokeWidth="1.5" opacity="0.6" />
-      </svg>
-    ),
+    id: "xllmapi", url: `${_BASE}/xllmapi/v1`, tip: "xllmapi",
+    icon: <span className="font-black text-[11px] leading-none">X</span>,
   },
   {
-    titleKey: "home.feature2.title",
-    descKey: "home.feature2.desc",
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-        <rect x="4" y="8" width="24" height="16" rx="3" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
-        <path d="M10 16L14 20L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
+    id: "openai", url: `${_BASE}/v1`, tip: "OpenAI",
+    // OpenAI logomark
+    icon: <svg viewBox="0 0 320 320" className="w-4 h-4" fill="currentColor"><path d="M297.06 130.97c7.26-21.79 4.76-45.66-6.85-65.48-17.46-30.4-52.56-46.04-86.84-38.68C189.84 8.89 170.87 0 150.64 0c-34.82 0-65.26 23.43-74.38 57.04-22.65 3.25-42.71 16.58-54.78 36.39-17.57 30.36-13.75 68.71 9.46 95.08-7.26 21.79-4.76 45.66 6.85 65.48 17.46 30.4 52.56 46.04 86.84 38.68 13.53 17.92 32.5 26.81 52.73 26.81 34.82 0 65.27-23.43 74.38-57.04 22.65-3.25 42.71-16.58 54.78-36.39 17.57-30.36 13.75-68.71-9.46-95.08zM150.64 290.67c-14.43 0-27.34-4.94-37.96-13.2l1.88-1.09 63.12-36.43c3.23-1.85 5.19-5.27 5.19-8.96v-89.02l26.67 15.4c.29.15.49.42.54.74v73.63c-.03 32.69-26.7 59.19-59.44 58.93zM42.97 237.54c-7.21-12.44-9.82-27.14-7.37-41.44l1.88 1.13 63.12 36.43c3.17 1.87 7.12 1.87 10.31 0l77.13-44.53v30.79c.01.33-.12.65-.37.87l-63.86 36.87c-28.26 16.37-64.52 6.64-80.84-20.12zM27.68 105.24c7.16-12.45 18.21-21.93 31.43-27.1v75.09c-.02 3.69 1.95 7.1 5.17 8.97l77.13 44.53-26.67 15.4c-.27.18-.61.21-.91.08L49.96 185.28c-28.21-16.31-38.1-52.41-22.28-80.04zm217.17 50.48-77.13-44.53L194.39 95.8c.27-.18.61-.21.91-.08l63.86 36.86c28.3 16.33 38.18 52.57 22.2 80.14-7.16 12.41-18.17 21.87-31.35 27.1v-75.13c0-3.67-1.95-7.08-5.16-8.97zm26.56-41.62-1.88-1.13-63.12-36.43c-3.17-1.87-7.12-1.87-10.31 0l-77.13 44.53V90.28c-.01-.33.12-.65.37-.87l63.86-36.84c28.3-16.33 64.58-6.55 80.84 20.24 7.16 12.37 9.78 27.02 7.37 41.29zM112.87 195.2l-26.67-15.4c-.29-.15-.49-.42-.54-.74V105.4c.03-32.72 26.78-59.24 59.5-58.93 14.33.13 27.17 5.07 37.76 13.26l-1.88 1.09-63.12 36.43c-3.23 1.85-5.19 5.27-5.19 8.96l.14 88.99zm14.49-31.3L160 144.65l32.63 18.84v37.69L160 220.02l-32.64-18.83V163.9z"/></svg>,
   },
   {
-    titleKey: "home.feature3.title",
-    descKey: "home.feature3.desc",
-    icon: (
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-        <rect x="3" y="6" width="10" height="8" rx="2" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
-        <rect x="19" y="6" width="10" height="8" rx="2" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
-        <rect x="11" y="18" width="10" height="8" rx="2" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
-        <line x1="8" y1="14" x2="16" y2="18" stroke="currentColor" strokeWidth="1.5" opacity="0.6" />
-        <line x1="24" y1="14" x2="16" y2="18" stroke="currentColor" strokeWidth="1.5" opacity="0.6" />
-      </svg>
-    ),
+    id: "anthropic", url: `${_BASE}/anthropic/v1`, tip: "Anthropic",
+    // Anthropic logomark
+    icon: <svg viewBox="0 0 256 176" className="w-4 h-4" fill="currentColor"><path d="M147.487 0 256 176h-53.32L94.163 0h53.324ZM66.138 0 0 176h53.32l22.286-57.77h69.49L122.81 176h53.32L109.465 0H66.138Z"/></svg>,
   },
 ];
 
-export function HomePage() {
-  const { t } = useLocale();
+function ApiEndpointBox({ onGetKey, t }: { onGetKey: () => void; t: (k: string) => string }) {
+  const [fmt, setFmt] = useState(0);
+  const current = API_FORMATS[fmt]!;
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Hero */}
-      <section className="flex flex-col items-center justify-center pt-36 pb-24 px-6 text-center relative">
+    <div className="flex items-center gap-2 max-w-2xl w-full mb-12">
+      {/* Format icon buttons */}
+      <div className="flex items-center gap-1 shrink-0">
+        {API_FORMATS.map((f, i) => (
+          <button
+            key={f.id}
+            onClick={() => setFmt(i)}
+            title={f.tip}
+            className={`w-8 h-8 flex items-center justify-center rounded-md cursor-pointer transition-all border ${
+              i === fmt
+                ? "border-accent/50 bg-accent/10 text-accent"
+                : "border-transparent bg-transparent text-text-tertiary hover:text-text-secondary hover:bg-panel/50"
+            }`}
+          >
+            {f.icon}
+          </button>
+        ))}
+      </div>
+
+      {/* URL */}
+      <div className="flex-1 rounded-[var(--radius-input)] border border-line bg-[#0d1117] px-4 py-2.5 flex items-center min-w-0">
+        <span className="text-accent text-sm font-mono truncate flex-1">{current.url}</span>
+        <div className="shrink-0 ml-2"><CopyButton text={current.url} /></div>
+      </div>
+
+      {/* Get key */}
+      <button
+        onClick={onGetKey}
+        className="shrink-0 rounded-[var(--radius-btn)] border border-accent/30 bg-transparent px-4 py-2.5 text-sm font-medium text-accent cursor-pointer hover:bg-accent/5 transition-colors whitespace-nowrap"
+      >
+        {t("home.getApiKey")} →
+      </button>
+    </div>
+  );
+}
+
+// ── Page ───────────────────────────────────────────────────────────
+export function HomePage() {
+  const { t } = useLocale();
+  const { isLoggedIn } = useAuth();
+  const navigate = useNavigate();
+
+  return (
+    <div className="home-snap-container">
+
+      {/* ─── Screen 1: Hero ─── */}
+      <section id="screen-hero" className="home-snap-section relative flex flex-col items-center justify-center px-6">
         <span className="inline-block mb-6 rounded-[var(--radius-badge)] border border-accent/20 bg-accent-bg px-4 py-1.5 text-xs font-medium text-accent">
           {t("home.badge")}
         </span>
         <AnimatedTitle />
-        <p className="text-text-secondary text-lg max-w-2xl mt-6 mb-10 leading-relaxed">
-          {t("home.subtitle")}
+        <p className="text-text-secondary text-lg max-w-2xl mt-6 mb-8 leading-relaxed text-center">
+          {t("home.subtitle.prefix")}
+          <span className="inline-block mx-1.5 rounded-md border border-accent/20 bg-accent/5 px-2 py-0.5 text-accent font-medium">{t("home.subtitle.platform")}</span>
+          {t("home.subtitle.and")}
+          <span className="inline-block mx-1.5 rounded-md border border-purple-400/30 bg-purple-500/10 px-2 py-0.5 text-purple-400 font-medium">{t("home.subtitle.distributed")}</span>
+          {t("home.subtitle.suffix")}
         </p>
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-4 items-center mb-10">
           <Link
             to="/auth"
             className="rounded-[var(--radius-btn)] bg-accent px-7 py-3 text-sm font-semibold text-[#081018] no-underline hover:no-underline hover:opacity-90 shadow-[var(--shadow-cta)] transition-opacity"
           >
             {t("home.cta.getStarted")}
           </Link>
-          <Link
-            to="/docs"
+          <a
+            href={_DOCS}
             className="text-accent text-sm font-medium no-underline hover:no-underline hover:opacity-80 transition-opacity"
           >
             {t("home.cta.readDocs")}
-          </Link>
+          </a>
         </div>
+
+        {/* API box with format tabs */}
+        <ApiEndpointBox
+          onGetKey={() => navigate(isLoggedIn ? "/app/api-keys" : "/auth")}
+          t={t}
+        />
+
+        {/* Model scroll — 3 rows */}
+        <div className="w-full space-y-4 overflow-hidden">
+          <InfiniteScrollRow models={ROW_1} />
+          <InfiniteScrollRow models={ROW_2} reverse />
+          <InfiniteScrollRow models={ROW_3} />
+        </div>
+
+        <ScrollDownArrow targetId="screen-features" />
       </section>
 
-      {/* Features */}
-      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {FEATURES.map((f) => (
-            <div
-              key={f.titleKey}
-              className="rounded-[var(--radius-card)] border border-line bg-panel p-6 transition-colors hover:border-accent/20"
-            >
-              <div className="text-accent mb-4">{f.icon}</div>
-              <h3 className="text-base font-semibold mb-2 tracking-tight">{t(f.titleKey)}</h3>
-              <p className="text-text-secondary text-sm leading-relaxed">{t(f.descKey)}</p>
+      {/* ─── Screen 2: Features ─── */}
+      <section id="screen-features" className="home-snap-section relative flex flex-col items-center justify-center px-6 border-t border-line/30">
+        <div className="mx-auto max-w-[var(--spacing-content)] w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-20 gap-y-16">
+            <div>
+              <h3 className="text-xl font-bold mb-3 tracking-tight">{t("home.feature1.title")}</h3>
+              <p className="text-text-secondary text-base leading-relaxed">{t("home.feature1.desc")}</p>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Supported Providers */}
-      <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-24">
-        <h2 className="text-2xl font-bold text-center mb-10 tracking-tight">
-          {t("home.models.title")}
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto">
-          {PROVIDERS.map((p) => (
-            <div
-              key={p.name}
-              className="flex flex-col items-center gap-3 rounded-[var(--radius-card)] border border-line bg-panel p-6 transition-all hover:border-accent/25 hover:bg-accent-bg/50"
-            >
-              <div className="text-text-secondary">{p.icon}</div>
-              <span className="text-sm font-medium text-text-primary">{p.name}</span>
+            <div>
+              <h3 className="text-xl font-bold mb-3 tracking-tight">{t("home.feature2.title")}</h3>
+              <p className="text-text-secondary text-base leading-relaxed">{t("home.feature2.desc")}</p>
             </div>
-          ))}
+            <div>
+              <h3 className="text-xl font-bold mb-3 tracking-tight">{t("home.feature3.title")}</h3>
+              <p className="text-text-secondary text-base leading-relaxed">{t("home.feature3.desc")}</p>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold mb-3 tracking-tight">{t("home.feature4.title")}</h3>
+              <p className="text-text-secondary text-base leading-relaxed">{t("home.feature4.desc")}</p>
+            </div>
+          </div>
+        </div>
+        <ScrollDownArrow targetId="screen-agents" />
+      </section>
+
+      {/* ─── Screen 3: Agents ─── */}
+      <section id="screen-agents" className="home-snap-section relative flex items-center px-6 border-t border-line/30 overflow-hidden">
+        <div className="mx-auto max-w-[var(--spacing-content)] w-full flex flex-col md:flex-row md:items-center gap-10 py-12">
+          <div className="md:w-[240px] shrink-0 text-center md:text-left">
+            <h2 className="text-3xl font-bold mb-4 tracking-tight">
+              {t("home.agents.title")}
+            </h2>
+            <p className="text-text-secondary text-base leading-relaxed">
+              {t("home.agents.desc")}
+            </p>
+          </div>
+          <div className="flex-1 min-w-0">
+            <AgentTabs />
+          </div>
         </div>
       </section>
 
-      <div className="mt-auto">
+      {/* Footer outside snap */}
+      <div className="home-snap-section-auto">
         <Footer />
       </div>
+
+      <style>{`
+        .home-snap-container {
+          height: 100vh;
+          overflow-y: auto;
+          scroll-snap-type: y mandatory;
+          scroll-behavior: smooth;
+        }
+        .home-snap-section {
+          min-height: 100vh;
+          scroll-snap-align: start;
+          scroll-snap-stop: always;
+        }
+        .home-snap-section-auto {
+          scroll-snap-align: end;
+        }
+        @keyframes scroll-l {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-25%); }
+        }
+        @keyframes scroll-r {
+          0% { transform: translateX(-25%); }
+          100% { transform: translateX(0); }
+        }
+      `}</style>
     </div>
   );
 }

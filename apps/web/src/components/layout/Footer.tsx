@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+declare const __XLLMAPI_DOCS_URL__: string;
+
 export function Footer() {
   return (
     <footer className="border-t border-line py-8 text-center text-sm text-text-tertiary">
@@ -8,9 +10,9 @@ export function Footer() {
           <Link to="/" className="text-text-tertiary hover:text-text-secondary no-underline transition-colors">
             Home
           </Link>
-          <Link to="/docs" className="text-text-tertiary hover:text-text-secondary no-underline transition-colors">
+          <a href={__XLLMAPI_DOCS_URL__} className="text-text-tertiary hover:text-text-secondary no-underline transition-colors">
             Docs
-          </Link>
+          </a>
         </nav>
         <p className="text-text-tertiary/60 text-xs">&copy; {new Date().getFullYear()} xllmapi</p>
       </div>

@@ -19,3 +19,8 @@ build/
 *.pid
 .superpowers/
 apps/web/releases/
+.platform.xllmapi.json
+
+# Next.js docs
+apps/docs/.next/
+apps/docs/.source/

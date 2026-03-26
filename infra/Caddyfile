@@ -1,23 +1,42 @@
 # xllmapi Production Reverse Proxy
-# Usage: caddy run --config infra/Caddyfile
+# Usage: sudo cp infra/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+#
+# For Cloudflare Origin Certificate (no domain registration required):
+#   tls /etc/caddy/cf-origin.pem /etc/caddy/cf-origin-key.pem
+#
+# For Let's Encrypt (after domain registration):
+#   Remove the tls line — Caddy auto-provisions certificates
 
-{$XLLMAPI_DOMAIN:localhost} {
-    # Auto HTTPS (Let's Encrypt)
+{$XLLMAPI_DOMAIN:api.xllmapi.com} {
+    # TLS: uncomment ONE of the following
+    # tls /etc/caddy/cf-origin.pem /etc/caddy/cf-origin-key.pem   # Cloudflare Origin
+    # tls internal                                                  # Local/dev self-signed
+
     reverse_proxy localhost:3000 {
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto {scheme}
 
+        # Health check for zero-downtime reload
+        health_uri /readyz
+        health_interval 5s
+        health_timeout 3s
+
         # SSE streaming support
         flush_interval -1
     }
 
-    # Compress
     encode gzip zstd
 
-    # Logging
     log {
         output file /var/log/caddy/xllmapi-access.log
         format json
     }
 }
+
+# Docs site (optional — uncomment if deploying docs on same server)
+# {$XLLMAPI_DOCS_DOMAIN:docs.xllmapi.com} {
+#     tls /etc/caddy/cf-origin.pem /etc/caddy/cf-origin-key.pem
+#     reverse_proxy localhost:3001
+#     encode gzip zstd
+# }

@@ -43,5 +43,37 @@ export async function handlePublicRoutes(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/v1/site-banner") {
+    const configRows = await platformService.getAdminConfig() as { key: string; value: string }[];
+    const lookup = new Map(configRows.map((r) => [r.key, r.value]));
+    const enabled = lookup.get("site_banner_enabled") === "true";
+    const content = lookup.get("site_banner_content") ?? "";
+    const type = lookup.get("site_banner_type") ?? "info";
+    const response = json(200, {
+      requestId,
+      enabled,
+      content: enabled ? content : "",
+      type: enabled ? type : "info"
+    });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/v1/welcome-message") {
+    const configRows = await platformService.getAdminConfig() as { key: string; value: string }[];
+    const lookup = new Map(configRows.map((r) => [r.key, r.value]));
+    const enabled = lookup.get("welcome_message_enabled") === "true";
+    const content = lookup.get("welcome_message_content") ?? "";
+    const response = json(200, {
+      requestId,
+      enabled,
+      content: enabled ? content : ""
+    });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   return false;
 }
