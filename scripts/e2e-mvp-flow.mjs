@@ -101,6 +101,14 @@ const expectStatus = async (path, init, expectedStatus) => {
   return r.body;
 };
 
+const getAdminEmailDeliveries = async (adminToken, limit = 100) => {
+  const result = await expectOk(`/v1/admin/email-deliveries?limit=${limit}`, {
+    headers: hdr(adminToken),
+  });
+  assert(Array.isArray(result.data), "admin email deliveries returns list");
+  return result.data;
+};
+
 const createSessionByEmail = async (email) => {
   const reqCode = await expectOk("/v1/auth/request-code", {
     method: "POST",
@@ -144,8 +152,10 @@ async function testHealthAndFrontendRoutes() {
 
   // All 6 page routes should return 200 HTML
   for (const path of ["/", "/auth", "/chat", "/app", "/app/apis", "/app/consumption",
-    "/app/invitations", "/app/settings", "/admin", "/admin/users",
-    "/admin/invitations", "/admin/reviews", "/admin/usage", "/admin/settlement-failures", "/docs"]) {
+    "/app/invitations", "/app/settings", "/auth/forgot-password", "/auth/confirm-email-change",
+    "/reset-password", "/admin", "/admin/users",
+    "/admin/invitations", "/admin/reviews", "/admin/usage", "/admin/settlement-failures",
+    "/admin/email-deliveries", "/admin/security-events", "/docs"]) {
     const resp = await fetch(`${BASE_URL}${path}`);
     assert(resp.ok, `route ${path} returned ${resp.status}`);
     const ct = resp.headers.get("content-type") || "";
@@ -199,8 +209,9 @@ async function testAuthFlow() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email: `nobody_${randomId()}@xllmapi.local` }),
   });
-  assert(!nonInvited.ok || nonInvited.body?.eligible === false, "non-invited email rejected");
-  pass("non-invited email cannot get code");
+  assert(nonInvited.ok, "non-invited email request-code returns generic success");
+  assert(!nonInvited.body?.devCode, "non-invited email receives no dev code");
+  pass("non-invited email request is generic without code leakage");
 
   // Verify wrong code fails
   const reqCode = await expectOk("/v1/auth/request-code", {
@@ -533,30 +544,111 @@ async function testSettings(consumerToken) {
     method: "PATCH", headers,
     body: JSON.stringify({ currentPassword: "", newPassword: "TestPass123!" }),
   });
-  // Password set may fail if user has no current password (first time requires different flow)
-  if (pwResp.ok) {
-    pass("password set");
+  assert(pwResp.ok, `password set failed: ${pwResp.status}`);
+  pass("password set");
 
-    // Now test password login
-    const me = await expectOk("/v1/me", { headers: hdr(consumerToken) });
-    const loginResp = await requestJson("/v1/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: me.data.email, password: "TestPass123!" }),
-    });
-    if (loginResp.ok) {
-      assert(loginResp.body?.token, "password login returns token");
-      pass("password login works");
-    } else {
-      pass("password login skipped (endpoint may not be configured)");
-    }
-  } else {
-    pass("password set skipped (may require initial password setup flow)");
-  }
+  // Now test password login
+  const me = await expectOk("/v1/me", { headers: hdr(consumerToken) });
+  const loginResp = await requestJson("/v1/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: me.data.email, password: "TestPass123!" }),
+  });
+  assert(loginResp.ok, "password login works after password set");
+  assert(loginResp.body?.token, "password login returns token");
+  pass("password login works");
+
+  return { email: me.data.email, password: "TestPass123!" };
+}
+
+async function testAccountRecoveryAndEmailChange(adminToken, _consumerToken, consumerEmail) {
+  console.log("\n[10] Account Recovery & Email Change");
+
+  const passwordResetRequest = await requestJson("/v1/auth/request-password-reset", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: consumerEmail }),
+  });
+  assert(passwordResetRequest.ok, "password reset request accepted");
+
+  const deliveries = await eventually(async () => {
+    const rows = await getAdminEmailDeliveries(adminToken, 100);
+    const delivery = rows.find((row) => row.templateKey === "password_reset" && row.toEmail === consumerEmail);
+    assert(delivery, "password reset delivery visible");
+    return rows;
+  });
+  const passwordResetDelivery = deliveries.find((row) => row.templateKey === "password_reset" && row.toEmail === consumerEmail);
+  const resetUrl = passwordResetDelivery.payload?.variables?.actionUrl;
+  assert(resetUrl, "password reset action url available");
+  const resetToken = new URL(resetUrl).searchParams.get("token");
+  assert(resetToken, "password reset token extracted");
+
+  const resetPassword = "ResetPass456!";
+  const resetResp = await requestJson("/v1/auth/reset-password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: resetToken, newPassword: resetPassword }),
+  });
+  assert(resetResp.ok, "password reset succeeds");
+  pass("password reset works");
+
+  const loginAfterReset = await requestJson("/v1/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: consumerEmail, password: resetPassword }),
+  });
+  assert(loginAfterReset.ok, "password login works after reset");
+  const refreshedConsumerToken = loginAfterReset.body?.token;
+  assert(refreshedConsumerToken, "password login after reset returns token");
+  pass("password login works after reset");
+
+  const emailChangeTarget = `changed_${randomId()}@xllmapi.local`;
+  const emailChangeReq = await requestJson("/v1/me/security/email", {
+    method: "PATCH",
+    headers: jsonHdr(refreshedConsumerToken),
+    body: JSON.stringify({ newEmail: emailChangeTarget, currentPassword: resetPassword }),
+  });
+  assert(emailChangeReq.status === 202, `email change request status ${emailChangeReq.status}`);
+  pass("email change request accepted");
+
+  const emailDeliveries = await eventually(async () => {
+    const rows = await getAdminEmailDeliveries(adminToken, 100);
+    const delivery = rows.find((row) => row.templateKey === "email_change_confirm" && row.toEmail === emailChangeTarget);
+    assert(delivery, "email change confirmation delivery visible");
+    return rows;
+  });
+  const emailChangeDelivery = emailDeliveries.find((row) => row.templateKey === "email_change_confirm" && row.toEmail === emailChangeTarget);
+  const confirmUrl = emailChangeDelivery.payload?.variables?.actionUrl;
+  assert(confirmUrl, "email change confirm url available");
+  const confirmToken = new URL(confirmUrl).searchParams.get("token");
+  assert(confirmToken, "email change token extracted");
+
+  const confirmResp = await requestJson("/v1/auth/confirm-email-change", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: confirmToken }),
+  });
+  assert(confirmResp.ok, "email change confirmation succeeds");
+  assert(confirmResp.body?.data?.email === emailChangeTarget, "email change returns updated email");
+  pass("email change confirmation works");
+
+  const loginAfterEmailChange = await requestJson("/v1/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: emailChangeTarget, password: resetPassword }),
+  });
+  assert(loginAfterEmailChange.ok, "login works with new email after change");
+  pass("login works with changed email");
+
+  return {
+    email: emailChangeTarget,
+    password: resetPassword,
+    token: loginAfterEmailChange.body?.token
+  };
 }
 
 async function testAdminReviews(adminToken) {
-  console.log("\n[10] Admin: Offering Reviews");
+  console.log("\n[11] Admin: Offering Reviews");
 
   // Check pending offerings (should be empty since auto-approved)
   const pending = await expectOk("/v1/admin/offerings/pending", { headers: hdr(adminToken) });
@@ -575,7 +667,7 @@ async function testAdminReviews(adminToken) {
 }
 
 async function testAdminRequestSettlementVisibility(adminToken, logicalModel) {
-  console.log("\n[11] Admin: Request Settlement Visibility");
+  console.log("\n[12] Admin: Request Settlement Visibility");
 
   const requests = await expectOk(`/v1/admin/requests?model=${encodeURIComponent(logicalModel)}&limit=5`, {
     headers: hdr(adminToken)
@@ -593,7 +685,7 @@ async function testAdminRequestSettlementVisibility(adminToken, logicalModel) {
 }
 
 async function testPublicSupplierProfile(supplierToken, logicalModel) {
-  console.log("\n[12] Public Supplier Profile");
+  console.log("\n[13] Public Supplier Profile");
 
   const me = await expectOk("/v1/me", { headers: hdr(supplierToken) });
   const handle = me.data?.handle;
@@ -612,7 +704,7 @@ async function testPublicSupplierProfile(supplierToken, logicalModel) {
 }
 
 async function testLogout(consumerToken) {
-  console.log("\n[13] Logout");
+  console.log("\n[14] Logout");
 
   const resp = await requestJson("/v1/auth/logout", {
     method: "POST",
@@ -623,7 +715,7 @@ async function testLogout(consumerToken) {
 }
 
 async function testDocsFrontend() {
-  console.log("\n[14] Docs Page");
+  console.log("\n[15] Docs Page");
 
   const resp = await fetch(`${BASE_URL}/docs`);
   assert(resp.ok, "docs route returns 200");
@@ -660,6 +752,7 @@ const main = async () => {
       XLLMAPI_DB_DRIVER: "postgres",
       DATABASE_URL: process.env.DATABASE_URL || "postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi",
       REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
+      XLLMAPI_APP_BASE_URL: BASE_URL,
       XLLMAPI_DEEPSEEK_API_KEY: DEEPSEEK_API_KEY,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -703,21 +796,28 @@ const main = async () => {
     await testUserInvitations(consumerSession.token);
 
     // [9] Settings
-    await testSettings(consumerSession.token);
+    const settingsResult = await testSettings(consumerSession.token);
 
-    // [10] Admin reviews
+    // [10] Account recovery + email change
+    const accountRecoveryResult = await testAccountRecoveryAndEmailChange(
+      adminSession.token,
+      consumerSession.token,
+      settingsResult.email
+    );
+
+    // [11] Admin reviews
     await testAdminReviews(adminSession.token);
 
-    // [11] Admin request settlement visibility
+    // [12] Admin request settlement visibility
     await testAdminRequestSettlementVisibility(adminSession.token, logicalModel);
 
-    // [12] Public supplier profile
+    // [13] Public supplier profile
     await testPublicSupplierProfile(supplierSession.token, logicalModel);
 
-    // [13] Logout
-    await testLogout(consumerSession.token);
+    // [14] Logout
+    await testLogout(accountRecoveryResult.token ?? consumerSession.token);
 
-    // [14] Docs
+    // [15] Docs
     await testDocsFrontend();
 
     console.log("\n╔════════════════════════════════════════╗");

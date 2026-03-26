@@ -11,6 +11,7 @@ Browser / API Client
 │  platform-api   │  :3000  (Node.js)
 │                 │
 │  Auth & Session │  邀请制注册, Email/密码登录
+│  Email Security │  邀请邮件, 找回密码, 邮箱变更确认
 │  Offerings CRUD │  凭据管理, 模型供给
 │  Provider Exec  │  路由, 熔断, 重试, 限流
 │  Settlement     │  xtokens 结算
@@ -99,6 +100,10 @@ XLLMAPI_CORS_ORIGINS=https://app.example.com
 # Optional
 PORT=3000
 XLLMAPI_RELEASE_ID=<git sha or deploy timestamp>
+XLLMAPI_APP_BASE_URL=https://app.example.com
+XLLMAPI_EMAIL_PROVIDER=resend
+XLLMAPI_EMAIL_FROM=noreply@example.com
+XLLMAPI_RESEND_API_KEY=<resend api key>
 XLLMAPI_DEEPSEEK_API_KEY=<for platform-owned offerings>
 XLLMAPI_NODE_IMAGE=<optional docker base image override for compose builds>
 ```
@@ -109,6 +114,7 @@ Production notes:
 - `GET /healthz` is liveness, `GET /readyz` is readiness.
 - `GET /version` reports the current release identifier.
 - Browser sign-in now uses an HttpOnly session cookie by default; Bearer session tokens and API keys remain supported for programmatic clients.
+- Transactional email flows now cover invitation delivery, email-code sign-in, password reset, and email change confirmation.
 - frontend assets can be built under `/_releases/<release-id>/...` to support safer rolling upgrades.
 
 ## API
@@ -128,6 +134,8 @@ Key endpoints:
 - `GET /v1/wallet` — Token balance
 - `GET /v1/usage/consumption` — Usage stats
 - `GET /v1/admin/settlement-failures` — Admin settlement failure queue
+- `GET /v1/admin/email-deliveries` — Admin transactional email delivery log
+- `GET /v1/admin/security-events` — Admin account security events
 
 ## Testing
 
@@ -139,7 +147,6 @@ npm run test:platform-api
 # otherwise falls back to a local mock OpenAI-compatible provider)
 npm run test:e2e:mvp
 npm run test:e2e:sharing
-
 # Ops: retry persisted settlement failures
 npm run ops:retry:settlement-failures
 
@@ -159,5 +166,6 @@ CI release gates:
 ## Docs
 
 - [Deployment guide](/home/speak/workspace/github/xllmapi/xllmapi/docs/deploy.md)
+- [Auth / Email security design](/home/speak/workspace/github/xllmapi/xllmapi/docs/auth-email-invitation-and-security-design.md)
 - [Production readiness plan](/home/speak/workspace/github/xllmapi/xllmapi/docs/production-readiness-and-zero-downtime-plan.md)
 - [Observability assets](/home/speak/workspace/github/xllmapi/xllmapi/infra/observability/README.md)

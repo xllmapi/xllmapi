@@ -201,7 +201,6 @@ Unit=xllmapi-settlement-retry.service
 [Install]
 WantedBy=timers.target
 ```
-
 仓库内已提供模板文件：
 
 - `infra/systemd/xllmapi-platform.service`
@@ -266,7 +265,6 @@ XLLMAPI_SMOKE_BASE_URL=https://app.example.com \
 XLLMAPI_EXPECT_RELEASE_ID=20250325120000 \
 npm run smoke:release
 ```
-
 ---
 
 ## 环境变量完整参考
@@ -285,6 +283,16 @@ npm run smoke:release
 | `HOST` | 否 | 0.0.0.0 | 监听地址 |
 | `XLLMAPI_NODE_IMAGE` | 否 | `swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:24-bookworm-slim` | Docker 构建使用的 Node 基础镜像 |
 | `XLLMAPI_CHAT_RATE_LIMIT_PER_MINUTE` | 否 | 60 | 每 API Key 每分钟请求上限 |
+| `XLLMAPI_APP_BASE_URL` | 生产建议必须 | — | 用于构造密码重置、邮箱确认、邀请链接 |
+| `XLLMAPI_EMAIL_PROVIDER` | 否 | development:`mock` production:`resend` | 事务邮件 provider |
+| `XLLMAPI_EMAIL_FROM` | 生产环境必须 | — | 发件地址 |
+| `XLLMAPI_EMAIL_REPLY_TO` | 否 | — | 回复地址 |
+| `XLLMAPI_RESEND_API_KEY` | `resend` 时必须 | — | Resend API key |
+| `XLLMAPI_AUTH_CODE_TTL_SECONDS` | 否 | 600 | 邮箱验证码 TTL |
+| `XLLMAPI_PASSWORD_RESET_TTL_SECONDS` | 否 | 1800 | 密码重置链接 TTL |
+| `XLLMAPI_EMAIL_CHANGE_TTL_SECONDS` | 否 | 1800 | 邮箱变更确认链接 TTL |
+| `XLLMAPI_EMAIL_SEND_COOLDOWN_SECONDS` | 否 | 60 | 邮件发送冷却提示秒数 |
+| `XLLMAPI_SECURITY_NOTIFY_EMAIL_ENABLED` | 否 | 1 | 是否发送密码/邮箱变更通知 |
 | `XLLMAPI_SESSION_COOKIE_NAME` | 否 | xllmapi_session | 浏览器 HttpOnly session cookie 名称 |
 | `XLLMAPI_SESSION_MAX_AGE_SECONDS` | 否 | 2592000 | session cookie 生命周期（秒） |
 
@@ -298,6 +306,26 @@ npm run smoke:release
 - 登录方式: 邮箱验证码（开发环境验证码固定为 `000000`）
 
 **生产环境**建议：首次登录后在管理后台邀请真实管理员邮箱，然后禁用 demo 账号。
+
+---
+
+## 事务邮件与账户安全
+
+当前版本已实现以下邮件链路：
+
+1. 邀请邮件
+2. 邮箱验证码登录/注册
+3. 忘记密码 / 重置密码
+4. 邮箱变更确认
+5. 密码与邮箱变更安全通知
+
+生产部署建议：
+
+1. 使用 `XLLMAPI_EMAIL_PROVIDER=resend`
+2. 配置 `XLLMAPI_APP_BASE_URL` 为外部可访问域名
+3. 在 admin 后台定期检查：
+   - `/admin/email-deliveries`
+   - `/admin/security-events`
 
 ---
 

@@ -55,11 +55,10 @@ const createAdminCookie = async (baseUrl: string) => {
     body: JSON.stringify({ email: "admin_demo@xllmapi.local", code: requestCode.body.devCode })
   });
   assert.equal(verified.status, 200);
-  const setCookie = verified.headers.get("set-cookie");
+const setCookie = verified.headers.get("set-cookie");
   assert.ok(setCookie);
   return String(setCookie).split(";")[0];
 };
-
 const startServer = async (env: Record<string, string> = {}) => {
   const port = randomPort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -191,7 +190,6 @@ test("missing assets return 404 JSON while SPA routes still return HTML", async 
     await server.stop();
   }
 });
-
 test("legacy password hashes still login and are rehashed on success", async () => {
   const server = await startServer();
 
@@ -218,7 +216,6 @@ test("legacy password hashes still login and are rehashed on success", async () 
     await server.stop();
   }
 });
-
 test("admin can inspect and retry settlement failures", async () => {
   const server = await startServer();
 
@@ -298,6 +295,152 @@ test("admin can inspect and retry settlement failures", async () => {
 
     const ledgerEntryCount = db.prepare("SELECT COUNT(*) AS count FROM ledger_entries WHERE request_id = ?").get(requestId) as { count: number };
     assert.equal(ledgerEntryCount.count, 2);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("password reset sends email delivery and updates credentials", async () => {
+  const server = await startServer({
+    XLLMAPI_APP_BASE_URL: "http://127.0.0.1:3900"
+  });
+
+  try {
+    const db = new DatabaseSync(server.dbPath);
+    const resetRequest = await requestJson(server.baseUrl, "/v1/auth/request-password-reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "admin_demo@xllmapi.local" })
+    });
+    assert.equal(resetRequest.status, 200);
+    assert.equal(resetRequest.body?.ok, true);
+
+    const delivery = db.prepare(`
+      SELECT payload
+      FROM email_delivery_attempts
+      WHERE template_key = 'password_reset'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get() as { payload: string } | undefined;
+    assert.ok(delivery);
+    const payload = JSON.parse(delivery.payload) as { variables?: { actionUrl?: string } };
+    const actionUrl = payload.variables?.actionUrl;
+    assert.ok(actionUrl);
+    const token = new URL(actionUrl).searchParams.get("token");
+    assert.ok(token);
+
+    const reset = await requestJson(server.baseUrl, "/v1/auth/reset-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, newPassword: "ResetPass123!" })
+    });
+    assert.equal(reset.status, 200);
+    assert.equal(reset.body?.ok, true);
+
+    const login = await requestJson(server.baseUrl, "/v1/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "admin_demo@xllmapi.local", password: "ResetPass123!" })
+    });
+    assert.equal(login.status, 200);
+    assert.equal(login.body?.ok, true);
+
+    const securityEvent = db.prepare(`
+      SELECT type
+      FROM security_events
+      WHERE user_id = 'admin_demo'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get() as { type: string } | undefined;
+    assert.equal(securityEvent?.type, "password_reset_completed");
+  } finally {
+    await server.stop();
+  }
+});
+
+test("email change requires confirmation and updates identity after token confirmation", async () => {
+  const server = await startServer({
+    XLLMAPI_APP_BASE_URL: "http://127.0.0.1:3901"
+  });
+
+  try {
+    const db = new DatabaseSync(server.dbPath);
+    const cookieHeader = await createAdminCookie(server.baseUrl);
+    const newEmail = "admin_new@xllmapi.local";
+
+    const requestChange = await requestJson(server.baseUrl, "/v1/me/security/email", {
+      method: "PATCH",
+      headers: {
+        cookie: cookieHeader,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ newEmail, currentPassword: "admin123456" })
+    });
+    assert.equal(requestChange.status, 202);
+    assert.equal(requestChange.body?.ok, true);
+
+    const confirmDelivery = db.prepare(`
+      SELECT payload
+      FROM email_delivery_attempts
+      WHERE template_key = 'email_change_confirm'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get() as { payload: string } | undefined;
+    assert.ok(confirmDelivery);
+    const confirmPayload = JSON.parse(confirmDelivery.payload) as { variables?: { actionUrl?: string } };
+    const confirmToken = new URL(confirmPayload.variables?.actionUrl ?? "").searchParams.get("token");
+    assert.ok(confirmToken);
+
+    const confirm = await requestJson(server.baseUrl, "/v1/auth/confirm-email-change", {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ token: confirmToken })
+    });
+    assert.equal(confirm.status, 200);
+    assert.equal(confirm.body?.data?.email, newEmail);
+
+    const identity = db.prepare("SELECT email FROM user_identities WHERE user_id = 'admin_demo' LIMIT 1").get() as { email: string };
+    assert.equal(identity.email, newEmail);
+
+    const oldEmailNotice = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM email_delivery_attempts
+      WHERE template_key IN ('email_change_requested_notice', 'email_changed_notice')
+    `).get() as { count: number };
+    assert.ok(oldEmailNotice.count >= 2);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("admin endpoints expose email deliveries and security events", async () => {
+  const server = await startServer({
+    XLLMAPI_APP_BASE_URL: "http://127.0.0.1:3902"
+  });
+
+  try {
+    const cookieHeader = await createAdminCookie(server.baseUrl);
+    await requestJson(server.baseUrl, "/v1/auth/request-password-reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "admin_demo@xllmapi.local" })
+    });
+
+    const emailDeliveries = await requestJson(server.baseUrl, "/v1/admin/email-deliveries?limit=20", {
+      headers: { cookie: cookieHeader }
+    });
+    assert.equal(emailDeliveries.status, 200);
+    assert.ok(Array.isArray(emailDeliveries.body?.data));
+    assert.ok(emailDeliveries.body?.data.some((row: { templateKey: string }) => row.templateKey === "password_reset"));
+
+    const securityEvents = await requestJson(server.baseUrl, "/v1/admin/security-events?limit=20", {
+      headers: { cookie: cookieHeader }
+    });
+    assert.equal(securityEvents.status, 200);
+    assert.ok(Array.isArray(securityEvents.body?.data));
   } finally {
     await server.stop();
   }

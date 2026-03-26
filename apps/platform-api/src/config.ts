@@ -1,4 +1,5 @@
 const ALLOWED_DB_DRIVERS = new Set(["sqlite", "postgres"]);
+const ALLOWED_EMAIL_PROVIDERS = new Set(["mock", "resend"]);
 
 const parsePositiveInt = (name: string, fallback: number) => {
   const raw = process.env[name];
@@ -20,6 +21,23 @@ const parseCsv = (raw: string | undefined) =>
     .map((value) => value.trim())
     .filter(Boolean);
 
+const parseBoolean = (name: string, fallback: boolean) => {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim().length === 0) {
+    return fallback;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  throw new Error(`${name} must be a boolean`);
+};
+
 const envMode = process.env.XLLMAPI_ENV ?? "development";
 const isProduction = envMode === "production";
 const secretKey = process.env.XLLMAPI_SECRET_KEY ?? null;
@@ -29,9 +47,18 @@ const sqliteDbPath = process.env.XLLMAPI_DB_PATH ?? null;
 const redisUrl = process.env.REDIS_URL ?? null;
 const corsOrigins = parseCsv(process.env.XLLMAPI_CORS_ORIGINS);
 const releaseId = (process.env.XLLMAPI_RELEASE_ID ?? "dev").trim() || "dev";
+const emailProvider = (process.env.XLLMAPI_EMAIL_PROVIDER ?? (isProduction ? "resend" : "mock")).trim().toLowerCase();
+const appBaseUrl = (process.env.XLLMAPI_APP_BASE_URL ?? "").trim().replace(/\/+$/, "");
+const emailFrom = (process.env.XLLMAPI_EMAIL_FROM ?? "").trim();
+const emailReplyTo = (process.env.XLLMAPI_EMAIL_REPLY_TO ?? "").trim() || null;
+const resendApiKey = (process.env.XLLMAPI_RESEND_API_KEY ?? "").trim() || null;
 
 if (!ALLOWED_DB_DRIVERS.has(dbDriver)) {
   throw new Error(`XLLMAPI_DB_DRIVER must be one of: ${Array.from(ALLOWED_DB_DRIVERS).join(", ")}`);
+}
+
+if (!ALLOWED_EMAIL_PROVIDERS.has(emailProvider)) {
+  throw new Error(`XLLMAPI_EMAIL_PROVIDER must be one of: ${Array.from(ALLOWED_EMAIL_PROVIDERS).join(", ")}`);
 }
 
 if (isProduction && (!secretKey || secretKey.trim().length === 0)) {
@@ -54,6 +81,18 @@ if (isProduction && corsOrigins.length === 0) {
   throw new Error("XLLMAPI_CORS_ORIGINS is required when XLLMAPI_ENV=production");
 }
 
+if (isProduction && appBaseUrl.length === 0) {
+  throw new Error("XLLMAPI_APP_BASE_URL is required when XLLMAPI_ENV=production");
+}
+
+if (isProduction && emailFrom.length === 0) {
+  throw new Error("XLLMAPI_EMAIL_FROM is required when XLLMAPI_ENV=production");
+}
+
+if (isProduction && emailProvider === "resend" && (!resendApiKey || resendApiKey.length === 0)) {
+  throw new Error("XLLMAPI_RESEND_API_KEY is required when XLLMAPI_EMAIL_PROVIDER=resend in production");
+}
+
 export const config = {
   envMode,
   isProduction,
@@ -64,6 +103,11 @@ export const config = {
   redisUrl,
   corsOrigins,
   releaseId,
+  appBaseUrl,
+  emailProvider,
+  emailFrom,
+  emailReplyTo,
+  resendApiKey,
   chatRateLimitPerMinute: parsePositiveInt("XLLMAPI_CHAT_RATE_LIMIT_PER_MINUTE", 60),
   authRequestCodeLimitPerMinute: parsePositiveInt("XLLMAPI_AUTH_REQUEST_CODE_LIMIT_PER_MINUTE", 5),
   authVerifyCodeLimitPerMinute: parsePositiveInt("XLLMAPI_AUTH_VERIFY_CODE_LIMIT_PER_MINUTE", 10),
@@ -71,5 +115,10 @@ export const config = {
   requestBodyMaxBytes: parsePositiveInt("XLLMAPI_REQUEST_BODY_MAX_BYTES", 1_048_576),
   assetRetentionCount: parsePositiveInt("XLLMAPI_ASSET_RETENTION_COUNT", 3),
   sessionCookieName: process.env.XLLMAPI_SESSION_COOKIE_NAME?.trim() || "xllmapi_session",
-  sessionMaxAgeSeconds: parsePositiveInt("XLLMAPI_SESSION_MAX_AGE_SECONDS", 30 * 24 * 60 * 60)
+  sessionMaxAgeSeconds: parsePositiveInt("XLLMAPI_SESSION_MAX_AGE_SECONDS", 30 * 24 * 60 * 60),
+  authCodeTtlSeconds: parsePositiveInt("XLLMAPI_AUTH_CODE_TTL_SECONDS", 10 * 60),
+  passwordResetTtlSeconds: parsePositiveInt("XLLMAPI_PASSWORD_RESET_TTL_SECONDS", 30 * 60),
+  emailChangeTtlSeconds: parsePositiveInt("XLLMAPI_EMAIL_CHANGE_TTL_SECONDS", 30 * 60),
+  emailSendCooldownSeconds: parsePositiveInt("XLLMAPI_EMAIL_SEND_COOLDOWN_SECONDS", 60),
+  securityNotifyEmailEnabled: parseBoolean("XLLMAPI_SECURITY_NOTIFY_EMAIL_ENABLED", true)
 };

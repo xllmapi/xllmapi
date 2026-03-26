@@ -9,6 +9,9 @@ type MetricsState = {
   cacheMisses: number;
   coreErrors: number;
   settlementFailures: number;
+  emailSends: number;
+  emailSendFailures: number;
+  securityEvents: number;
 };
 
 const metrics: MetricsState = {
@@ -21,7 +24,10 @@ const metrics: MetricsState = {
   cacheHits: 0,
   cacheMisses: 0,
   coreErrors: 0,
-  settlementFailures: 0
+  settlementFailures: 0,
+  emailSends: 0,
+  emailSendFailures: 0,
+  securityEvents: 0
 };
 
 export const metricsService = {
@@ -71,7 +77,16 @@ export const metricsService = {
       `xllmapi_core_errors${labelSuffix} ${metrics.coreErrors}`,
       "# HELP xllmapi_settlement_failures Total settlement failures after provider success.",
       "# TYPE xllmapi_settlement_failures counter",
-      `xllmapi_settlement_failures${labelSuffix} ${metrics.settlementFailures}`
+      `xllmapi_settlement_failures${labelSuffix} ${metrics.settlementFailures}`,
+      "# HELP xllmapi_email_sends Total transactional emails sent successfully.",
+      "# TYPE xllmapi_email_sends counter",
+      `xllmapi_email_sends${labelSuffix} ${metrics.emailSends}`,
+      "# HELP xllmapi_email_send_failures Total transactional email send failures.",
+      "# TYPE xllmapi_email_send_failures counter",
+      `xllmapi_email_send_failures${labelSuffix} ${metrics.emailSendFailures}`,
+      "# HELP xllmapi_security_events Total security events recorded.",
+      "# TYPE xllmapi_security_events counter",
+      `xllmapi_security_events${labelSuffix} ${metrics.securityEvents}`
     ].join("\n");
   }
 };

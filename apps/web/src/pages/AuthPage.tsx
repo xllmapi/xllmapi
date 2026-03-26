@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/hooks/useLocale";
@@ -12,6 +12,7 @@ type Step = "email" | "verify";
 export function AuthPage() {
   const { login, isLoggedIn } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useLocale();
 
   const [mode, setMode] = useState<Mode>("code");
@@ -23,13 +24,19 @@ export function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [devCode, setDevCode] = useState("");
 
+  useEffect(() => {
+    const hintedEmail = searchParams.get("email");
+    if (hintedEmail) {
+      setEmail(hintedEmail);
+    }
+  }, [searchParams]);
+
   if (isLoggedIn) {
     navigate("/app", { replace: true });
     return null;
   }
 
-  const handleRequestCode = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const requestCode = async () => {
     setError("");
     setLoading(true);
     try {
@@ -44,6 +51,11 @@ export function AuthPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRequestCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await requestCode();
   };
 
   const handleVerifyCode = async (e: React.FormEvent) => {
@@ -153,6 +165,13 @@ export function AuthPage() {
             >
               {t("auth.back")}
             </button>
+            <button
+              type="button"
+              onClick={() => void requestCode()}
+              className="text-text-secondary text-sm hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors"
+            >
+              {t("auth.resendCode")}
+            </button>
           </form>
         )}
 
@@ -175,6 +194,9 @@ export function AuthPage() {
             <FormButton type="submit" disabled={loading}>
               {loading ? t("auth.signingIn") : t("auth.signIn")}
             </FormButton>
+            <Link to="/auth/forgot-password" className="text-text-secondary text-sm hover:text-text-primary transition-colors">
+              {t("auth.forgotPassword")}
+            </Link>
           </form>
         )}
 

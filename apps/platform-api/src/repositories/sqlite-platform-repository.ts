@@ -29,9 +29,11 @@ import {
   get_provider_credential_by_id,
   get_wallet_balance,
   list_active_models,
+  list_admin_email_deliveries,
   list_chat_conversations,
   list_chat_messages,
   list_admin_invitations,
+  list_admin_security_events,
   list_admin_users,
   list_invitations,
   list_offerings,
@@ -45,9 +47,14 @@ import {
   delete_chat_conversation,
   update_chat_conversation_title,
   request_login_code,
+  request_password_reset,
   remove_offering,
   remove_provider_credential,
   revoke_invitation,
+  record_email_delivery_attempt,
+  record_security_event,
+  request_email_change,
+  reset_password,
   review_offering,
   update_offering,
   update_provider_credential_status,
@@ -55,6 +62,7 @@ import {
   update_me_password,
   update_me_email,
   update_me_phone,
+  confirm_email_change,
   verify_login_code,
   write_audit_log
 } from "../db.js";
@@ -88,6 +96,22 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   loginWithPassword(email, password) {
     return login_with_password(email, password);
+  },
+
+  requestPasswordReset(email) {
+    return request_password_reset(email);
+  },
+
+  resetPassword(params) {
+    return reset_password(params);
+  },
+
+  requestEmailChange(params) {
+    return request_email_change(params);
+  },
+
+  confirmEmailChange(params) {
+    return confirm_email_change(params);
   },
 
   updateMeProfile(params) {
@@ -190,6 +214,22 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   writeAuditLog(params) {
     write_audit_log(params);
+  },
+
+  recordEmailDeliveryAttempt(params) {
+    record_email_delivery_attempt(params);
+  },
+
+  recordSecurityEvent(params) {
+    record_security_event(params);
+  },
+
+  listAdminEmailDeliveries(limit) {
+    return list_admin_email_deliveries(limit);
+  },
+
+  listAdminSecurityEvents(limit) {
+    return list_admin_security_events(limit);
   },
 
   findOfferingForModel(logicalModel) {
@@ -352,7 +392,6 @@ export const sqlitePlatformRepository: PlatformRepository = {
   retrySettlementFailure(params) {
     return retry_settlement_failure(params);
   },
-
   createNotification() {
     return { id: "" };
   },

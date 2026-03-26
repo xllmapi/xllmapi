@@ -49,6 +49,25 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS auth_email_challenges (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    code_hash TEXT,
+    token_hash TEXT,
+    user_id TEXT,
+    target_email TEXT,
+    invitation_id TEXT,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    invalidated_at TEXT,
+    send_count INTEGER NOT NULL DEFAULT 1,
+    last_sent_at TEXT,
+    verify_attempt_count INTEGER NOT NULL DEFAULT 0,
+    metadata TEXT,
+    created_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS auth_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -175,6 +194,47 @@ db.exec(`
     target_type TEXT NOT NULL,
     target_id TEXT NOT NULL,
     payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS email_delivery_attempts (
+    id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    template_key TEXT NOT NULL,
+    to_email TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    challenge_id TEXT,
+    status TEXT NOT NULL,
+    provider_message_id TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    payload TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS email_change_requests (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    old_email TEXT NOT NULL,
+    new_email TEXT NOT NULL,
+    challenge_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    requested_ip TEXT,
+    requested_user_agent TEXT,
+    expires_at TEXT NOT NULL,
+    verified_at TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS security_events (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    payload TEXT,
     created_at TEXT NOT NULL
   );
 
@@ -570,6 +630,108 @@ const get_invitation_by_email_ = (email: string) =>
     LIMIT 1
   `).get(normalize_email_(email), now_iso_()) as InvitationRow | undefined;
 
+const get_auth_email_challenge_by_code_ = (email: string, purpose: string, code: string) =>
+  db.prepare(`
+    SELECT id
+    FROM auth_email_challenges
+    WHERE email = ?
+      AND purpose = ?
+      AND code_hash = ?
+      AND consumed_at IS NULL
+      AND invalidated_at IS NULL
+      AND expires_at > ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(normalize_email_(email), purpose, hashApiKey(code), now_iso_()) as { id: string } | undefined;
+
+const get_auth_email_challenge_by_token_ = (token: string, purpose: string) =>
+  db.prepare(`
+    SELECT
+      id,
+      user_id AS userId,
+      email,
+      target_email AS targetEmail,
+      metadata
+    FROM auth_email_challenges
+    WHERE purpose = ?
+      AND token_hash = ?
+      AND consumed_at IS NULL
+      AND invalidated_at IS NULL
+      AND expires_at > ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(purpose, hashApiKey(token), now_iso_()) as {
+    id: string;
+    userId: string | null;
+    email: string;
+    targetEmail: string | null;
+    metadata: string | null;
+  } | undefined;
+
+const invalidate_auth_email_challenges_ = (params: {
+  email: string;
+  purpose: string;
+  userId?: string | null;
+}) => {
+  db.prepare(`
+    UPDATE auth_email_challenges
+    SET invalidated_at = ?
+    WHERE email = ?
+      AND purpose = ?
+      AND consumed_at IS NULL
+      AND invalidated_at IS NULL
+      ${params.userId ? "AND COALESCE(user_id, '') = ?" : ""}
+  `).run(...[
+    now_iso_(),
+    normalize_email_(params.email),
+    params.purpose,
+    ...(params.userId ? [params.userId] : [])
+  ]);
+};
+
+const create_auth_email_challenge_ = (params: {
+  email: string;
+  purpose: string;
+  ttlSeconds: number;
+  code?: string | null;
+  token?: string | null;
+  userId?: string | null;
+  targetEmail?: string | null;
+  invitationId?: string | null;
+  metadata?: unknown;
+}) => {
+  const id = `emlch_${randomUUID()}`;
+  const now = now_iso_();
+  db.prepare(`
+    INSERT INTO auth_email_challenges (
+      id, email, purpose, code_hash, token_hash, user_id, target_email, invitation_id,
+      expires_at, consumed_at, invalidated_at, send_count, last_sent_at, verify_attempt_count, metadata, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1, ?, 0, ?, ?)
+  `).run(
+    id,
+    normalize_email_(params.email),
+    params.purpose,
+    params.code ? hashApiKey(params.code) : null,
+    params.token ? hashApiKey(params.token) : null,
+    params.userId ?? null,
+    params.targetEmail ? normalize_email_(params.targetEmail) : null,
+    params.invitationId ?? null,
+    new Date(Date.now() + params.ttlSeconds * 1000).toISOString(),
+    now,
+    params.metadata ? JSON.stringify(params.metadata) : null,
+    now
+  );
+
+  return id;
+};
+
+const revoke_user_sessions_ = (params: { userId: string; exceptSessionId?: string | null }) => {
+  const result = params.exceptSessionId
+    ? db.prepare("DELETE FROM auth_sessions WHERE user_id = ? AND id != ?").run(params.userId, params.exceptSessionId)
+    : db.prepare("DELETE FROM auth_sessions WHERE user_id = ?").run(params.userId);
+  return Number(result.changes);
+};
+
 const get_me_profile_ = (userId: string): MeProfile | null => {
   const row = db.prepare(`
     SELECT
@@ -686,25 +848,31 @@ export const request_login_code = (email: string) => {
   if (!identity && !invitation) {
     return {
       eligible: false,
-      firstLogin: false
+      firstLogin: false,
+      email: normalizedEmail
     };
   }
 
   const code = generate_code_();
-  db.prepare(`
-    INSERT INTO login_codes (id, email, code_hash, expires_at, consumed_at, created_at)
-    VALUES (?, ?, ?, ?, NULL, ?)
-  `).run(
-    `lc_${randomUUID()}`,
-    normalizedEmail,
-    hashApiKey(code),
-    new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    now_iso_()
-  );
+  invalidate_auth_email_challenges_({
+    email: normalizedEmail,
+    purpose: identity ? "login_code" : "invite_signup_code",
+    userId: identity?.userId ?? null
+  });
+  const challengeId = create_auth_email_challenge_({
+    email: normalizedEmail,
+    purpose: identity ? "login_code" : "invite_signup_code",
+    ttlSeconds: config.authCodeTtlSeconds,
+    code,
+    userId: identity?.userId ?? null,
+    invitationId: invitation?.id ?? null
+  });
 
   return {
     eligible: true,
     firstLogin: !identity,
+    challengeId,
+    email: normalizedEmail,
     code: config.isProduction ? undefined : code
   };
 };
@@ -712,28 +880,40 @@ export const request_login_code = (email: string) => {
 export const verify_login_code = (email: string, code: string): VerifyLoginCodeResult => {
   const normalizedEmail = normalize_email_(email);
   const now = now_iso_();
-  const codeRow = db.prepare(`
-    SELECT id
-    FROM login_codes
-    WHERE email = ?
-      AND code_hash = ?
-      AND consumed_at IS NULL
-      AND expires_at > ?
-    ORDER BY created_at DESC
-    LIMIT 1
-  `).get(normalizedEmail, hashApiKey(code), now) as { id: string } | undefined;
+  const identity = get_identity_by_email_(normalizedEmail);
+  const codeRow = get_auth_email_challenge_by_code_(
+    normalizedEmail,
+    identity ? "login_code" : "invite_signup_code",
+    code
+  );
+  const legacyCodeRow = !codeRow
+    ? db.prepare(`
+      SELECT id
+      FROM login_codes
+      WHERE email = ?
+        AND code_hash = ?
+        AND consumed_at IS NULL
+        AND expires_at > ?
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(normalizedEmail, hashApiKey(code), now) as { id: string } | undefined
+    : undefined;
 
-  if (!codeRow) {
+  if (!codeRow && !legacyCodeRow) {
     return { ok: false as const, code: "invalid_code", message: "invalid or expired verification code" };
   }
 
-  let me = get_me_profile_(get_identity_by_email_(normalizedEmail)?.userId ?? "");
+  let me = get_me_profile_(identity?.userId ?? "");
   let firstLoginCompleted = false;
   let initialApiKey: string | null = null;
 
   db.exec("BEGIN");
   try {
-    db.prepare("UPDATE login_codes SET consumed_at = ? WHERE id = ?").run(now, codeRow.id);
+    if (codeRow) {
+      db.prepare("UPDATE auth_email_challenges SET consumed_at = ? WHERE id = ?").run(now, codeRow.id);
+    } else if (legacyCodeRow) {
+      db.prepare("UPDATE login_codes SET consumed_at = ? WHERE id = ?").run(now, legacyCodeRow.id);
+    }
 
     if (!me) {
       const invitation = get_invitation_by_email_(normalizedEmail);
@@ -880,6 +1060,7 @@ export const update_me_profile = (params: {
 
 export const update_me_password = (params: {
   userId: string;
+  currentSessionId?: string | null;
   currentPassword: string;
   newPassword: string;
 }) => {
@@ -890,7 +1071,11 @@ export const update_me_password = (params: {
     LIMIT 1
   `).get(params.userId) as { passwordHash: string } | undefined;
 
-  if (!current || !verifyPassword(params.currentPassword, current.passwordHash)) {
+  if (current && !verifyPassword(params.currentPassword, current.passwordHash)) {
+    return { ok: false as const, code: "invalid_password", message: "current password is invalid" };
+  }
+
+  if (!current && params.currentPassword.trim().length > 0) {
     return { ok: false as const, code: "invalid_password", message: "current password is invalid" };
   }
 
@@ -902,7 +1087,12 @@ export const update_me_password = (params: {
       updated_at = excluded.updated_at
   `).run(params.userId, hashPassword(params.newPassword), now_iso_());
 
-  return { ok: true as const };
+  const sessionsRevoked = revoke_user_sessions_({
+    userId: params.userId,
+    exceptSessionId: params.currentSessionId ?? null
+  });
+
+  return { ok: true as const, data: { sessionsRevoked } };
 };
 
 export const update_me_email = (params: { userId: string; newEmail: string }) => {
@@ -927,6 +1117,213 @@ export const update_me_phone = (params: { userId: string; phone: string }) => {
     WHERE id = ?
   `).run(params.phone.trim(), params.userId);
   return { ok: true as const, data: get_me_profile_(params.userId) };
+};
+
+export const request_password_reset = (email: string) => {
+  const normalizedEmail = normalize_email_(email);
+  const identity = get_identity_by_email_(normalizedEmail);
+  if (!identity) {
+    return {
+      accepted: false,
+      email: normalizedEmail,
+      challengeId: null,
+      userId: null
+    };
+  }
+
+  const token = `reset_${randomUUID().replaceAll("-", "")}`;
+  invalidate_auth_email_challenges_({
+    email: normalizedEmail,
+    purpose: "password_reset",
+    userId: identity.userId
+  });
+  const challengeId = create_auth_email_challenge_({
+    email: normalizedEmail,
+    purpose: "password_reset",
+    ttlSeconds: config.passwordResetTtlSeconds,
+    token,
+    userId: identity.userId
+  });
+
+  return {
+    accepted: true,
+    email: normalizedEmail,
+    token,
+    challengeId,
+    userId: identity.userId
+  };
+};
+
+export const reset_password = (params: { token: string; newPassword: string }) => {
+  const challenge = get_auth_email_challenge_by_token_(params.token, "password_reset");
+  if (!challenge?.userId) {
+    return { ok: false as const, code: "invalid_token", message: "invalid or expired reset token" };
+  }
+
+  const now = now_iso_();
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE auth_email_challenges SET consumed_at = ? WHERE id = ?").run(now, challenge.id);
+    db.prepare(`
+      INSERT INTO user_passwords (user_id, password_hash, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        password_hash = excluded.password_hash,
+        updated_at = excluded.updated_at
+    `).run(challenge.userId, hashPassword(params.newPassword), now);
+    db.prepare(`
+      UPDATE auth_email_challenges
+      SET invalidated_at = ?
+      WHERE purpose = 'password_reset'
+        AND user_id = ?
+        AND consumed_at IS NULL
+        AND invalidated_at IS NULL
+    `).run(now, challenge.userId);
+    const sessionsRevoked = revoke_user_sessions_({ userId: challenge.userId });
+    db.exec("COMMIT");
+    return { ok: true as const, data: { userId: challenge.userId, sessionsRevoked } };
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+};
+
+export const request_email_change = (params: {
+  userId: string;
+  newEmail: string;
+  currentPassword?: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}) => {
+  const me = get_me_profile_(params.userId);
+  if (!me) {
+    return { ok: false as const, code: "not_found", message: "user not found" };
+  }
+
+  const normalizedEmail = normalize_email_(params.newEmail);
+  const existing = get_identity_by_email_(normalizedEmail);
+  if (existing && existing.userId !== params.userId) {
+    return { ok: false as const, code: "email_taken", message: "email already in use" };
+  }
+  if (normalizedEmail === normalize_email_(me.email)) {
+    return { ok: false as const, code: "email_unchanged", message: "new email must be different" };
+  }
+
+  const current = db.prepare(`
+    SELECT password_hash AS passwordHash
+    FROM user_passwords
+    WHERE user_id = ?
+    LIMIT 1
+  `).get(params.userId) as { passwordHash: string } | undefined;
+
+  if (current && !verifyPassword(params.currentPassword ?? "", current.passwordHash)) {
+    return { ok: false as const, code: "invalid_password", message: "current password is invalid" };
+  }
+
+  const token = `emailchg_${randomUUID().replaceAll("-", "")}`;
+  invalidate_auth_email_challenges_({
+    email: normalizedEmail,
+    purpose: "email_change_verify_new",
+    userId: params.userId
+  });
+  const challengeId = create_auth_email_challenge_({
+    email: normalizedEmail,
+    purpose: "email_change_verify_new",
+    ttlSeconds: config.emailChangeTtlSeconds,
+    token,
+    userId: params.userId,
+    targetEmail: normalizedEmail,
+    metadata: {
+      oldEmail: me.email,
+      newEmail: normalizedEmail
+    }
+  });
+  const requestId = `emailreq_${randomUUID()}`;
+  db.prepare(`
+    INSERT INTO email_change_requests (
+      id, user_id, old_email, new_email, challenge_id, status, requested_ip, requested_user_agent,
+      expires_at, verified_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, NULL, ?)
+  `).run(
+    requestId,
+    params.userId,
+    normalize_email_(me.email),
+    normalizedEmail,
+    challengeId,
+    params.ipAddress ?? null,
+    params.userAgent ?? null,
+    new Date(Date.now() + config.emailChangeTtlSeconds * 1000).toISOString(),
+    now_iso_()
+  );
+
+  return {
+    ok: true as const,
+    data: {
+      requestId,
+      oldEmail: normalize_email_(me.email),
+      newEmail: normalizedEmail,
+      token,
+      challengeId
+    }
+  };
+};
+
+export const confirm_email_change = (params: { token: string; sessionId?: string | null }) => {
+  const challenge = get_auth_email_challenge_by_token_(params.token, "email_change_verify_new");
+  if (!challenge?.userId || !challenge.targetEmail) {
+    return { ok: false as const, code: "invalid_token", message: "invalid or expired email change token" };
+  }
+
+  const request = db.prepare(`
+    SELECT id, old_email AS oldEmail, new_email AS newEmail
+    FROM email_change_requests
+    WHERE challenge_id = ?
+      AND status = 'pending'
+      AND expires_at > ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(challenge.id, now_iso_()) as { id: string; oldEmail: string; newEmail: string } | undefined;
+
+  if (!request) {
+    return { ok: false as const, code: "invalid_token", message: "invalid or expired email change token" };
+  }
+
+  const existing = get_identity_by_email_(challenge.targetEmail);
+  if (existing && existing.userId !== challenge.userId) {
+    return { ok: false as const, code: "email_taken", message: "email already in use" };
+  }
+
+  const now = now_iso_();
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE auth_email_challenges SET consumed_at = ? WHERE id = ?").run(now, challenge.id);
+    db.prepare(`
+      UPDATE email_change_requests
+      SET status = 'verified', verified_at = ?
+      WHERE id = ?
+    `).run(now, request.id);
+    db.prepare(`
+      UPDATE user_identities
+      SET email = ?, email_verified = 1
+      WHERE user_id = ?
+    `).run(challenge.targetEmail, challenge.userId);
+    revoke_user_sessions_({
+      userId: challenge.userId,
+      exceptSessionId: params.sessionId ?? null
+    });
+    db.exec("COMMIT");
+    return {
+      ok: true as const,
+      data: {
+        profile: get_me_profile_(challenge.userId),
+        oldEmail: request.oldEmail,
+        newEmail: request.newEmail
+      }
+    };
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 };
 
 export const get_me = (userId: string) => get_me_profile_(userId);
@@ -2257,6 +2654,112 @@ export const write_audit_log = (params: {
     new Date().toISOString()
   );
 };
+
+export const record_email_delivery_attempt = (params: {
+  id: string;
+  provider: string;
+  templateKey: string;
+  toEmail: string;
+  subject: string;
+  challengeId?: string | null;
+  status: "queued" | "sent" | "failed" | "delivered" | "bounced" | "complained";
+  providerMessageId?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  payload?: unknown;
+}) => {
+  const now = now_iso_();
+  db.prepare(`
+    INSERT INTO email_delivery_attempts (
+      id, provider, template_key, to_email, subject, challenge_id, status,
+      provider_message_id, error_code, error_message, payload, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    params.id,
+    params.provider,
+    params.templateKey,
+    normalize_email_(params.toEmail),
+    params.subject,
+    params.challengeId ?? null,
+    params.status,
+    params.providerMessageId ?? null,
+    params.errorCode ?? null,
+    params.errorMessage ?? null,
+    params.payload ? JSON.stringify(params.payload) : null,
+    now,
+    now
+  );
+};
+
+export const record_security_event = (params: {
+  id: string;
+  userId: string;
+  type: string;
+  severity: "info" | "warning" | "critical";
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  payload?: unknown;
+}) => {
+  db.prepare(`
+    INSERT INTO security_events (
+      id, user_id, type, severity, ip_address, user_agent, payload, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    params.id,
+    params.userId,
+    params.type,
+    params.severity,
+    params.ipAddress ?? null,
+    params.userAgent ?? null,
+    params.payload ? JSON.stringify(params.payload) : null,
+    now_iso_()
+  );
+};
+
+export const list_admin_email_deliveries = (limit = 100) =>
+  db.prepare(`
+    SELECT
+      id,
+      provider,
+      template_key AS templateKey,
+      to_email AS toEmail,
+      subject,
+      challenge_id AS challengeId,
+      status,
+      provider_message_id AS providerMessageId,
+      error_code AS errorCode,
+      error_message AS errorMessage,
+      payload,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM email_delivery_attempts
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(limit).map((row: any) => ({
+    ...row,
+    payload: row.payload ? JSON.parse(row.payload) : null
+  }));
+
+export const list_admin_security_events = (limit = 100) =>
+  db.prepare(`
+    SELECT
+      se.id,
+      se.user_id AS userId,
+      i.email,
+      se.type,
+      se.severity,
+      se.ip_address AS ipAddress,
+      se.user_agent AS userAgent,
+      se.payload,
+      se.created_at AS createdAt
+    FROM security_events se
+    LEFT JOIN user_identities i ON i.user_id = se.user_id
+    ORDER BY se.created_at DESC
+    LIMIT ?
+  `).all(limit).map((row: any) => ({
+    ...row,
+    payload: row.payload ? JSON.parse(row.payload) : null
+  }));
 
 export const find_cached_response = (params: {
   requesterUserId: string;

@@ -8,7 +8,9 @@ export function SecurityPage() {
   const { t } = useLocale();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [emailSaving, setEmailSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -29,6 +31,25 @@ export function SecurityPage() {
       setError(extractError(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setEmailSaving(true);
+    try {
+      await apiJson("/v1/me/security/email", {
+        method: "PATCH",
+        body: JSON.stringify({ newEmail, currentPassword: currentPassword || undefined }),
+      });
+      setNewEmail("");
+      setSuccess(t("security.emailChangeRequested"));
+    } catch (err: unknown) {
+      setError(extractError(err));
+    } finally {
+      setEmailSaving(false);
     }
   };
 
@@ -70,6 +91,27 @@ export function SecurityPage() {
             className="self-start"
           >
             {saving ? t("security.saving") : t("security.save")}
+          </FormButton>
+        </form>
+      </div>
+
+      <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6 mt-6">
+        <h2 className="text-base font-semibold mb-4 tracking-tight">{t("security.changeEmail")}</h2>
+        <p className="text-sm text-text-secondary mb-4">{t("security.changeEmailDesc")}</p>
+        <form onSubmit={handleChangeEmail} className="flex flex-col gap-4 max-w-lg">
+          <FormInput
+            type="email"
+            placeholder={t("security.newEmail")}
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            required
+          />
+          <FormButton
+            type="submit"
+            disabled={emailSaving || !newEmail}
+            className="self-start"
+          >
+            {emailSaving ? t("security.saving") : t("security.requestEmailChange")}
           </FormButton>
         </form>
       </div>

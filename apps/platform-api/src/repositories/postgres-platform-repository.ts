@@ -110,6 +110,80 @@ const providerKeyFingerprint = (params: {
   hashApiKey(`${params.providerType}|${(normalizeBaseUrl(params.baseUrl) ?? "").toLowerCase()}|${params.apiKey.trim()}`);
 
 const generateCode = () => String(randomInt(100000, 1000000));
+const generateOpaqueToken = (prefix: string) => `${prefix}_${randomBytes(24).toString("hex")}`;
+
+const createAuthEmailChallenge = async (params: {
+  email: string;
+  purpose: string;
+  ttlSeconds: number;
+  code?: string | null;
+  token?: string | null;
+  userId?: string | null;
+  targetEmail?: string | null;
+  invitationId?: string | null;
+  metadata?: unknown;
+}) => {
+  const currentPool = getPool();
+  const id = `emlch_${randomUUID()}`;
+  await currentPool.query(`
+    INSERT INTO auth_email_challenges (
+      id, email, purpose, code_hash, token_hash, user_id, target_email, invitation_id,
+      expires_at, consumed_at, invalidated_at, send_count, last_sent_at, verify_attempt_count, metadata, created_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() + ($9 * INTERVAL '1 second'), NULL, NULL, 1, NOW(), 0, $10::jsonb, NOW())
+  `, [
+    id,
+    normalizeEmail(params.email),
+    params.purpose,
+    params.code ? hashApiKey(params.code) : null,
+    params.token ? hashApiKey(params.token) : null,
+    params.userId ?? null,
+    params.targetEmail ? normalizeEmail(params.targetEmail) : null,
+    params.invitationId ?? null,
+    params.ttlSeconds,
+    JSON.stringify(params.metadata ?? null)
+  ]);
+  return id;
+};
+
+const invalidateAuthEmailChallenges = async (params: {
+  email: string;
+  purpose: string;
+  userId?: string | null;
+}) => {
+  const currentPool = getPool();
+  if (params.userId) {
+    await currentPool.query(`
+      UPDATE auth_email_challenges
+      SET invalidated_at = NOW()
+      WHERE email = $1
+        AND purpose = $2
+        AND user_id = $3
+        AND consumed_at IS NULL
+        AND invalidated_at IS NULL
+    `, [normalizeEmail(params.email), params.purpose, params.userId]);
+    return;
+  }
+
+  await currentPool.query(`
+    UPDATE auth_email_challenges
+    SET invalidated_at = NOW()
+    WHERE email = $1
+      AND purpose = $2
+      AND consumed_at IS NULL
+      AND invalidated_at IS NULL
+  `, [normalizeEmail(params.email), params.purpose]);
+};
+
+const revokeUserSessions = async (params: {
+  userId: string;
+  exceptSessionId?: string | null;
+}) => {
+  const currentPool = getPool();
+  const result = params.exceptSessionId
+    ? await currentPool.query("DELETE FROM auth_sessions WHERE user_id = $1 AND id != $2", [params.userId, params.exceptSessionId])
+    : await currentPool.query("DELETE FROM auth_sessions WHERE user_id = $1", [params.userId]);
+  return result.rowCount ?? 0;
+};
 
 type SettlementParams = {
   requestId: string;
@@ -196,6 +270,70 @@ const ensureDevSeed = (() => {
           user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
           password_hash TEXT NOT NULL,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await currentPool.query(`
+        CREATE TABLE IF NOT EXISTS auth_email_challenges (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL,
+          purpose TEXT NOT NULL,
+          code_hash TEXT,
+          token_hash TEXT,
+          user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+          target_email TEXT,
+          invitation_id TEXT REFERENCES invitations(id) ON DELETE SET NULL,
+          expires_at TIMESTAMPTZ NOT NULL,
+          consumed_at TIMESTAMPTZ,
+          invalidated_at TIMESTAMPTZ,
+          send_count INTEGER NOT NULL DEFAULT 1,
+          last_sent_at TIMESTAMPTZ,
+          verify_attempt_count INTEGER NOT NULL DEFAULT 0,
+          metadata JSONB,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await currentPool.query(`
+        CREATE TABLE IF NOT EXISTS email_delivery_attempts (
+          id TEXT PRIMARY KEY,
+          provider TEXT NOT NULL,
+          template_key TEXT NOT NULL,
+          to_email TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          challenge_id TEXT REFERENCES auth_email_challenges(id) ON DELETE SET NULL,
+          status TEXT NOT NULL,
+          provider_message_id TEXT,
+          error_code TEXT,
+          error_message TEXT,
+          payload JSONB,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await currentPool.query(`
+        CREATE TABLE IF NOT EXISTS email_change_requests (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          old_email TEXT NOT NULL,
+          new_email TEXT NOT NULL,
+          challenge_id TEXT NOT NULL REFERENCES auth_email_challenges(id) ON DELETE CASCADE,
+          status TEXT NOT NULL,
+          requested_ip TEXT,
+          requested_user_agent TEXT,
+          expires_at TIMESTAMPTZ NOT NULL,
+          verified_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await currentPool.query(`
+        CREATE TABLE IF NOT EXISTS security_events (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          type TEXT NOT NULL,
+          severity TEXT NOT NULL,
+          ip_address TEXT,
+          user_agent TEXT,
+          payload JSONB,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
       `);
       await currentPool.query(`
@@ -453,18 +591,30 @@ export const postgresPlatformRepository: PlatformRepository = {
     );
 
     if (!identity.rows[0] && !invitation.rows[0]) {
-      return { eligible: false, firstLogin: false };
+      return { eligible: false, firstLogin: false, email: normalizedEmail, challengeId: null };
     }
 
     const code = generateCode();
-    await currentPool.query(`
-      INSERT INTO login_codes (id, email, code_hash, expires_at, created_at)
-      VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes', NOW())
-    `, [`lc_${randomUUID()}`, normalizedEmail, hashApiKey(code)]);
+    const purpose = identity.rows[0] ? "login_code" : "invite_signup_code";
+    await invalidateAuthEmailChallenges({
+      email: normalizedEmail,
+      purpose,
+      userId: identity.rows[0]?.user_id ?? null
+    });
+    const challengeId = await createAuthEmailChallenge({
+      email: normalizedEmail,
+      purpose,
+      ttlSeconds: config.authCodeTtlSeconds,
+      code,
+      userId: identity.rows[0]?.user_id ?? null,
+      invitationId: invitation.rows[0]?.id ?? null
+    });
 
     return {
       eligible: true,
       firstLogin: !identity.rows[0],
+      challengeId,
+      email: normalizedEmail,
       code: config.isProduction ? undefined : code
     };
   },
@@ -476,23 +626,46 @@ export const postgresPlatformRepository: PlatformRepository = {
     const client = await currentPool.connect();
     try {
       await client.query("BEGIN");
+      const identityPreview = await client.query<{ userId: string }>(
+        "SELECT user_id AS \"userId\" FROM user_identities WHERE email = $1 LIMIT 1",
+        [normalizedEmail]
+      );
+      const challengePurpose = identityPreview.rows[0] ? "login_code" : "invite_signup_code";
       const codeRow = await client.query<{ id: string }>(`
         SELECT id
-        FROM login_codes
+        FROM auth_email_challenges
         WHERE email = $1
-          AND code_hash = $2
+          AND purpose = $2
+          AND code_hash = $3
           AND consumed_at IS NULL
+          AND invalidated_at IS NULL
           AND expires_at > NOW()
         ORDER BY created_at DESC
         LIMIT 1
-      `, [normalizedEmail, hashApiKey(code)]);
+      `, [normalizedEmail, challengePurpose, hashApiKey(code)]);
+      const legacyCodeRow = !codeRow.rows[0]
+        ? await client.query<{ id: string }>(`
+            SELECT id
+            FROM login_codes
+            WHERE email = $1
+              AND code_hash = $2
+              AND consumed_at IS NULL
+              AND expires_at > NOW()
+            ORDER BY created_at DESC
+            LIMIT 1
+          `, [normalizedEmail, hashApiKey(code)])
+        : { rows: [] };
 
-      if (!codeRow.rows[0]) {
+      if (!codeRow.rows[0] && !legacyCodeRow.rows[0]) {
         await client.query("ROLLBACK");
         return { ok: false as const, code: "invalid_code", message: "invalid or expired verification code" };
       }
 
-      await client.query("UPDATE login_codes SET consumed_at = NOW() WHERE id = $1", [codeRow.rows[0].id]);
+      if (codeRow.rows[0]) {
+        await client.query("UPDATE auth_email_challenges SET consumed_at = NOW() WHERE id = $1", [codeRow.rows[0].id]);
+      } else {
+        await client.query("UPDATE login_codes SET consumed_at = NOW() WHERE id = $1", [legacyCodeRow.rows[0].id]);
+      }
 
       let identity = await client.query<{ userId: string }>(
         "SELECT user_id AS \"userId\" FROM user_identities WHERE email = $1 LIMIT 1",
@@ -618,6 +791,101 @@ export const postgresPlatformRepository: PlatformRepository = {
     };
   },
 
+  async requestPasswordReset(email) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const normalizedEmail = normalizeEmail(email);
+    const identity = await currentPool.query<{ userId: string }>(
+      "SELECT user_id AS \"userId\" FROM user_identities WHERE email = $1 LIMIT 1",
+      [normalizedEmail]
+    );
+    if (!identity.rows[0]) {
+      return {
+        accepted: false,
+        email: normalizedEmail,
+        challengeId: null,
+        userId: null
+      };
+    }
+
+    const token = generateOpaqueToken("reset");
+    await invalidateAuthEmailChallenges({
+      email: normalizedEmail,
+      purpose: "password_reset",
+      userId: identity.rows[0].userId
+    });
+    const challengeId = await createAuthEmailChallenge({
+      email: normalizedEmail,
+      purpose: "password_reset",
+      ttlSeconds: config.passwordResetTtlSeconds,
+      token,
+      userId: identity.rows[0].userId
+    });
+
+    return {
+      accepted: true,
+      email: normalizedEmail,
+      token,
+      challengeId,
+      userId: identity.rows[0].userId
+    };
+  },
+
+  async resetPassword(params) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const client = await currentPool.connect();
+    try {
+      await client.query("BEGIN");
+      const challenge = await client.query<{ id: string; userId: string }>(`
+        SELECT id, user_id AS "userId"
+        FROM auth_email_challenges
+        WHERE purpose = 'password_reset'
+          AND token_hash = $1
+          AND consumed_at IS NULL
+          AND invalidated_at IS NULL
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [hashApiKey(params.token)]);
+      if (!challenge.rows[0]) {
+        await client.query("ROLLBACK");
+        return { ok: false as const, code: "invalid_token", message: "invalid or expired reset token" };
+      }
+
+      await client.query("UPDATE auth_email_challenges SET consumed_at = NOW() WHERE id = $1", [challenge.rows[0].id]);
+      await client.query(`
+        INSERT INTO user_passwords (user_id, password_hash, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (user_id) DO UPDATE SET
+          password_hash = EXCLUDED.password_hash,
+          updated_at = EXCLUDED.updated_at
+      `, [challenge.rows[0].userId, hashPassword(params.newPassword)]);
+      await client.query(`
+        UPDATE auth_email_challenges
+        SET invalidated_at = NOW()
+        WHERE purpose = 'password_reset'
+          AND user_id = $1
+          AND consumed_at IS NULL
+          AND invalidated_at IS NULL
+      `, [challenge.rows[0].userId]);
+      const revokeResult = await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [challenge.rows[0].userId]);
+      await client.query("COMMIT");
+      return {
+        ok: true as const,
+        data: {
+          userId: challenge.rows[0].userId,
+          sessionsRevoked: revokeResult.rowCount ?? 0
+        }
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async updateMeProfile(params) {
     await ensureDevSeed();
     const currentPool = getPool();
@@ -637,7 +905,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       "SELECT password_hash AS \"passwordHash\" FROM user_passwords WHERE user_id = $1 LIMIT 1",
       [params.userId]
     );
-    if (!current.rows[0] || !verifyPassword(params.currentPassword, current.rows[0].passwordHash)) {
+    if (current.rows[0] && !verifyPassword(params.currentPassword, current.rows[0].passwordHash)) {
       return { ok: false as const, code: "invalid_password", message: "current password is invalid" };
     }
     await currentPool.query(`
@@ -647,12 +915,20 @@ export const postgresPlatformRepository: PlatformRepository = {
         password_hash = EXCLUDED.password_hash,
         updated_at = EXCLUDED.updated_at
     `, [params.userId, hashPassword(params.newPassword)]);
-    return { ok: true as const };
+    const sessionsRevoked = await revokeUserSessions({
+      userId: params.userId,
+      exceptSessionId: params.currentSessionId ?? null
+    });
+    return { ok: true as const, data: { sessionsRevoked } };
   },
 
-  async updateMeEmail(params) {
+  async requestEmailChange(params) {
     await ensureDevSeed();
     const currentPool = getPool();
+    const me = await getMeProfile(params.userId);
+    if (!me) {
+      return { ok: false as const, code: "not_found", message: "user not found" };
+    }
     const normalizedEmail = normalizeEmail(params.newEmail);
     const existing = await currentPool.query<{ userId: string }>(
       "SELECT user_id AS \"userId\" FROM user_identities WHERE email = $1 LIMIT 1",
@@ -661,11 +937,145 @@ export const postgresPlatformRepository: PlatformRepository = {
     if (existing.rows[0] && existing.rows[0].userId !== params.userId) {
       return { ok: false as const, code: "email_taken", message: "email already in use" };
     }
-    await currentPool.query(
-      "UPDATE user_identities SET email = $1, email_verified = TRUE WHERE user_id = $2",
-      [normalizedEmail, params.userId]
+    if (normalizedEmail === normalizeEmail(me.email)) {
+      return { ok: false as const, code: "email_unchanged", message: "new email must be different" };
+    }
+
+    const current = await currentPool.query<{ passwordHash: string }>(
+      "SELECT password_hash AS \"passwordHash\" FROM user_passwords WHERE user_id = $1 LIMIT 1",
+      [params.userId]
     );
-    return { ok: true as const, data: await getMeProfile(params.userId) };
+    if (current.rows[0] && !verifyPassword(params.currentPassword ?? "", current.rows[0].passwordHash)) {
+      return { ok: false as const, code: "invalid_password", message: "current password is invalid" };
+    }
+
+    const token = generateOpaqueToken("emailchg");
+    await invalidateAuthEmailChallenges({
+      email: normalizedEmail,
+      purpose: "email_change_verify_new",
+      userId: params.userId
+    });
+    const challengeId = await createAuthEmailChallenge({
+      email: normalizedEmail,
+      purpose: "email_change_verify_new",
+      ttlSeconds: config.emailChangeTtlSeconds,
+      token,
+      userId: params.userId,
+      targetEmail: normalizedEmail,
+      metadata: {
+        oldEmail: me.email,
+        newEmail: normalizedEmail
+      }
+    });
+    const requestId = `emailreq_${randomUUID()}`;
+    await currentPool.query(`
+      INSERT INTO email_change_requests (
+        id, user_id, old_email, new_email, challenge_id, status, requested_ip, requested_user_agent,
+        expires_at, verified_at, created_at
+      ) VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, NOW() + ($8 * INTERVAL '1 second'), NULL, NOW())
+    `, [
+      requestId,
+      params.userId,
+      normalizeEmail(me.email),
+      normalizedEmail,
+      challengeId,
+      params.ipAddress ?? null,
+      params.userAgent ?? null,
+      config.emailChangeTtlSeconds
+    ]);
+
+    return {
+      ok: true as const,
+      data: {
+        requestId,
+        oldEmail: normalizeEmail(me.email),
+        newEmail: normalizedEmail,
+        token,
+        challengeId
+      }
+    };
+  },
+
+  async confirmEmailChange(params) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const client = await currentPool.connect();
+    try {
+      await client.query("BEGIN");
+      const challenge = await client.query<{ id: string; userId: string; targetEmail: string }>(`
+        SELECT id, user_id AS "userId", target_email AS "targetEmail"
+        FROM auth_email_challenges
+        WHERE purpose = 'email_change_verify_new'
+          AND token_hash = $1
+          AND consumed_at IS NULL
+          AND invalidated_at IS NULL
+          AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [hashApiKey(params.token)]);
+      if (!challenge.rows[0]) {
+        await client.query("ROLLBACK");
+        return { ok: false as const, code: "invalid_token", message: "invalid or expired email change token" };
+      }
+
+      const existing = await client.query<{ userId: string }>(
+        "SELECT user_id AS \"userId\" FROM user_identities WHERE email = $1 LIMIT 1",
+        [challenge.rows[0].targetEmail]
+      );
+      if (existing.rows[0] && existing.rows[0].userId !== challenge.rows[0].userId) {
+        await client.query("ROLLBACK");
+        return { ok: false as const, code: "email_taken", message: "email already in use" };
+      }
+
+      const request = await client.query<{ oldEmail: string; newEmail: string }>(`
+        SELECT old_email AS "oldEmail", new_email AS "newEmail"
+        FROM email_change_requests
+        WHERE challenge_id = $1
+          AND status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [challenge.rows[0].id]);
+      if (!request.rows[0]) {
+        await client.query("ROLLBACK");
+        return { ok: false as const, code: "invalid_token", message: "invalid or expired email change token" };
+      }
+
+      await client.query("UPDATE auth_email_challenges SET consumed_at = NOW() WHERE id = $1", [challenge.rows[0].id]);
+      await client.query(`
+        UPDATE email_change_requests
+        SET status = 'verified', verified_at = NOW()
+        WHERE challenge_id = $1
+          AND status = 'pending'
+      `, [challenge.rows[0].id]);
+      await client.query(`
+        UPDATE user_identities
+        SET email = $1, email_verified = TRUE
+        WHERE user_id = $2
+      `, [challenge.rows[0].targetEmail, challenge.rows[0].userId]);
+      if (params.sessionId) {
+        await client.query("DELETE FROM auth_sessions WHERE user_id = $1 AND id != $2", [challenge.rows[0].userId, params.sessionId]);
+      } else {
+        await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [challenge.rows[0].userId]);
+      }
+      await client.query("COMMIT");
+      return {
+        ok: true as const,
+        data: {
+          profile: await getMeProfile(challenge.rows[0].userId),
+          oldEmail: request.rows[0].oldEmail,
+          newEmail: request.rows[0].newEmail
+        }
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async updateMeEmail() {
+    return { ok: false as const, code: "deprecated", message: "use requestEmailChange instead" };
   },
 
   async updateMePhone(params) {
@@ -1304,6 +1714,93 @@ export const postgresPlatformRepository: PlatformRepository = {
       params.targetId,
       JSON.stringify(params.payload ?? {})
     ]);
+  },
+
+  async recordEmailDeliveryAttempt(params) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO email_delivery_attempts (
+        id, provider, template_key, to_email, subject, challenge_id, status,
+        provider_message_id, error_code, error_message, payload, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, NOW(), NOW())
+    `, [
+      params.id,
+      params.provider,
+      params.templateKey,
+      normalizeEmail(params.toEmail),
+      params.subject,
+      params.challengeId ?? null,
+      params.status,
+      params.providerMessageId ?? null,
+      params.errorCode ?? null,
+      params.errorMessage ?? null,
+      JSON.stringify(params.payload ?? null)
+    ]);
+  },
+
+  async recordSecurityEvent(params) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO security_events (id, user_id, type, severity, ip_address, user_agent, payload, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, NOW())
+    `, [
+      params.id,
+      params.userId,
+      params.type,
+      params.severity,
+      params.ipAddress ?? null,
+      params.userAgent ?? null,
+      JSON.stringify(params.payload ?? null)
+    ]);
+  },
+
+  async listAdminEmailDeliveries(limit) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        id,
+        provider,
+        template_key AS "templateKey",
+        to_email AS "toEmail",
+        subject,
+        challenge_id AS "challengeId",
+        status,
+        provider_message_id AS "providerMessageId",
+        error_code AS "errorCode",
+        error_message AS "errorMessage",
+        payload,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM email_delivery_attempts
+      ORDER BY created_at DESC
+      LIMIT $1
+    `, [limit]);
+    return result.rows;
+  },
+
+  async listAdminSecurityEvents(limit) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        se.id,
+        se.user_id AS "userId",
+        i.email,
+        se.type,
+        se.severity,
+        se.ip_address AS "ipAddress",
+        se.user_agent AS "userAgent",
+        se.payload,
+        se.created_at AS "createdAt"
+      FROM security_events se
+      LEFT JOIN user_identities i ON i.user_id = se.user_id
+      ORDER BY se.created_at DESC
+      LIMIT $1
+    `, [limit]);
+    return result.rows;
   },
 
   async findOfferingForModel(logicalModel) {
@@ -2489,7 +2986,6 @@ export const postgresPlatformRepository: PlatformRepository = {
       return { ok: false as const, code: "retry_failed", message: error instanceof Error ? error.message : "retry failed" };
     }
   },
-
   async createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }) {
     await ensureDevSeed();
     const currentPool = getPool();
