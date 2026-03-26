@@ -9,6 +9,7 @@ interface BannerData {
 }
 
 const DISMISS_KEY = "xllmapi_banner_dismissed";
+const BANNER_HEIGHT = "28px";
 
 const typeStyles: Record<BannerType, string> = {
   info: "bg-accent/10 border-accent/30 text-accent",
@@ -21,17 +22,17 @@ export function SiteBanner() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem(DISMISS_KEY);
-    if (stored) {
-      setDismissed(true);
-      return;
-    }
-
     fetch("/v1/site-banner")
       .then((r) => r.json())
       .then((data: BannerData) => {
         if (data.enabled && data.content) {
-          setBanner(data);
+          // If content changed since last dismiss, show again
+          const dismissedContent = sessionStorage.getItem(DISMISS_KEY);
+          if (dismissedContent === data.content) {
+            setDismissed(true);
+          } else {
+            setBanner(data);
+          }
         }
       })
       .catch(() => {});
@@ -41,12 +42,14 @@ export function SiteBanner() {
 
   const dismiss = () => {
     setDismissed(true);
-    sessionStorage.setItem(DISMISS_KEY, "1");
+    // Store the dismissed content, so new content will still show
+    sessionStorage.setItem(DISMISS_KEY, banner.content);
   };
 
   return (
     <div
-      className={`border-b px-4 py-2 text-xs flex items-center justify-between gap-2 ${typeStyles[banner.type] ?? typeStyles.info}`}
+      className={`fixed left-0 right-0 z-40 border-b px-4 py-1.5 text-xs flex items-center justify-between gap-2 ${typeStyles[banner.type] ?? typeStyles.info}`}
+      style={{ top: "var(--spacing-header, 56px)", height: BANNER_HEIGHT }}
     >
       <span className="flex-1 text-center truncate">{banner.content}</span>
       <button
