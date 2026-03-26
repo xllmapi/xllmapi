@@ -110,7 +110,7 @@ export function MarketDetailPage() {
               <h1 className="text-2xl font-bold tracking-tight">{detail.logicalModel}</h1>
               <Badge>{detail.enabled !== false && detail.reviewStatus === "approved" ? "available" : "offline"}</Badge>
               {(detail.executionMode === "platform" || !detail.executionMode) ? (
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ 平台托管</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ 平台节点</span>
               ) : (
                 <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-500/10 text-purple-400">🖥️ 分布式</span>
               )}

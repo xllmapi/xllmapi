@@ -134,6 +134,10 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return get_me(userId);
   },
 
+  findUserByHandle() {
+    return null;
+  },
+
   listInvitations(userId) {
     return list_invitations(userId);
   },
@@ -369,6 +373,10 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return [];
   },
 
+  getConfigValue() {
+    return null;
+  },
+
   updateAdminConfig() {
     return { ok: true };
   },
@@ -483,6 +491,11 @@ export const sqlitePlatformRepository: PlatformRepository = {
   // --- User Profile (stubs) ---
   getPublicUserProfile() { return null; },
   listUserOfferings() { return []; },
+
+  // --- Provider Presets (stubs) ---
+  listProviderPresets() { return []; },
+  upsertProviderPreset() {},
+  deleteProviderPreset() { return false; },
 
   devUserApiKey: DEV_USER_API_KEY,
   devAdminApiKey: DEV_ADMIN_API_KEY

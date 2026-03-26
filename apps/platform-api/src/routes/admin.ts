@@ -378,7 +378,7 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const body = await read_json<{ title: string; body?: string; content?: string; type?: string; targetUserId?: string }>(req);
+    const body = await read_json<{ title: string; body?: string; content?: string; type?: string; targetUserId?: string; targetHandle?: string }>(req);
     const notifContent = body.body ?? body.content ?? "";
     if (!body.title || !notifContent) {
       const response = json(400, { error: { message: "title and content are required", requestId } });
@@ -386,12 +386,24 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
+    // Resolve targetHandle to targetUserId
+    let targetUserId = body.targetUserId ?? null;
+    if (!targetUserId && body.targetHandle) {
+      const resolved = await platformService.findUserByHandle(body.targetHandle);
+      if (!resolved) {
+        const response = json(404, { error: { message: `user not found: ${body.targetHandle}`, requestId } });
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+      targetUserId = resolved.id;
+    }
     const result = await platformService.createNotification({
       id: randomUUID(),
       title: body.title,
       body: notifContent,
       type: body.type ?? "announcement",
-      targetUserId: body.targetUserId ?? null,
+      targetUserId,
       createdBy: auth.userId
     });
     const response = json(201, { requestId, data: result });
@@ -479,6 +491,103 @@ export async function handleAdminRoutes(
       requestId,
       data: reviewResult.data
     });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // --- Provider Presets ---
+
+  // GET /v1/admin/provider-presets
+  if (req.method === "GET" && url.pathname === "/v1/admin/provider-presets") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const presets = await platformService.listProviderPresets();
+    const response = json(200, { ok: true, data: presets, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // PUT /v1/admin/provider-presets/:id  &  DELETE /v1/admin/provider-presets/:id
+  const presetMatch = url.pathname.match(/^\/v1\/admin\/provider-presets\/([^/]+)$/);
+
+  if (req.method === "PUT" && presetMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const presetId = decodeURIComponent(presetMatch[1]);
+    const body = await read_json<{ label: string; providerType: string; baseUrl: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number }>(req);
+    await platformService.upsertProviderPreset({
+      id: presetId,
+      label: body.label,
+      providerType: body.providerType,
+      baseUrl: body.baseUrl,
+      anthropicBaseUrl: body.anthropicBaseUrl,
+      models: body.models || [],
+      enabled: body.enabled,
+      sortOrder: body.sortOrder,
+      updatedBy: auth.userId,
+    });
+    const response = json(200, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // POST /v1/admin/provider-presets
+  if (req.method === "POST" && url.pathname === "/v1/admin/provider-presets") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const body = await read_json<{ id?: string; label?: string; providerType?: string; baseUrl?: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number }>(req);
+    if (!body.id || !body.label || !body.providerType || !body.baseUrl) {
+      const response = json(400, { error: { code: "invalid_request", message: "id, label, providerType, and baseUrl are required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    await platformService.upsertProviderPreset({
+      id: body.id,
+      label: body.label,
+      providerType: body.providerType,
+      baseUrl: body.baseUrl,
+      anthropicBaseUrl: body.anthropicBaseUrl,
+      models: body.models || [],
+      enabled: body.enabled ?? true,
+      sortOrder: body.sortOrder ?? 0,
+      updatedBy: auth.userId,
+    });
+    const response = json(201, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // DELETE /v1/admin/provider-presets/:id
+  if (req.method === "DELETE" && presetMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const deleted = await platformService.deleteProviderPreset(decodeURIComponent(presetMatch[1]));
+    const response = json(deleted ? 200 : 404, { ok: deleted, requestId });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;

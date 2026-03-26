@@ -2,6 +2,39 @@
 
 ---
 
+## v0.2.0 — 2026-03-27
+
+### 核心功能
+
+- **跨格式响应自动转换** — 统一端点 `/xllmapi/v1` 现在支持 clientFormat ≠ targetFormat 时自动转换响应格式（流式 + 非流式），实现 OpenAI ↔ Anthropic 双向无感
+- **Provider 预设管理** — 管理员可在后台管理供应商预设（厂商、模型、baseUrl、anthropicBaseUrl），不再 hardcode
+- **MiniMax Anthropic 双格式支持** — MiniMax 预设新增 `anthropicBaseUrl`，Anthropic SDK 直连 MiniMax Anthropic 端点
+- **节点默认配置** — 管理员可配置默认并发数、每日 Token 上限、默认输入/输出定价
+
+### 改进
+
+- **"平台托管" → "平台节点"** — 全平台统一文案
+- **API 厂商选择 UI 优化** — 从下拉列表改为卡片式网格，显示厂商名和支持格式
+- **模型定价引导修复** — placeholder 正确读取 pricing guidance API 返回值（修复 `res.data` 取值问题）
+- **模型勾选不再被刷掉** — 添加模型流程中暂停 30s 自动刷新
+- **模型自动检测去重** — AbortController 防止重复调用
+- **OpenCode 配置修复** — 使用 `@ai-sdk/openai-compatible` + `@ai-sdk/anthropic` 双 Provider，正确的 limit 配置
+- **Claude Code 配置增强** — DeepSeek + MiniMax 双模型，含 API_TIMEOUT_MS
+- **文档 API URL 统一** — 非格式说明处统一使用 `/xllmapi/v1`
+- **文档移除未验证集成** — 移除 Continue、LobeChat、ChatGPT-Next-Web 页面
+- **AI工具集成** — 分类重命名，OpenClaw 改为 "AI Agent 工具"
+- **模型信息更新** — DeepSeek V3.2 (128K)、Kimi K2.5 (256K)、MiniMax (200K)
+
+### 数据库
+
+- **migration 012** — 新增 `provider_presets` 表，种子数据包含 DeepSeek、MiniMax、Kimi、OpenAI、Anthropic
+
+### 新增文件
+
+- `core/adapters/response-converter.ts` — 响应格式转换器（JSON + SSE 流状态机）
+
+---
+
 ## v0.1.2 — 2026-03-27
 
 **Release ID**: `fab7737-20260327025709`

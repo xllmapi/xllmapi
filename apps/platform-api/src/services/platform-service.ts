@@ -14,6 +14,7 @@ type ProviderPreset = {
   label: string;
   providerType: CandidateOffering["providerType"];
   baseUrl: string;
+  anthropicBaseUrl?: string;
   logicalModel: string;
   realModel: string;
 };
@@ -93,6 +94,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "MiniMax",
     providerType: "openai_compatible",
     baseUrl: "https://api.minimaxi.com/v1",
+    anthropicBaseUrl: "https://api.minimaxi.com/anthropic",
     logicalModel: "MiniMax-M2.7",
     realModel: "MiniMax-M2.7"
   },
@@ -101,6 +103,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "MiniMax",
     providerType: "openai_compatible",
     baseUrl: "https://api.minimaxi.com/v1",
+    anthropicBaseUrl: "https://api.minimaxi.com/anthropic",
     logicalModel: "MiniMax-M2.5",
     realModel: "MiniMax-M2.5"
   },
@@ -109,6 +112,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
     label: "MiniMax",
     providerType: "openai_compatible",
     baseUrl: "https://api.minimaxi.com/v1",
+    anthropicBaseUrl: "https://api.minimaxi.com/anthropic",
     logicalModel: "MiniMax-Text-01",
     realModel: "MiniMax-Text-01"
   }
@@ -276,12 +280,53 @@ export const platformService = {
   /** Direct access to the underlying repository (used by node-connection-manager, etc.) */
   repo: platformRepository,
 
-  listProviderCatalog() {
+  async listProviderCatalog(): Promise<ProviderPreset[]> {
+    try {
+      const dbPresets = await platformRepository.listProviderPresets();
+      if (dbPresets.length > 0) {
+        const flat: ProviderPreset[] = [];
+        for (const p of dbPresets) {
+          if (!p.enabled) continue;
+          const models = (Array.isArray(p.models) ? p.models : []) as Array<{ logicalModel: string; realModel: string }>;
+          for (const m of models) {
+            flat.push({
+              id: p.id,
+              label: p.label,
+              providerType: p.providerType as CandidateOffering["providerType"],
+              baseUrl: p.baseUrl,
+              anthropicBaseUrl: p.anthropicBaseUrl ?? undefined,
+              logicalModel: m.logicalModel,
+              realModel: m.realModel,
+            });
+          }
+        }
+        if (flat.length > 0) return flat;
+      }
+    } catch {
+      // fallback to hardcoded
+    }
     return PROVIDER_PRESETS;
   },
 
-  getProviderPresetById(id: string) {
-    return PROVIDER_PRESETS.find((item) => item.id === id) ?? null;
+  async getProviderPresetById(id: string): Promise<ProviderPreset | null> {
+    const catalog = await this.listProviderCatalog();
+    return catalog.find((item) => item.id === id) ?? null;
+  },
+
+  async listProviderPresets() {
+    return platformRepository.listProviderPresets();
+  },
+
+  async upsertProviderPreset(params: {
+    id: string; label: string; providerType: string; baseUrl: string;
+    anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
+    sortOrder?: number; updatedBy?: string;
+  }) {
+    return platformRepository.upsertProviderPreset(params);
+  },
+
+  async deleteProviderPreset(id: string) {
+    return platformRepository.deleteProviderPreset(id);
   },
 
   async discoverProviderModels(params: {
@@ -340,21 +385,14 @@ export const platformService = {
 
   async getPricingGuidance(logicalModel: string) {
     const normalizedModel = logicalModel.trim();
-    const defaults = (() => {
-      if (normalizedModel.toLowerCase().includes("deepseek")) {
-        return { inputPricePer1k: 300, outputPricePer1k: 500, source: "default_profile" as const };
-      }
-      if (normalizedModel.toLowerCase().includes("minimax")) {
-        return { inputPricePer1k: 500, outputPricePer1k: 800, source: "default_profile" as const };
-      }
-      if (normalizedModel.toLowerCase().includes("claude")) {
-        return { inputPricePer1k: 1500, outputPricePer1k: 3000, source: "default_profile" as const };
-      }
-      if (normalizedModel.toLowerCase().includes("gpt") || normalizedModel.toLowerCase().includes("openai")) {
-        return { inputPricePer1k: 1000, outputPricePer1k: 2000, source: "default_profile" as const };
-      }
-      return { inputPricePer1k: 1000, outputPricePer1k: 2000, source: "default_profile" as const };
-    })();
+
+    // Read admin-configured default pricing
+    const adminInputPrice = Number(await platformRepository.getConfigValue("default_input_price_per_1k")) || 0;
+    const adminOutputPrice = Number(await platformRepository.getConfigValue("default_output_price_per_1k")) || 0;
+    const fallbackInput = adminInputPrice > 0 ? adminInputPrice : 1000;
+    const fallbackOutput = adminOutputPrice > 0 ? adminOutputPrice : 2000;
+
+    const defaults = { inputPricePer1k: fallbackInput, outputPricePer1k: fallbackOutput, source: "default_profile" as const };
 
     const marketModels = await platformRepository.listMarketModels();
     const marketModel = marketModels.find((item) => item.logicalModel === normalizedModel);
@@ -816,6 +854,7 @@ export const platformService = {
     ownerUserId: string;
     providerType: CandidateOffering["providerType"];
     baseUrl?: string;
+    anthropicBaseUrl?: string;
     apiKey: string;
   }) {
     return platformRepository.createProviderCredential(params);
@@ -844,6 +883,10 @@ export const platformService = {
     return platformRepository.listPendingOfferings();
   },
 
+  getConfigValue(key: string) {
+    return platformRepository.getConfigValue(key);
+  },
+
   createOffering(params: {
     id: string;
     ownerUserId: string;
@@ -853,6 +896,8 @@ export const platformService = {
     pricingMode: CandidateOffering["pricingMode"];
     fixedPricePer1kInput: number;
     fixedPricePer1kOutput: number;
+    maxConcurrency?: number;
+    dailyTokenLimit?: number;
   }) {
     return platformRepository.createOffering(params);
   },
@@ -1026,6 +1071,10 @@ export const platformService = {
 
   createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }) {
     return platformRepository.createNotification(params);
+  },
+
+  findUserByHandle(handle: string) {
+    return platformRepository.findUserByHandle(handle);
   },
 
   listAdminNotifications() {

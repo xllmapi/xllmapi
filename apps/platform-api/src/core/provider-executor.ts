@@ -75,7 +75,7 @@ function resolveBaseUrl(offering: CandidateOffering): string {
 }
 
 import type { ApiFormatId, ProxyUsage } from "./adapters/index.js";
-import { getAdapter, convertRequestBody } from "./adapters/index.js";
+import { getAdapter, convertRequestBody, convertJsonResponse, createStreamConverter } from "./adapters/index.js";
 
 /** Check if an offering has an endpoint for a given format */
 function hasEndpoint(offering: CandidateOffering, format: ApiFormatId): boolean {
@@ -193,9 +193,15 @@ export async function proxyApiRequest(params: {
       }
 
       let usage: ProxyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      const needsConversion = params.clientFormat !== targetFormat;
 
       if (isStreaming && resp.body) {
+        if (needsConversion && params.clientFormat === "anthropic") {
+          respHeaders["content-type"] = "text/event-stream; charset=utf-8";
+        }
         params.writeHead(resp.status, respHeaders);
+
+        const converter = needsConversion ? createStreamConverter(targetFormat, params.clientFormat) : null;
         const { Readable } = await import("node:stream");
         const nodeStream = Readable.fromWeb(resp.body as import("stream/web").ReadableStream);
         const TAIL_SIZE = 4096;
@@ -203,25 +209,51 @@ export async function proxyApiRequest(params: {
 
         await new Promise<void>((resolve, reject) => {
           nodeStream.on("data", (chunk: Buffer) => {
-            params.res.write(chunk);
             const str = chunk.toString();
+            if (converter) {
+              const lines = converter.transform(str);
+              for (const line of lines) params.res.write(line);
+            } else {
+              params.res.write(chunk);
+            }
             tailBuf += str;
             if (tailBuf.length > TAIL_SIZE * 2) tailBuf = tailBuf.slice(-TAIL_SIZE);
           });
-          nodeStream.on("end", () => { params.res.end(); resolve(); });
+          nodeStream.on("end", () => {
+            if (converter) {
+              const final = converter.flush();
+              for (const line of final) params.res.write(line);
+            }
+            params.res.end();
+            resolve();
+          });
           nodeStream.on("error", (err: Error) => { params.res.end(); reject(err); });
         });
 
         usage = adapter.extractUsageFromStream(tailBuf) ?? usage;
       } else {
         const bodyText = await resp.text();
-        params.writeHead(resp.status, respHeaders);
-        params.res.end(bodyText);
-
-        try {
-          const parsed = JSON.parse(bodyText);
-          usage = adapter.extractUsageFromJson(parsed) ?? usage;
-        } catch { /* ignore */ }
+        if (needsConversion) {
+          try {
+            const parsed = JSON.parse(bodyText);
+            usage = adapter.extractUsageFromJson(parsed) ?? usage;
+            const converted = convertJsonResponse(targetFormat, params.clientFormat, parsed);
+            respHeaders["content-type"] = "application/json";
+            params.writeHead(resp.status, respHeaders);
+            params.res.end(JSON.stringify(converted));
+          } catch {
+            // Fallback: pass through if conversion fails
+            params.writeHead(resp.status, respHeaders);
+            params.res.end(bodyText);
+          }
+        } else {
+          params.writeHead(resp.status, respHeaders);
+          params.res.end(bodyText);
+          try {
+            const parsed = JSON.parse(bodyText);
+            usage = adapter.extractUsageFromJson(parsed) ?? usage;
+          } catch { /* ignore */ }
+        }
       }
 
       return { chosenOffering: offering, usage };

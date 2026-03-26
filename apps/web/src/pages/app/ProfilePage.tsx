@@ -61,6 +61,7 @@ export function ProfilePage() {
           <div>
             <p className="text-sm font-medium">{user?.displayName || "—"}</p>
             <p className="text-text-secondary text-xs">{user?.email}</p>
+            {user?.handle && <p className="text-text-tertiary text-xs font-mono mt-0.5">{user.handle}</p>}
           </div>
         </div>
 

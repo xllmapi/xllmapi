@@ -53,7 +53,7 @@ export function AdminNotificationsPage() {
           title: title.trim(),
           content: content.trim(),
           type,
-          ...(targetUserId.trim() ? { targetUserId: targetUserId.trim() } : {}),
+          ...(targetUserId.trim() ? { targetHandle: targetUserId.trim() } : {}),
         }),
       });
       setMessage({ type: "success", text: t("admin.notifications.sent") });
@@ -159,7 +159,7 @@ export function AdminNotificationsPage() {
           {type === "personal" && (
             <FormInput
               label={t("admin.notifications.targetUser")}
-              placeholder="User ID"
+              placeholder="xu-xxxxxxxx"
               value={targetUserId}
               onChange={(e) => setTargetUserId(e.target.value)}
             />

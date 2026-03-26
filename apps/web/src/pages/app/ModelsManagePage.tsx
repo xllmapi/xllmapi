@@ -17,6 +17,7 @@ interface ProviderPreset {
   name: string;
   label?: string;
   baseUrl: string;
+  anthropicBaseUrl?: string;
   logicalModel: string;
   realModel: string;
 }
@@ -966,11 +967,12 @@ function ProvidingTab() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
-  // Auto-refresh node/offering data every 30s
+  // Auto-refresh node/offering data every 30s (paused during add flow)
   useEffect(() => {
+    if (addMode) return; // Don't refresh while user is adding a model
     const timer = setInterval(() => { void loadData(); }, 30_000);
     return () => clearInterval(timer);
-  }, [loadData]);
+  }, [loadData, addMode]);
 
   // ── Provider helpers ──
   const providerMap = new Map<string, ProviderPreset>();
@@ -983,7 +985,7 @@ function ProvidingTab() {
   const providerLabel = firstPreset?.label ?? firstPreset?.name ?? selectedProvider;
 
   // ── Auto-discover models ──
-  const doDiscover = useCallback(async (preset: ProviderPreset, key: string) => {
+  const doDiscover = useCallback(async (preset: ProviderPreset, key: string, signal?: AbortSignal) => {
     setDiscovering(true);
     setDiscoveryFailed(false);
     try {
@@ -996,8 +998,10 @@ function ProvidingTab() {
             baseUrl: preset.baseUrl,
             apiKey: key,
           }),
+          signal,
         },
       );
+      if (signal?.aborted) return;
       if (result.ok !== false && result.data?.length > 0) {
         setDiscoveredModels(result.data);
         setDiscoveryDone(true);
@@ -1006,11 +1010,12 @@ function ProvidingTab() {
         setDiscoveryFailed(true);
         setDiscoveryDone(true);
       }
-    } catch {
+    } catch (err) {
+      if (signal?.aborted) return;
       setDiscoveryFailed(true);
       setDiscoveryDone(true);
     } finally {
-      setDiscovering(false);
+      if (!signal?.aborted) setDiscovering(false);
     }
   }, []);
 
@@ -1026,12 +1031,15 @@ function ProvidingTab() {
     const preset = catalog.find((p) => p.id === selectedProvider);
     if (!preset) return;
 
+    const controller = new AbortController();
+
     discoverTimerRef.current = setTimeout(() => {
-      void doDiscover(preset, apiKey.trim());
+      void doDiscover(preset, apiKey.trim(), controller.signal);
     }, 600);
 
     return () => {
       if (discoverTimerRef.current) clearTimeout(discoverTimerRef.current);
+      controller.abort();
     };
   }, [selectedProvider, apiKey, catalog, doDiscover]);
 
@@ -1051,16 +1059,17 @@ function ProvidingTab() {
     if (guidanceDefaults[modelId]) return;
     apiJson<any>(`/v1/pricing/guidance?logicalModel=${encodeURIComponent(modelLabel)}`)
       .then((res) => {
-        setGuidanceDefaults((prev) => ({ ...prev, [modelId]: { input: res.inputPricePer1k ?? 300, output: res.outputPricePer1k ?? 500 } }));
-        setModelPricing((prev) => prev[modelId] ? prev : { ...prev, [modelId]: { input: String(res.inputPricePer1k ?? ""), output: String(res.outputPricePer1k ?? "") } });
+        const g = res.data ?? res;
+        setGuidanceDefaults((prev) => ({ ...prev, [modelId]: { input: g.inputPricePer1k ?? 1000, output: g.outputPricePer1k ?? 2000 } }));
+        setModelPricing((prev) => prev[modelId] ? prev : { ...prev, [modelId]: { input: String(g.inputPricePer1k ?? ""), output: String(g.outputPricePer1k ?? "") } });
         if (!pricingGuidance) {
           setPricingGuidance({
-            platformMinInput: res.platformMinInput ?? 0,
-            platformMaxInput: res.platformMaxInput ?? 0,
-            platformMinOutput: res.platformMinOutput ?? 0,
-            platformMaxOutput: res.platformMaxOutput ?? 0,
-            avg7dInputPricePer1k: res.avg7dInputPricePer1k,
-            avg7dOutputPricePer1k: res.avg7dOutputPricePer1k,
+            platformMinInput: g.platformMinInput ?? 0,
+            platformMaxInput: g.platformMaxInput ?? 0,
+            platformMinOutput: g.platformMinOutput ?? 0,
+            platformMaxOutput: g.platformMaxOutput ?? 0,
+            avg7dInputPricePer1k: g.avg7dInputPricePer1k,
+            avg7dOutputPricePer1k: g.avg7dOutputPricePer1k,
           });
         }
       })
@@ -1389,29 +1398,52 @@ node dist/main.js start \\
               <form onSubmit={handlePublish} className="flex flex-col gap-5 max-w-lg">
                 <div>
                   <label className="text-text-secondary text-xs block mb-1.5">{t("network.selectProvider")}</label>
-                  <select
-                    value={selectedProvider}
-                    onChange={(e) => {
-                      setSelectedProvider(e.target.value);
-                      setSelectedModels(new Set());
-                      setDiscoveredModels([]);
-                      setDiscoveryDone(false);
-                      setDiscoveryFailed(false);
-                      setApiKey("");
-                    }}
-                    className="w-full rounded-[var(--radius-input)] border border-line px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
-                    style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
-                  >
-                    <option value="">{t("network.chooseProvider")}</option>
-                    {providers.map((providerId) => {
-                      const sample = providerMap.get(providerId);
-                      return (
-                        <option key={providerId} value={providerId}>
-                          {sample?.label ?? sample?.name ?? providerId}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  {!selectedProvider ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {providers.map((providerId) => {
+                        const sample = providerMap.get(providerId);
+                        const hasAnthropic = catalog.some((p) => p.id === providerId && p.anthropicBaseUrl);
+                        const isAnthropic = sample?.providerType === "anthropic";
+                        const formatLabel = isAnthropic ? "Anthropic" : hasAnthropic ? "OpenAI + Anthropic" : "OpenAI";
+                        return (
+                          <button
+                            key={providerId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedProvider(providerId);
+                              setSelectedModels(new Set());
+                              setDiscoveredModels([]);
+                              setDiscoveryDone(false);
+                              setDiscoveryFailed(false);
+                              setApiKey("");
+                            }}
+                            className="flex flex-col items-start gap-1 px-4 py-3 rounded-[var(--radius-card)] border border-line hover:border-accent/50 hover:bg-accent/5 cursor-pointer bg-transparent text-left transition-colors"
+                          >
+                            <span className="text-sm font-medium text-text-primary">{sample?.label ?? providerId}</span>
+                            <span className="text-[10px] text-text-tertiary">{formatLabel}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-accent">{providerLabel}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProvider("");
+                          setSelectedModels(new Set());
+                          setDiscoveredModels([]);
+                          setDiscoveryDone(false);
+                          setDiscoveryFailed(false);
+                          setApiKey("");
+                        }}
+                        className="text-xs text-text-tertiary hover:text-text-secondary cursor-pointer bg-transparent border-none"
+                      >
+                        {t("modelsMgmt.back")}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {selectedProvider && (
