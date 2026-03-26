@@ -38,6 +38,13 @@ export function AuthPage() {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
+  useEffect(() => {
+    const hintedEmail = searchParams.get("email");
+    if (hintedEmail) {
+      setEmail(hintedEmail);
+    }
+  }, [searchParams]);
+
   if (isLoggedIn) {
     navigate("/app", { replace: true });
     return null;

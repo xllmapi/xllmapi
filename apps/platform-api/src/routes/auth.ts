@@ -112,6 +112,33 @@ export async function handleAuthRoutes(
     return true;
   }
 
+  if (req.method === "POST" && url.pathname === "/v1/auth/confirm-email-change") {
+    const body = await read_json<{ token: string }>(req);
+    if (!body.token) {
+      const response = json(400, { error: { message: "token is required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const auth = await authenticate_session_only_(req);
+    const result = await platformService.confirmMeEmailChange({
+      token: body.token,
+      sessionId: auth?.sessionId ?? null
+    });
+    if (!result.ok) {
+      const response = json(400, { error: { code: result.code, message: result.message, requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const response = json(200, { ok: true, requestId, data: result.data });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/v1/auth/request-password-reset") {
     const body = await read_json<AuthRequestPasswordResetBody>(req);
     if (!body.email) {
@@ -165,33 +192,6 @@ export async function handleAuthRoutes(
     const result = await platformService.resetPassword({
       token: body.token,
       newPassword: body.newPassword
-    });
-    if (!result.ok) {
-      const response = json(400, { error: { code: result.code, message: result.message, requestId } });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
-      return true;
-    }
-
-    const response = json(200, { ok: true, requestId, data: result.data });
-    res.writeHead(response.statusCode, response.headers);
-    res.end(response.payload);
-    return true;
-  }
-
-  if (req.method === "POST" && url.pathname === "/v1/auth/confirm-email-change") {
-    const body = await read_json<{ token: string }>(req);
-    if (!body.token) {
-      const response = json(400, { error: { message: "token is required", requestId } });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
-      return true;
-    }
-
-    const auth = await authenticate_session_only_(req);
-    const result = await platformService.confirmMeEmailChange({
-      token: body.token,
-      sessionId: auth?.sessionId ?? null
     });
     if (!result.ok) {
       const response = json(400, { error: { code: result.code, message: result.message, requestId } });
