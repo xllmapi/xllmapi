@@ -111,28 +111,27 @@ const AGENTS = [
     name: "OpenCode",
     code: `// ~/.config/opencode/opencode.json
 {
+  "$schema": "https://opencode.ai/config.json",
   "provider": {
     "xllmapi": {
       "npm": "@ai-sdk/openai-compatible",
       "options": {
-        "baseURL": "https://api.xllmapi.com/xllmapi/v1",
-        "apiKey": "<YOUR_API_KEY>"
+        "baseURL": "https://api.xllmapi.com/v1",
+        "apiKey": "{env:XLLMAPI_API_KEY}"
       },
       "models": {
-        "deepseek-chat": { "name": "DeepSeek" }
+        "deepseek-chat": {
+          "name": "DeepSeek V3.2",
+          "limit": { "context": 128000, "output": 8192 }
+        },
+        "MiniMax-M2.7": {
+          "name": "MiniMax M2.7",
+          "limit": { "context": 204800, "output": 16000 }
+        }
       }
     },
-    "xllmapi-anthropic": {
-      "npm": "@ai-sdk/anthropic",
-      "options": {
-        "baseURL": "https://api.xllmapi.com/xllmapi/v1",
-        "apiKey": "<YOUR_API_KEY>"
-      },
-      "models": {
-        "MiniMax-M2.5": { "name": "MiniMax" }
-      }
-    }
-  }
+  },
+  "model": "xllmapi/deepseek-chat"
 }`,
   },
   {
@@ -140,11 +139,14 @@ const AGENTS = [
     code: `// ~/.claude/settings.json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "https://api.xllmapi.com/xllmapi/v1",
+    "ANTHROPIC_BASE_URL": "https://api.xllmapi.com",
     "ANTHROPIC_AUTH_TOKEN": "<YOUR_API_KEY>",
-    "ANTHROPIC_MODEL": "MiniMax-M2.7",
-    "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2.5",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-chat"
+    "API_TIMEOUT_MS": "3000000",
+    "ANTHROPIC_MODEL": "deepseek-chat",
+    "ANTHROPIC_SMALL_FAST_MODEL": "deepseek-chat",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2.7",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2.7",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-chat"
   }
 }`,
   },
@@ -198,7 +200,7 @@ const _DOCS = __XLLMAPI_DOCS_URL__;
 
 const API_FORMATS = [
   {
-    id: "xllmapi", url: `${_BASE}/xllmapi/v1`, tip: "xllmapi",
+    id: "xllmapi", url: `${_BASE}`, tip: "xllmapi",
     icon: <span className="font-black text-[11px] leading-none">X</span>,
   },
   {
@@ -207,7 +209,7 @@ const API_FORMATS = [
     icon: <svg viewBox="0 0 320 320" className="w-4 h-4" fill="currentColor"><path d="M297.06 130.97c7.26-21.79 4.76-45.66-6.85-65.48-17.46-30.4-52.56-46.04-86.84-38.68C189.84 8.89 170.87 0 150.64 0c-34.82 0-65.26 23.43-74.38 57.04-22.65 3.25-42.71 16.58-54.78 36.39-17.57 30.36-13.75 68.71 9.46 95.08-7.26 21.79-4.76 45.66 6.85 65.48 17.46 30.4 52.56 46.04 86.84 38.68 13.53 17.92 32.5 26.81 52.73 26.81 34.82 0 65.27-23.43 74.38-57.04 22.65-3.25 42.71-16.58 54.78-36.39 17.57-30.36 13.75-68.71-9.46-95.08zM150.64 290.67c-14.43 0-27.34-4.94-37.96-13.2l1.88-1.09 63.12-36.43c3.23-1.85 5.19-5.27 5.19-8.96v-89.02l26.67 15.4c.29.15.49.42.54.74v73.63c-.03 32.69-26.7 59.19-59.44 58.93zM42.97 237.54c-7.21-12.44-9.82-27.14-7.37-41.44l1.88 1.13 63.12 36.43c3.17 1.87 7.12 1.87 10.31 0l77.13-44.53v30.79c.01.33-.12.65-.37.87l-63.86 36.87c-28.26 16.37-64.52 6.64-80.84-20.12zM27.68 105.24c7.16-12.45 18.21-21.93 31.43-27.1v75.09c-.02 3.69 1.95 7.1 5.17 8.97l77.13 44.53-26.67 15.4c-.27.18-.61.21-.91.08L49.96 185.28c-28.21-16.31-38.1-52.41-22.28-80.04zm217.17 50.48-77.13-44.53L194.39 95.8c.27-.18.61-.21.91-.08l63.86 36.86c28.3 16.33 38.18 52.57 22.2 80.14-7.16 12.41-18.17 21.87-31.35 27.1v-75.13c0-3.67-1.95-7.08-5.16-8.97zm26.56-41.62-1.88-1.13-63.12-36.43c-3.17-1.87-7.12-1.87-10.31 0l-77.13 44.53V90.28c-.01-.33.12-.65.37-.87l63.86-36.84c28.3-16.33 64.58-6.55 80.84 20.24 7.16 12.37 9.78 27.02 7.37 41.29zM112.87 195.2l-26.67-15.4c-.29-.15-.49-.42-.54-.74V105.4c.03-32.72 26.78-59.24 59.5-58.93 14.33.13 27.17 5.07 37.76 13.26l-1.88 1.09-63.12 36.43c-3.23 1.85-5.19 5.27-5.19 8.96l.14 88.99zm14.49-31.3L160 144.65l32.63 18.84v37.69L160 220.02l-32.64-18.83V163.9z"/></svg>,
   },
   {
-    id: "anthropic", url: `${_BASE}/anthropic/v1`, tip: "Anthropic",
+    id: "anthropic", url: `${_BASE}/anthropic`, tip: "Anthropic",
     // Anthropic logomark
     icon: <svg viewBox="0 0 256 176" className="w-4 h-4" fill="currentColor"><path d="M147.487 0 256 176h-53.32L94.163 0h53.324ZM66.138 0 0 176h53.32l22.286-57.77h69.49L122.81 176h53.32L109.465 0H66.138Z"/></svg>,
   },
@@ -218,7 +220,7 @@ function ApiEndpointBox({ onGetKey, t }: { onGetKey: () => void; t: (k: string) 
   const current = API_FORMATS[fmt]!;
 
   return (
-    <div className="flex items-center gap-2 max-w-2xl w-full mb-12">
+    <div className="flex items-center gap-2 max-w-xl w-full mb-12">
       {/* Format icon buttons */}
       <div className="flex items-center gap-1 shrink-0">
         {API_FORMATS.map((f, i) => (

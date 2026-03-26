@@ -35,7 +35,7 @@ export async function handleProviderRoutes(
 
     const response = json(200, {
       object: "list",
-      data: platformService.listProviderCatalog()
+      data: await platformService.listProviderCatalog()
     });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
@@ -58,7 +58,7 @@ export async function handleProviderRoutes(
       providerId?: string;
     }>(req);
 
-    const providerPreset = body.providerId ? platformService.getProviderPresetById(body.providerId) : null;
+    const providerPreset = body.providerId ? await platformService.getProviderPresetById(body.providerId) : null;
     const providerType = (providerPreset?.providerType ?? body.providerType) as CandidateOffering["providerType"] | undefined;
     const baseUrl = (body.baseUrl?.trim() || providerPreset?.baseUrl || "").trim();
 
@@ -230,7 +230,7 @@ export async function handleProviderRoutes(
     }
 
     const body = await read_json<CreateProviderCredentialBody>(req);
-    const providerPreset = body.providerId ? platformService.getProviderPresetById(body.providerId) : null;
+    const providerPreset = body.providerId ? await platformService.getProviderPresetById(body.providerId) : null;
     const resolvedProviderType = providerPreset?.providerType ?? body.providerType;
     const resolvedBaseUrl = (body.baseUrl?.trim() || providerPreset?.baseUrl || "").trim();
 
@@ -283,6 +283,7 @@ export async function handleProviderRoutes(
       ownerUserId: auth.userId,
       providerType: resolvedProviderType,
       baseUrl: resolvedBaseUrl,
+      anthropicBaseUrl: providerPreset?.anthropicBaseUrl,
       apiKey: body.apiKey
     });
     if (created && typeof created === "object" && "ok" in created && created.ok === false) {
@@ -507,12 +508,25 @@ export async function handleProviderRoutes(
     }
 
     const guidance = await platformService.getPricingGuidance(body.logicalModel);
+
+    // Read admin defaults from platform_config
+    const defaultConcurrency = await platformService.getConfigValue("default_max_concurrency");
+    const defaultDailyLimit = await platformService.getConfigValue("default_daily_token_limit");
+    const defaultInputPrice = await platformService.getConfigValue("default_input_price_per_1k");
+    const defaultOutputPrice = await platformService.getConfigValue("default_output_price_per_1k");
+
     const fixedPricePer1kInput = (typeof body.fixedPricePer1kInput === "number" && body.fixedPricePer1kInput > 0)
       ? body.fixedPricePer1kInput
-      : guidance.inputPricePer1k;
+      : (defaultInputPrice ? parseFloat(defaultInputPrice) : guidance.inputPricePer1k);
     const fixedPricePer1kOutput = (typeof body.fixedPricePer1kOutput === "number" && body.fixedPricePer1kOutput > 0)
       ? body.fixedPricePer1kOutput
-      : guidance.outputPricePer1k;
+      : (defaultOutputPrice ? parseFloat(defaultOutputPrice) : guidance.outputPricePer1k);
+    const maxConcurrency = (typeof body.maxConcurrency === "number" && body.maxConcurrency > 0)
+      ? body.maxConcurrency
+      : (defaultConcurrency ? parseInt(defaultConcurrency, 10) : undefined);
+    const dailyTokenLimit = (typeof body.dailyTokenLimit === "number" && body.dailyTokenLimit > 0)
+      ? body.dailyTokenLimit
+      : (defaultDailyLimit ? parseInt(defaultDailyLimit, 10) : undefined);
 
     const offering = await platformService.createOffering({
       id: `offering_${randomUUID()}`,
@@ -522,7 +536,9 @@ export async function handleProviderRoutes(
       realModel: body.realModel,
       pricingMode: body.pricingMode ?? "fixed_price",
       fixedPricePer1kInput,
-      fixedPricePer1kOutput
+      fixedPricePer1kOutput,
+      maxConcurrency,
+      dailyTokenLimit
     });
 
     const response = json(201, {

@@ -148,7 +148,7 @@ export function ReviewsPage() {
                     {o.executionMode === "node" ? (
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-500/10 text-purple-400">🖥️ 分布式</span>
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ {o.providerType || "平台托管"}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ {o.providerType || "平台节点"}</span>
                     )}
                     <span>&middot;</span>
                     <span>

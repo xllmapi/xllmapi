@@ -20,6 +20,8 @@ export type CreateOfferingBody = {
   pricingMode?: "free" | "fixed_price" | "market_auto";
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  maxConcurrency?: number;
+  dailyTokenLimit?: number;
 };
 
 export type UpdateProviderCredentialBody = {

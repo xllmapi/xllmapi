@@ -179,7 +179,7 @@ for chunk in response:
     "xllmapi": {
       "npm": "@ai-sdk/openai-compatible",
       "options": {
-        "baseURL": "${API_BASE}/xllmapi/v1",
+        "baseURL": "${API_BASE}/v1",
         "apiKey": "<YOUR_API_KEY>"
       },
       "models": {
@@ -189,7 +189,7 @@ for chunk in response:
     "xllmapi-anthropic": {
       "npm": "@ai-sdk/anthropic",
       "options": {
-        "baseURL": "${API_BASE}/xllmapi/v1",
+        "baseURL": "${API_BASE}/anthropic",
         "apiKey": "<YOUR_API_KEY>"
       },
       "models": {
@@ -203,7 +203,7 @@ for chunk in response:
             <CodeBlock code={`// ~/.claude/settings.json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "${API_BASE}/xllmapi/v1",
+    "ANTHROPIC_BASE_URL": "${API_BASE}",
     "ANTHROPIC_AUTH_TOKEN": "<YOUR_API_KEY>",
     "ANTHROPIC_MODEL": "MiniMax-M2.7",
     "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2.5",

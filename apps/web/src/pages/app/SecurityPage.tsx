@@ -158,27 +158,6 @@ export function SecurityPage() {
           </FormButton>
         </form>
       </div>
-
-      <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6 mt-6">
-        <h2 className="text-base font-semibold mb-4 tracking-tight">{t("security.changeEmail")}</h2>
-        <p className="text-sm text-text-secondary mb-4">{t("security.changeEmailDesc")}</p>
-        <form onSubmit={handleChangeEmail} className="flex flex-col gap-4 max-w-lg">
-          <FormInput
-            type="email"
-            placeholder={t("security.newEmail")}
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            required
-          />
-          <FormButton
-            type="submit"
-            disabled={emailSaving || !newEmail}
-            className="self-start"
-          >
-            {emailSaving ? t("security.saving") : t("security.requestEmailChange")}
-          </FormButton>
-        </form>
-      </div>
     </div>
   );
 }

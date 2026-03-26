@@ -2,6 +2,7 @@ export type { ProviderAdapter, ProxyUsage, ApiFormatId } from "./types.js";
 export { openaiAdapter } from "./openai.js";
 export { anthropicAdapter } from "./anthropic.js";
 export { convertRequestBody } from "./converter.js";
+export { convertJsonResponse, createStreamConverter } from "./response-converter.js";
 
 import type { ApiFormatId, ProviderAdapter } from "./types.js";
 import { openaiAdapter } from "./openai.js";

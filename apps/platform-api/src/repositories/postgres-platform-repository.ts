@@ -686,7 +686,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         }
 
         userId = `user_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
-        const handle = `u-${userId.slice(-8)}`;
+        const handle = `xu-${userId.slice(-8)}`;
         await client.query(`
           INSERT INTO users (id, display_name, role, handle, status, avatar_url, created_at, last_login_at)
           VALUES ($1, $2, 'user', $3, 'active', $4, NOW(), NOW())
@@ -1088,6 +1088,12 @@ export const postgresPlatformRepository: PlatformRepository = {
   async getMe(userId) {
     await ensureDevSeed();
     return getMeProfile(userId);
+  },
+
+  async findUserByHandle(handle: string) {
+    const pool = getPool();
+    const result = await pool.query("SELECT id, display_name AS \"displayName\", handle, role FROM users WHERE handle = $1 LIMIT 1", [handle]);
+    return result.rows[0] ?? null;
   },
 
   async listInvitations(userId) {
@@ -1947,13 +1953,14 @@ export const postgresPlatformRepository: PlatformRepository = {
     }
     await currentPool.query(`
       INSERT INTO provider_credentials (
-        id, owner_user_id, provider_type, base_url, encrypted_secret, api_key_env_name, status, api_key_fingerprint
-      ) VALUES ($1, $2, $3, $4, $5, '', 'active', $6)
+        id, owner_user_id, provider_type, base_url, anthropic_base_url, encrypted_secret, api_key_env_name, status, api_key_fingerprint
+      ) VALUES ($1, $2, $3, $4, $5, $6, '', 'active', $7)
     `, [
       params.id,
       params.ownerUserId,
       params.providerType,
       normalizedBaseUrl,
+      params.anthropicBaseUrl ?? null,
       encryptSecret(params.apiKey),
       fingerprint
     ]);
@@ -2081,8 +2088,9 @@ export const postgresPlatformRepository: PlatformRepository = {
     await currentPool.query(`
       INSERT INTO offerings (
         id, owner_user_id, logical_model, credential_id, real_model, pricing_mode,
-        fixed_price_per_1k_input, fixed_price_per_1k_output, enabled, review_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, 'approved')
+        fixed_price_per_1k_input, fixed_price_per_1k_output, max_concurrency, daily_token_limit,
+        enabled, review_status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, 'approved')
     `, [
       params.id,
       params.ownerUserId,
@@ -2091,7 +2099,9 @@ export const postgresPlatformRepository: PlatformRepository = {
       params.realModel,
       params.pricingMode,
       params.fixedPricePer1kInput,
-      params.fixedPricePer1kOutput
+      params.fixedPricePer1kOutput,
+      params.maxConcurrency ?? 2,
+      params.dailyTokenLimit ?? 1000000
     ]);
     return getOfferingById(params.ownerUserId, params.id);
   },
@@ -2734,6 +2744,16 @@ export const postgresPlatformRepository: PlatformRepository = {
       "SELECT key, value, updated_at AS \"updatedAt\" FROM platform_config ORDER BY key"
     );
     return result.rows;
+  },
+
+  async getConfigValue(key: string): Promise<string | null> {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const result = await currentPool.query<{ value: string }>(
+      "SELECT value FROM platform_config WHERE key = $1 LIMIT 1",
+      [key]
+    );
+    return result.rows[0]?.value ?? null;
   },
 
   async updateAdminConfig(key: string, value: string, updatedBy: string) {
@@ -3865,6 +3885,52 @@ export const postgresPlatformRepository: PlatformRepository = {
       ORDER BY o.created_at DESC
     `, [handle]);
     return result.rows;
+  },
+
+  async listProviderPresets(): Promise<Array<{
+    id: string; label: string; providerType: string; baseUrl: string;
+    anthropicBaseUrl: string | null; models: unknown[]; enabled: boolean;
+    sortOrder: number; updatedAt: string; updatedBy: string | null;
+  }>> {
+    const pool = getPool();
+    const result = await pool.query(`
+      SELECT id, label, provider_type AS "providerType", base_url AS "baseUrl",
+        anthropic_base_url AS "anthropicBaseUrl", models, enabled,
+        sort_order AS "sortOrder", updated_at AS "updatedAt", updated_by AS "updatedBy"
+      FROM provider_presets
+      ORDER BY sort_order ASC, id ASC
+    `);
+    return result.rows;
+  },
+
+  async upsertProviderPreset(params: {
+    id: string; label: string; providerType: string; baseUrl: string;
+    anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
+    sortOrder?: number; updatedBy?: string;
+  }): Promise<void> {
+    const pool = getPool();
+    await pool.query(`
+      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9)
+      ON CONFLICT (id) DO UPDATE SET
+        label = EXCLUDED.label,
+        provider_type = EXCLUDED.provider_type,
+        base_url = EXCLUDED.base_url,
+        anthropic_base_url = EXCLUDED.anthropic_base_url,
+        models = EXCLUDED.models,
+        enabled = EXCLUDED.enabled,
+        sort_order = EXCLUDED.sort_order,
+        updated_at = NOW(),
+        updated_by = EXCLUDED.updated_by
+    `, [params.id, params.label, params.providerType, params.baseUrl,
+        params.anthropicBaseUrl ?? null, JSON.stringify(params.models),
+        params.enabled ?? true, params.sortOrder ?? 0, params.updatedBy ?? null]);
+  },
+
+  async deleteProviderPreset(id: string): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool.query("DELETE FROM provider_presets WHERE id = $1", [id]);
+    return (result.rowCount ?? 0) > 0;
   },
 
   devUserApiKey: DEV_USER_API_KEY,

@@ -99,6 +99,7 @@ export type PlatformRepository = {
     phone: string;
   }): MaybePromise<{ ok: boolean; code?: string; message?: string; data?: MeProfile | null }>;
   getMe(userId: string): MaybePromise<MeProfile | null>;
+  findUserByHandle(handle: string): MaybePromise<{ id: string; displayName: string; handle: string; role: string } | null>;
   listInvitations(userId: string): MaybePromise<any[]>;
   getInvitationStats(userId: string): MaybePromise<InvitationStats>;
   createInvitation(params: {
@@ -172,6 +173,7 @@ export type PlatformRepository = {
     ownerUserId: string;
     providerType: CandidateOffering["providerType"];
     baseUrl?: string;
+    anthropicBaseUrl?: string;
     apiKey: string;
   }): MaybePromise<any>;
   updateProviderCredentialStatus(params: {
@@ -194,6 +196,8 @@ export type PlatformRepository = {
     pricingMode: CandidateOffering["pricingMode"];
     fixedPricePer1kInput: number;
     fixedPricePer1kOutput: number;
+    maxConcurrency?: number;
+    dailyTokenLimit?: number;
   }): MaybePromise<any>;
   updateOffering(params: {
     ownerUserId: string;
@@ -307,6 +311,7 @@ export type PlatformRepository = {
   updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number }): MaybePromise<any>;
   getAdminProviders(): MaybePromise<any[]>;
   getAdminConfig(): MaybePromise<any[]>;
+  getConfigValue(key: string): MaybePromise<string | null>;
   updateAdminConfig(key: string, value: string, updatedBy: string): MaybePromise<any>;
   getAdminAuditLogs(limit: number): MaybePromise<any[]>;
   getAdminRequests(params: {
@@ -400,6 +405,19 @@ export type PlatformRepository = {
   // --- User Model Config ---
   getUserModelConfig(params: { userId: string; logicalModel: string }): MaybePromise<{ maxInputPrice: number | null; maxOutputPrice: number | null } | null>;
   upsertUserModelConfig(params: { userId: string; logicalModel: string; maxInputPrice: number | null; maxOutputPrice: number | null }): MaybePromise<void>;
+
+  // --- Provider Presets ---
+  listProviderPresets(): MaybePromise<Array<{
+    id: string; label: string; providerType: string; baseUrl: string;
+    anthropicBaseUrl: string | null; models: unknown[]; enabled: boolean;
+    sortOrder: number; updatedAt: string; updatedBy: string | null;
+  }>>;
+  upsertProviderPreset(params: {
+    id: string; label: string; providerType: string; baseUrl: string;
+    anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
+    sortOrder?: number; updatedBy?: string;
+  }): MaybePromise<void>;
+  deleteProviderPreset(id: string): MaybePromise<boolean>;
 
   // --- Market ---
   listMarketOfferings(params: { page?: number; limit?: number; executionMode?: string; logicalModel?: string; sort?: string }): MaybePromise<{ data: any[]; total: number }>;

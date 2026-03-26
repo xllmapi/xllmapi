@@ -28,6 +28,12 @@ const CONFIG_GROUPS: Record<string, string[]> = {
     "welcome_message_enabled",
     "welcome_message_content",
   ],
+  nodeDefaults: [
+    "default_max_concurrency",
+    "default_daily_token_limit",
+    "default_input_price_per_1k",
+    "default_output_price_per_1k",
+  ],
 };
 
 export function SettingsPage() {
@@ -119,6 +125,7 @@ export function SettingsPage() {
 
       {renderGroup(t("admin.settings.economy"), CONFIG_GROUPS.economy!)}
       {renderGroup(t("admin.settings.pricing"), CONFIG_GROUPS.pricing!)}
+      {renderGroup(t("admin.settings.nodeDefaults"), CONFIG_GROUPS.nodeDefaults!)}
 
       {otherConfigs.length > 0 &&
         renderGroup(
