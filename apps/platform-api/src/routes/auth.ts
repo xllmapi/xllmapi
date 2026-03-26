@@ -87,12 +87,14 @@ export async function handleAuthRoutes(
 
     const result = await platformService.requestLoginCode(body.email);
     if (!result.eligible) {
-      const response = json(403, {
-        error: {
-          code: "invite_required",
-          message: "this email has not been invited",
-          requestId
-        }
+      // Return generic success to avoid leaking whether email is invited
+      const response = json(200, {
+        ok: true,
+        requestId,
+        channel: "email",
+        firstLogin: true,
+        maskedEmail: body.email.replace(/^(.).+(@.*)$/, "$1***$2"),
+        cooldownSeconds: config.emailSendCooldownSeconds,
       });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
