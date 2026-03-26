@@ -8,6 +8,11 @@ const messages: Record<string, Record<string, string>> = {
     "nav.admin": "管理",
     "nav.signIn": "登录",
     "nav.logout": "退出",
+    "nav.ecosystem": "生态",
+    "nav.ecosystem.forum": "xllmapi 论坛",
+    "nav.ecosystem.github": "开源主页",
+    "nav.ecosystem.mcpp": "MCPP 社区",
+    "nav.ecosystem.qq": "QQ 群: 1092372680",
     "common.actions": "操作",
 
     // HomePage
@@ -716,6 +721,11 @@ const messages: Record<string, Record<string, string>> = {
     "nav.admin": "Admin",
     "nav.signIn": "Sign In",
     "nav.logout": "Logout",
+    "nav.ecosystem": "Ecosystem",
+    "nav.ecosystem.forum": "Forum",
+    "nav.ecosystem.github": "GitHub",
+    "nav.ecosystem.mcpp": "MCPP Community",
+    "nav.ecosystem.qq": "QQ Group: 1092372680",
     "common.actions": "Actions",
 
     // HomePage

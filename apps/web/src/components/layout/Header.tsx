@@ -3,16 +3,34 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/hooks/useLocale";
 import { apiJson } from "@/lib/api";
-import { LogOut, LayoutDashboard, Bell } from "lucide-react";
+import { LogOut, LayoutDashboard, Bell, ChevronDown, MessageSquare, Globe, Users } from "lucide-react";
 
 declare const __XLLMAPI_DOCS_URL__: string;
+
+const ECOSYSTEM_LINKS = [
+  { key: "nav.ecosystem.forum", href: "https://forum.d2learn.org/category/25/xllmapi", icon: MessageSquare },
+  { key: "nav.ecosystem.github", href: "https://github.com/xllmapi", icon: null /* custom SVG */ },
+  { key: "nav.ecosystem.mcpp", href: "https://mcpp.d2learn.org", icon: Globe },
+  { key: "nav.ecosystem.qq", href: null /* copy action */, icon: Users },
+];
+
+function GitHubSmallIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="currentColor">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+    </svg>
+  );
+}
 
 export function Header() {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
   const { locale, setLocale, t } = useLocale();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [ecoOpen, setEcoOpen] = useState(false);
+  const [qqCopied, setQqCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const ecoRef = useRef<HTMLDivElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const handleLogout = async () => {
@@ -36,17 +54,27 @@ export function Header() {
     return () => window.removeEventListener("notifications-changed", handler);
   }, [refreshUnread]);
 
-  // Close on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen && !ecoOpen) return;
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      if (menuOpen && menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
+      }
+      if (ecoOpen && ecoRef.current && !ecoRef.current.contains(e.target as Node)) {
+        setEcoOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen]);
+  }, [menuOpen, ecoOpen]);
+
+  const handleQqCopy = () => {
+    navigator.clipboard.writeText("1092372680").then(() => {
+      setQqCopied(true);
+      setTimeout(() => setQqCopied(false), 2000);
+    });
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-line bg-panel-strong">
@@ -68,6 +96,57 @@ export function Header() {
           <Link to="/chat" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
             {t("nav.chat")}
           </Link>
+
+          {/* Ecosystem dropdown */}
+          <div ref={ecoRef} className="relative">
+            <button
+              onClick={() => setEcoOpen((prev) => !prev)}
+              className="flex items-center gap-1 text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors text-sm"
+            >
+              {t("nav.ecosystem")}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${ecoOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {ecoOpen && (
+              <div
+                className="absolute right-0 top-full mt-2 w-48 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden z-50"
+                style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+              >
+                <div className="py-1">
+                  {ECOSYSTEM_LINKS.map((item) => {
+                    const Icon = item.icon;
+                    if (item.href) {
+                      return (
+                        <a
+                          key={item.key}
+                          href={item.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setEcoOpen(false)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-accent-bg no-underline transition-colors"
+                        >
+                          {Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}
+                          {t(item.key)}
+                        </a>
+                      );
+                    }
+                    // QQ group — copy action
+                    return (
+                      <button
+                        key={item.key}
+                        onClick={handleQqCopy}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-text-primary hover:bg-accent-bg cursor-pointer border-none bg-transparent transition-colors"
+                      >
+                        {Icon && <Icon className="w-3.5 h-3.5 text-text-tertiary" />}
+                        {qqCopied ? (locale === "zh" ? "已复制群号" : "Copied!") : t(item.key)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           {isLoggedIn && (
             <>
               <Link to="/app" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
@@ -80,18 +159,6 @@ export function Header() {
               )}
             </>
           )}
-
-          {/* GitHub */}
-          <a
-            href="https://github.com/xllmapi/xllmapi"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-text-tertiary hover:text-text-primary transition-colors"
-          >
-            <svg viewBox="0 0 16 16" className="w-5 h-5" fill="currentColor">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-            </svg>
-          </a>
 
           {/* Locale toggle */}
           <button
