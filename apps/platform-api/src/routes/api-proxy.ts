@@ -257,7 +257,8 @@ export async function handleApiProxyRoutes(
 
   // ── POST /anthropic/v1/messages — Anthropic compatible (primary) ──
   // ── POST /v1/messages — Anthropic compatible (backward compat) ────
-  if (req.method === "POST" && (url.pathname === "/anthropic/v1/messages" || url.pathname === "/v1/messages")) {
+  // ── POST /messages — Anthropic compatible (AI SDK @ai-sdk/anthropic) ────
+  if (req.method === "POST" && (url.pathname === "/anthropic/v1/messages" || url.pathname === "/v1/messages" || url.pathname === "/messages")) {
     const body = await read_json<Record<string, unknown>>(req);
     const model = body.model as string | undefined;
     if (!model || !Array.isArray(body.messages) || (body.messages as unknown[]).length === 0) {

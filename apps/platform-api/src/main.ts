@@ -138,6 +138,8 @@ const read_release_asset_file_ = (pathname: string): StaticFileResult | null => 
 const read_static_file_ = (pathname: string): StaticFileResult | null => {
   // Never intercept API routes or internal paths
   if (pathname.startsWith("/v1/") || pathname.startsWith("/internal/") ||
+      pathname.startsWith("/anthropic/") || pathname.startsWith("/xllmapi/") ||
+      pathname === "/messages" ||
       pathname === "/healthz" || pathname === "/readyz" ||
       pathname === "/metrics" || pathname === "/version") {
     return null;
