@@ -390,6 +390,10 @@ server.on('upgrade', (req, socket, head) => {
 
 server.listen(port, host, () => {
   console.log(`platform-api listening on http://${host}:${port}`);
+  // PM2 cluster ready signal — new worker is ready to accept traffic
+  if (typeof process.send === "function") {
+    process.send("ready");
+  }
 });
 
 // ── Graceful shutdown ──────────────────────────────────────────────
