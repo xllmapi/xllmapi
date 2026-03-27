@@ -64,7 +64,8 @@ import {
   update_me_phone,
   confirm_email_change,
   verify_login_code,
-  write_audit_log
+  write_audit_log,
+  get_config_value
 } from "../db.js";
 import { DEV_ADMIN_API_KEY, DEV_USER_API_KEY } from "../constants.js";
 import type { PlatformRepository } from "./platform-repository.js";
@@ -373,8 +374,8 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return [];
   },
 
-  getConfigValue() {
-    return null;
+  getConfigValue(key: string) {
+    return get_config_value(key);
   },
 
   updateAdminConfig() {

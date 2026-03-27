@@ -166,6 +166,7 @@ db.exec(`
     consumer_cost INTEGER NOT NULL,
     supplier_reward INTEGER NOT NULL,
     platform_margin INTEGER NOT NULL,
+    supplier_reward_rate REAL,
     created_at TEXT NOT NULL
   );
 
@@ -255,6 +256,23 @@ db.exec(`
     request_id TEXT,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS platform_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT,
+    updated_by TEXT
+  );
+
+  INSERT OR IGNORE INTO platform_config (key, value) VALUES
+    ('supplier_reward_rate', '0.85'),
+    ('initial_token_credit', '1000000'),
+    ('chat_rate_limit_per_minute', '60'),
+    ('default_invitation_quota', '5'),
+    ('min_input_price_per_1k', '100'),
+    ('min_output_price_per_1k', '200'),
+    ('max_input_price_per_1k', '10000'),
+    ('max_output_price_per_1k', '20000');
 `);
 
 const ensure_column_ = (tableName: string, columnName: string, definition: string) => {
@@ -932,10 +950,12 @@ export const verify_login_code = (email: string, code: string): VerifyLoginCodeR
         INSERT INTO user_identities (user_id, email, email_verified, created_at, last_login_at)
         VALUES (?, ?, 1, ?, ?)
       `).run(newUserId, normalizedEmail, now, now);
+      const creditRow = db.prepare("SELECT value FROM platform_config WHERE key = 'initial_token_credit'").get() as { value: string } | undefined;
+      const initialCredit = creditRow?.value ? Number(creditRow.value) : DEFAULT_INITIAL_TOKEN_CREDIT;
       db.prepare(`
         INSERT INTO wallets (user_id, available_token_credit)
         VALUES (?, ?)
-      `).run(newUserId, DEFAULT_INITIAL_TOKEN_CREDIT);
+      `).run(newUserId, initialCredit);
       db.prepare(`
         UPDATE invitations
         SET status = 'accepted',
@@ -1479,11 +1499,17 @@ export const list_admin_users = () =>
       u.status,
       i.email,
       u.created_at AS createdAt,
-      u.last_login_at AS lastLoginAt
+      u.last_login_at AS lastLoginAt,
+      (SELECT se.ip_address FROM security_events se WHERE se.user_id = u.id ORDER BY se.created_at DESC LIMIT 1) AS lastLoginIp
     FROM users u
     LEFT JOIN user_identities i ON i.user_id = u.id
     ORDER BY u.created_at DESC
   `).all();
+
+export const get_config_value = (key: string): string | null => {
+  const row = db.prepare("SELECT value FROM platform_config WHERE key = ?").get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+};
 
 export const get_wallet_balance = (userId: string): number => {
   const row = db
@@ -2116,7 +2142,9 @@ export const record_chat_settlement = (params: {
   const inputCost = Math.ceil((params.inputTokens * params.fixedPricePer1kInput) / 1000);
   const outputCost = Math.ceil((params.outputTokens * params.fixedPricePer1kOutput) / 1000);
   const consumerCost = inputCost + outputCost;
-  const supplierReward = Math.floor(consumerCost * 0.85);
+  const rateRow = db.prepare("SELECT value FROM platform_config WHERE key = 'supplier_reward_rate'").get() as { value: string } | undefined;
+  const supplierRewardRate = rateRow?.value ? Number(rateRow.value) : 0.85;
+  const supplierReward = Math.floor(consumerCost * supplierRewardRate);
   const platformMargin = consumerCost - supplierReward;
   const now = new Date().toISOString();
 
@@ -2165,8 +2193,8 @@ export const record_chat_settlement = (params: {
 
     db.prepare(`
       INSERT INTO settlement_records (
-        request_id, consumer_user_id, supplier_user_id, consumer_cost, supplier_reward, platform_margin, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        request_id, consumer_user_id, supplier_user_id, consumer_cost, supplier_reward, platform_margin, supplier_reward_rate, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       params.requestId,
       params.requesterUserId,
@@ -2174,6 +2202,7 @@ export const record_chat_settlement = (params: {
       consumerCost,
       supplierReward,
       platformMargin,
+      supplierRewardRate,
       now
     );
 

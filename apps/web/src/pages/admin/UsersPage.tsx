@@ -11,9 +11,11 @@ interface AdminUser {
   id: string;
   email: string;
   displayName: string;
+  handle: string;
   role: string;
   balance: number;
   lastLoginAt: string;
+  lastLoginIp: string | null;
   status: string;
   createdAt: string;
 }
@@ -117,6 +119,11 @@ export function UsersPage() {
   const columns: Column<AdminUser>[] = [
     { key: "email", header: t("admin.users.email") },
     {
+      key: "handle",
+      header: t("admin.users.handle"),
+      render: (u) => <span className="text-text-secondary text-xs font-mono">{u.handle || "\u2014"}</span>,
+    },
+    {
       key: "displayName",
       header: t("admin.users.nickname"),
       render: (u) => <span className="text-text-secondary">{u.displayName || "\u2014"}</span>,
@@ -138,6 +145,15 @@ export function UsersPage() {
       render: (u) => (
         <span className="text-text-secondary text-xs">
           {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : "\u2014"}
+        </span>
+      ),
+    },
+    {
+      key: "lastLoginIp",
+      header: t("admin.users.ip"),
+      render: (u) => (
+        <span className="text-text-secondary text-xs font-mono">
+          {u.lastLoginIp || "\u2014"}
         </span>
       ),
     },

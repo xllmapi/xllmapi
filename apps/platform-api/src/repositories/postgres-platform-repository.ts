@@ -695,11 +695,13 @@ export const postgresPlatformRepository: PlatformRepository = {
           INSERT INTO user_identities (user_id, email, email_verified, created_at, last_login_at)
           VALUES ($1, $2, TRUE, NOW(), NOW())
         `, [userId, normalizedEmail]);
+        const creditRow = await client.query("SELECT value FROM platform_config WHERE key = 'initial_token_credit' LIMIT 1");
+        const initialCredit = creditRow.rows[0]?.value ? Number(creditRow.rows[0].value) : DEFAULT_INITIAL_TOKEN_CREDIT;
         await client.query(`
           INSERT INTO wallets (user_id, available_token_credit)
           VALUES ($1, $2)
           ON CONFLICT (user_id) DO NOTHING
-        `, [userId, DEFAULT_INITIAL_TOKEN_CREDIT]);
+        `, [userId, initialCredit]);
         const rawKey = `xllm_${randomUUID().replaceAll("-", "")}`;
         await client.query(`
           INSERT INTO platform_api_keys (id, user_id, label, hashed_key, status)
@@ -1248,7 +1250,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         i.email,
         COALESCE(w.available_token_credit, 0) AS "balance",
         u.created_at AS "createdAt",
-        u.last_login_at AS "lastLoginAt"
+        u.last_login_at AS "lastLoginAt",
+        (SELECT se.ip_address FROM security_events se WHERE se.user_id = u.id ORDER BY se.created_at DESC LIMIT 1) AS "lastLoginIp"
       FROM users u
       LEFT JOIN user_identities i ON i.user_id = u.id
       LEFT JOIN wallets w ON w.user_id = u.id
@@ -2257,7 +2260,9 @@ export const postgresPlatformRepository: PlatformRepository = {
     const inputCost = Math.ceil((params.inputTokens * params.fixedPricePer1kInput) / 1000);
     const outputCost = Math.ceil((params.outputTokens * params.fixedPricePer1kOutput) / 1000);
     const consumerCost = inputCost + outputCost;
-    const supplierReward = Math.floor(consumerCost * 0.85);
+    const rateRow = await currentPool.query("SELECT value FROM platform_config WHERE key = 'supplier_reward_rate'");
+    const supplierRewardRate = rateRow.rows[0]?.value ? Number(rateRow.rows[0].value) : 0.85;
+    const supplierReward = Math.floor(consumerCost * supplierRewardRate);
     const platformMargin = consumerCost - supplierReward;
 
     try {
@@ -2294,15 +2299,16 @@ export const postgresPlatformRepository: PlatformRepository = {
       `, [params.requestId, params.supplierUserId, supplierReward]);
       await client.query(`
         INSERT INTO settlement_records (
-          request_id, consumer_user_id, supplier_user_id, consumer_cost, supplier_reward, platform_margin
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+          request_id, consumer_user_id, supplier_user_id, consumer_cost, supplier_reward, platform_margin, supplier_reward_rate
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [
         params.requestId,
         params.requesterUserId,
         params.supplierUserId,
         consumerCost,
         supplierReward,
-        platformMargin
+        platformMargin,
+        supplierRewardRate
       ]);
       await client.query("COMMIT");
     } catch (error) {
@@ -2873,6 +2879,7 @@ export const postgresPlatformRepository: PlatformRepository = {
           sr.consumer_cost AS "consumerCost",
           sr.supplier_reward AS "supplierReward",
           sr.platform_margin AS "platformMargin",
+          sr.supplier_reward_rate AS "supplierRewardRate",
           sr.created_at AS "createdAt"
         FROM settlement_records sr
         LEFT JOIN users cu ON cu.id = sr.consumer_user_id
