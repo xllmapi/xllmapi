@@ -815,6 +815,20 @@ export const platformService = {
     return platformRepository.getDebugState();
   },
 
+  recordSecurityEvent(params: {
+    userId: string;
+    type: string;
+    severity: "info" | "warning" | "critical";
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    payload?: unknown;
+  }) {
+    return Promise.resolve(platformRepository.recordSecurityEvent({
+      id: `se_${crypto.randomUUID()}`,
+      ...params,
+    }));
+  },
+
   writeAuditLog(params: {
     actorUserId: string;
     action: string;
