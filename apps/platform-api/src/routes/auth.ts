@@ -260,6 +260,15 @@ export async function handleAuthRoutes(
       return true;
     }
 
+    platformService.recordSecurityEvent({
+      userId: result.user.id,
+      type: "login_success",
+      severity: "info",
+      ipAddress: get_request_ip_(req),
+      userAgent: req.headers["user-agent"] ?? null,
+      payload: { method: "code", email: body.email }
+    }).catch(() => {});
+
     const response = json(200, {
       ok: true,
       token: result.token,
@@ -309,6 +318,15 @@ export async function handleAuthRoutes(
       res.end(response.payload);
       return true;
     }
+
+    platformService.recordSecurityEvent({
+      userId: result.user.id,
+      type: "login_success",
+      severity: "info",
+      ipAddress: get_request_ip_(req),
+      userAgent: req.headers["user-agent"] ?? null,
+      payload: { method: "password", email: body.email }
+    }).catch(() => {});
 
     const response = json(200, {
       ok: true,

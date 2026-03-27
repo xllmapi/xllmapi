@@ -404,36 +404,36 @@ async function gracefulShutdown(signal: string) {
   isShuttingDown = true;
   console.log(`[shutdown] received ${signal}, shutting down gracefully...`);
 
-  // Stop accepting new connections
-  server.close(() => {
-    console.log("[shutdown] HTTP server closed");
+  // Safety timeout: exit before PM2's kill_timeout (35s)
+  const forceExitTimer = setTimeout(() => {
+    console.log("[shutdown] timeout reached, forcing exit");
+    process.exit(1);
+  }, 25_000);
+  forceExitTimer.unref();
+
+  // 1. Stop accepting new connections and wait for in-flight requests to drain
+  await new Promise<void>((resolve) => {
+    server.close(() => {
+      console.log("[shutdown] HTTP server closed");
+      resolve();
+    });
   });
 
-  // Close WebSocket server
+  // 2. Close WebSocket server
   try {
     nodeConnectionManager.shutdown();
   } catch { /* ignore */ }
 
-  // Wait for in-flight requests (max 30s)
-  const timeout = setTimeout(() => {
-    console.log("[shutdown] timeout reached, forcing exit");
-    process.exit(1);
-  }, 30_000);
+  // 3. Close database pool and Redis in parallel
+  const results = await Promise.allSettled([
+    import("./repositories/postgres-platform-repository.js").then(m => m.closePool()),
+    cacheService.close()
+  ]);
 
-  // Close database pool
-  try {
-    const { closePool } = await import("./repositories/postgres-platform-repository.js");
-    await closePool();
-    console.log("[shutdown] database pool closed");
-  } catch { /* ignore */ }
+  if (results[0].status === "fulfilled") console.log("[shutdown] database pool closed");
+  if (results[1].status === "fulfilled") console.log("[shutdown] cache closed");
 
-  // Close Redis
-  try {
-    await cacheService.close();
-    console.log("[shutdown] cache closed");
-  } catch { /* ignore */ }
-
-  clearTimeout(timeout);
+  clearTimeout(forceExitTimer);
   console.log("[shutdown] done");
   process.exit(0);
 }

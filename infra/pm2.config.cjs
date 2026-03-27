@@ -11,6 +11,7 @@ module.exports = {
       NODE_ENV: "production",
       XLLMAPI_ENV: "production",
       PORT: 3000,
+      XLLMAPI_RELEASE_ID: process.env.XLLMAPI_RELEASE_ID || "dev",
     },
     max_memory_restart: "512M",
     log_date_format: "YYYY-MM-DD HH:mm:ss Z",

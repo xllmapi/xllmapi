@@ -64,7 +64,14 @@ const getPool = () => {
   }
 
   pool = new Pool({
-    connectionString: config.databaseUrl
+    connectionString: config.databaseUrl,
+    max: 20,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+  });
+
+  pool.on("error", (err) => {
+    console.error("[db] pool error:", err.message);
   });
 
   return pool;

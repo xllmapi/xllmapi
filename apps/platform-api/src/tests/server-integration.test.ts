@@ -344,11 +344,20 @@ test("password reset sends email delivery and updates credentials", async () => 
     const securityEvent = db.prepare(`
       SELECT type
       FROM security_events
-      WHERE user_id = 'admin_demo'
+      WHERE user_id = 'admin_demo' AND type = 'password_reset_completed'
       ORDER BY created_at DESC
       LIMIT 1
     `).get() as { type: string } | undefined;
     assert.equal(securityEvent?.type, "password_reset_completed");
+
+    const loginEvent = db.prepare(`
+      SELECT type
+      FROM security_events
+      WHERE user_id = 'admin_demo' AND type = 'login_success'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get() as { type: string } | undefined;
+    assert.equal(loginEvent?.type, "login_success");
   } finally {
     await server.stop();
   }
