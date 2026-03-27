@@ -14,11 +14,36 @@ export async function handleNetworkRoutes(
   requestId: string
 ): Promise<boolean> {
 
-  if (req.method === "GET" && url.pathname === "/v1/models") {
-    const response = json(200, {
-      object: "list",
-      data: await platformService.listMarketModels()
-    });
+  if (req.method === "GET" && (url.pathname === "/v1/models" || url.pathname === "/models")) {
+    const models = await platformService.listMarketModels();
+    const isAnthropic = req.headers["anthropic-version"] != null;
+    const now = Math.floor(Date.now() / 1000);
+
+    const response = isAnthropic
+      ? json(200, {
+          data: models.map((m: any) => ({
+            id: m.logicalModel,
+            display_name: m.logicalModel,
+            type: "model" as const,
+            created_at: new Date().toISOString(),
+            max_input_tokens: m.contextLength ?? null,
+            max_tokens: 8192,
+          })),
+          has_more: false,
+          first_id: models[0]?.logicalModel ?? null,
+          last_id: models[models.length - 1]?.logicalModel ?? null,
+        })
+      : json(200, {
+          object: "list",
+          data: models.map((m: any) => ({
+            id: m.logicalModel,
+            object: "model" as const,
+            created: now,
+            owned_by: "xllmapi",
+            ...(m.contextLength ? { context_length: m.contextLength } : {}),
+          })),
+        });
+
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;

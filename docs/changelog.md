@@ -2,6 +2,22 @@
 
 ---
 
+## v0.2.1 — 2026-03-27
+
+### 核心
+
+- **`/v1/models` SDK 标准格式** — 自动识别 OpenAI/Anthropic 格式返回标准 models 列表，兼容所有 SDK
+  - OpenAI 格式：`id` + `object` + `created` + `owned_by` + `context_length`
+  - Anthropic 格式：`id` + `display_name` + `type` + `created_at` + `max_input_tokens` + `max_tokens` + 分页
+- **短路径统一** — `/chat/completions`、`/messages`、`/models` 均支持（无需 `/v1` 前缀）
+- **`https://api.xllmapi.com` 大一统 base URL** — 一个地址兼容 OpenAI SDK、Anthropic SDK、AI SDK、curl
+
+### 新增测试
+
+- `models-endpoint.test.ts` — 6 个集成测试覆盖 `/v1/models`（OpenAI/Anthropic 格式）、`/models`、`/v1/network/models`、`/chat/completions`、`/messages` 短路径
+
+---
+
 ## v0.2.0 — 2026-03-27
 
 **Release ID**: `6a60d8b-20260327075656`
