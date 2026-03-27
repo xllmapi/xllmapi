@@ -32,7 +32,7 @@ elif [[ -n "${DB_URL}" ]] && command -v psql &>/dev/null; then
   gunzip -c "${BACKUP_FILE}" | psql "${DB_URL}"
 else
   # Auto-detect Docker container
-  for name in xllmapi-postgres postgres xllmapi_postgres_1; do
+  for name in xllmapi-postgres postgres docker-postgres-1 xllmapi_postgres_1; do
     if docker inspect "${name}" &>/dev/null; then
       CONTAINER="${name}"
       break

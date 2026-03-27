@@ -20,7 +20,7 @@ elif command -v pg_dump &>/dev/null; then
   pg_dump "${DB_URL}" | gzip > "${BACKUP_FILE}.tmp"
 else
   # Auto-detect: try common Docker container names
-  for name in xllmapi-postgres postgres xllmapi_postgres_1; do
+  for name in xllmapi-postgres postgres docker-postgres-1 xllmapi_postgres_1; do
     if docker inspect "${name}" &>/dev/null; then
       CONTAINER="${name}"
       break
