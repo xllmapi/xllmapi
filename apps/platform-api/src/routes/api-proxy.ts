@@ -242,7 +242,8 @@ export async function handleApiProxyRoutes(
 ): Promise<boolean> {
 
   // ── POST /v1/chat/completions — OpenAI compatible ─────────────────
-  if (req.method === "POST" && url.pathname === "/v1/chat/completions") {
+  // ── POST /chat/completions — OpenAI compatible (short form) ───────
+  if (req.method === "POST" && (url.pathname === "/v1/chat/completions" || url.pathname === "/chat/completions")) {
     const body = await read_json<Record<string, unknown>>(req);
     const model = body.model as string | undefined;
     if (!model || !Array.isArray(body.messages) || (body.messages as unknown[]).length === 0) {
