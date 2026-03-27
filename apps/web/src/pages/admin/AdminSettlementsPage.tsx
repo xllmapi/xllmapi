@@ -16,6 +16,7 @@ interface SettlementRow {
   consumerCost: number;
   supplierReward: number;
   platformMargin: number;
+  supplierRewardRate: number | null;
   createdAt: string;
 }
 
@@ -86,6 +87,16 @@ export function AdminSettlementsPage() {
       key: "supplierEmail",
       header: t("admin.settlements.supplier"),
       render: (r) => <span className="text-text-secondary text-xs">{r.supplierName || r.supplierEmail}</span>,
+    },
+    {
+      key: "supplierRewardRate",
+      header: t("admin.settlements.rewardRate"),
+      align: "right",
+      render: (r) => (
+        <span className="text-xs text-text-secondary">
+          {r.supplierRewardRate != null ? `${Math.round(r.supplierRewardRate * 100)}%` : "\u2014"}
+        </span>
+      ),
     },
     {
       key: "consumerCost",

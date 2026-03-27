@@ -353,6 +353,27 @@ export async function handleProviderRoutes(
     }
 
     const body = await read_json<UpdateOfferingBody>(req);
+
+    if (typeof body.fixedPricePer1kInput === "number" || typeof body.fixedPricePer1kOutput === "number") {
+      const minInput = Number(await platformService.getConfigValue("min_input_price_per_1k")) || 0;
+      const maxInput = Number(await platformService.getConfigValue("max_input_price_per_1k")) || Infinity;
+      const minOutput = Number(await platformService.getConfigValue("min_output_price_per_1k")) || 0;
+      const maxOutput = Number(await platformService.getConfigValue("max_output_price_per_1k")) || Infinity;
+      if ((typeof body.fixedPricePer1kInput === "number" && (body.fixedPricePer1kInput < minInput || body.fixedPricePer1kInput > maxInput)) ||
+          (typeof body.fixedPricePer1kOutput === "number" && (body.fixedPricePer1kOutput < minOutput || body.fixedPricePer1kOutput > maxOutput))) {
+        const response = json(400, {
+          error: {
+            code: "price_out_of_range",
+            message: `Price must be within configured limits: input [${minInput}, ${maxInput}], output [${minOutput}, ${maxOutput}]`,
+            requestId
+          }
+        });
+        res.writeHead(response.statusCode, response.headers);
+        res.end(response.payload);
+        return true;
+      }
+    }
+
     const offering = await platformService.updateOffering({
       ownerUserId: auth.userId,
       offeringId,
@@ -527,6 +548,24 @@ export async function handleProviderRoutes(
     const dailyTokenLimit = (typeof body.dailyTokenLimit === "number" && body.dailyTokenLimit > 0)
       ? body.dailyTokenLimit
       : (defaultDailyLimit ? parseInt(defaultDailyLimit, 10) : undefined);
+
+    const minInput = Number(await platformService.getConfigValue("min_input_price_per_1k")) || 0;
+    const maxInput = Number(await platformService.getConfigValue("max_input_price_per_1k")) || Infinity;
+    const minOutput = Number(await platformService.getConfigValue("min_output_price_per_1k")) || 0;
+    const maxOutput = Number(await platformService.getConfigValue("max_output_price_per_1k")) || Infinity;
+    if (fixedPricePer1kInput < minInput || fixedPricePer1kInput > maxInput ||
+        fixedPricePer1kOutput < minOutput || fixedPricePer1kOutput > maxOutput) {
+      const response = json(400, {
+        error: {
+          code: "price_out_of_range",
+          message: `Price must be within configured limits: input [${minInput}, ${maxInput}], output [${minOutput}, ${maxOutput}]`,
+          requestId
+        }
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
 
     const offering = await platformService.createOffering({
       id: `offering_${randomUUID()}`,

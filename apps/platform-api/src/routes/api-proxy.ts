@@ -100,10 +100,12 @@ async function validateApiRequest(
   }
 
   metricsService.increment("chatRequests");
+  const chatRateLimitStr = await platformService.getConfigValue("chat_rate_limit_per_minute");
+  const chatRateLimit = chatRateLimitStr ? Number(chatRateLimitStr) : config.chatRateLimitPerMinute;
   const rateLimitKey = "apiKeyId" in auth && auth.apiKeyId ? auth.apiKeyId : `session:${auth.userId}`;
   const rateLimit = await cacheService.consumeRateLimit({
     key: `chat:${rateLimitKey}`,
-    limit: config.chatRateLimitPerMinute,
+    limit: chatRateLimit,
     windowMs: 60_000,
   });
   if (!rateLimit.ok) {
@@ -113,7 +115,7 @@ async function validateApiRequest(
     });
     res.writeHead(response.statusCode, {
       ...response.headers,
-      "x-ratelimit-limit": String(config.chatRateLimitPerMinute),
+      "x-ratelimit-limit": String(chatRateLimit),
       "x-ratelimit-remaining": String(rateLimit.remaining),
       "x-ratelimit-reset": String(rateLimit.resetAt),
     });

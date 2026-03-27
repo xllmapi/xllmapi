@@ -295,9 +295,11 @@ export async function handleChatRoutes(
     }
 
     metricsService.increment("chatRequests");
+    const chatRateLimitStr = await platformService.getConfigValue("chat_rate_limit_per_minute");
+    const chatRateLimit = chatRateLimitStr ? Number(chatRateLimitStr) : config.chatRateLimitPerMinute;
     const rateLimit = await cacheService.consumeRateLimit({
       key: `chat:session:${auth.userId}`,
-      limit: config.chatRateLimitPerMinute,
+      limit: chatRateLimit,
       windowMs: 60_000
     });
     if (!rateLimit.ok) {
@@ -311,7 +313,7 @@ export async function handleChatRoutes(
       });
       res.writeHead(response.statusCode, {
         ...response.headers,
-        "x-ratelimit-limit": String(config.chatRateLimitPerMinute),
+        "x-ratelimit-limit": String(chatRateLimit),
         "x-ratelimit-remaining": String(rateLimit.remaining),
         "x-ratelimit-reset": String(rateLimit.resetAt),
       });
