@@ -8,6 +8,7 @@ type CachedValue = {
   source: "redis" | "memory";
 };
 
+const MAX_MEMORY_CACHE_SIZE = 10_000;
 const memoryResponseCache = new Map<string, { value: string; expiresAt: number }>();
 
 type RedisClientLike = ReturnType<typeof createClient>;
@@ -30,6 +31,9 @@ const getRedisClient = async () => {
 
     client.on("error", (error) => {
       console.error("[cache] redis error", error instanceof Error ? error.message : String(error));
+      if (!client.isOpen) {
+        redisClientPromise = null;
+      }
     });
 
     try {
@@ -37,6 +41,7 @@ const getRedisClient = async () => {
       return client;
     } catch (error) {
       console.error("[cache] redis connect failed", error instanceof Error ? error.message : String(error));
+      redisClientPromise = null;
       return null;
     }
   })();
@@ -50,6 +55,16 @@ const pruneMemoryCache = () => {
     if (entry.expiresAt <= now) {
       memoryResponseCache.delete(key);
     }
+  }
+};
+
+const enforceMemoryCacheLimit = () => {
+  if (memoryResponseCache.size <= MAX_MEMORY_CACHE_SIZE) return;
+  pruneMemoryCache();
+  while (memoryResponseCache.size > MAX_MEMORY_CACHE_SIZE) {
+    const firstKey = memoryResponseCache.keys().next().value;
+    if (firstKey) memoryResponseCache.delete(firstKey);
+    else break;
   }
 };
 
@@ -67,38 +82,50 @@ export const cacheService = {
       };
     }
 
-    const redisKey = `rate_limit:${params.key}`;
-    const count = await redis.incr(redisKey);
-    let ttlMs = await redis.pTTL(redisKey);
+    try {
+      const redisKey = `rate_limit:${params.key}`;
+      const count = await redis.incr(redisKey);
+      let ttlMs = await redis.pTTL(redisKey);
 
-    if (count === 1 || ttlMs < 0) {
-      await redis.pExpire(redisKey, params.windowMs);
-      ttlMs = params.windowMs;
-    }
+      if (count === 1 || ttlMs < 0) {
+        await redis.pExpire(redisKey, params.windowMs);
+        ttlMs = params.windowMs;
+      }
 
-    if (count > params.limit) {
+      if (count > params.limit) {
+        return {
+          ok: false as const,
+          remaining: 0,
+          resetAt: Date.now() + ttlMs,
+          source: "redis" as const
+        };
+      }
+
       return {
-        ok: false as const,
-        remaining: 0,
+        ok: true as const,
+        remaining: Math.max(params.limit - count, 0),
         resetAt: Date.now() + ttlMs,
         source: "redis" as const
       };
+    } catch (error) {
+      console.error("[cache] redis rate limit error, falling back to memory", error instanceof Error ? error.message : String(error));
+      return {
+        ...consumeInMemoryRateLimit(params),
+        source: "memory" as const
+      };
     }
-
-    return {
-      ok: true as const,
-      remaining: Math.max(params.limit - count, 0),
-      resetAt: Date.now() + ttlMs,
-      source: "redis" as const
-    };
   },
 
   async getCachedResponse(key: string): Promise<CachedValue | null> {
     const redis = await getRedisClient();
     if (redis) {
-      const value = await redis.get(`idempotency:${key}`);
-      if (value !== null) {
-        return { value, source: "redis" };
+      try {
+        const value = await redis.get(`idempotency:${key}`);
+        if (value !== null) {
+          return { value, source: "redis" };
+        }
+      } catch {
+        // fall through to memory cache
       }
     }
 
@@ -122,12 +149,17 @@ export const cacheService = {
     const ttlSeconds = params.ttlSeconds ?? 300;
     const redis = await getRedisClient();
     if (redis) {
-      await redis.set(`idempotency:${params.key}`, params.value, {
-        EX: ttlSeconds
-      });
-      return;
+      try {
+        await redis.set(`idempotency:${params.key}`, params.value, {
+          EX: ttlSeconds
+        });
+        return;
+      } catch {
+        // fall through to memory cache
+      }
     }
 
+    enforceMemoryCacheLimit();
     memoryResponseCache.set(params.key, {
       value: params.value,
       expiresAt: Date.now() + ttlSeconds * 1000
@@ -141,6 +173,7 @@ export const cacheService = {
         await redis.quit();
       } catch { /* ignore */ }
     }
+    redisClientPromise = null;
     memoryResponseCache.clear();
   },
 

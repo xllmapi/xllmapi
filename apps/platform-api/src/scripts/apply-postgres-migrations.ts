@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL;
+const dryRun = process.argv.includes("--dry-run");
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to apply Postgres migrations");
@@ -24,6 +25,14 @@ const client = new Client({
 const main = async () => {
   await client.connect();
 
+  // Verify database connectivity
+  await client.query("SELECT 1");
+  console.log("[migrations] database connection verified");
+
+  if (dryRun) {
+    console.log("[migrations] dry-run mode — no changes will be applied");
+  }
+
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -31,6 +40,8 @@ const main = async () => {
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+
+    let pendingCount = 0;
 
     for (const fileName of migrationFiles) {
       const version = fileName;
@@ -41,6 +52,12 @@ const main = async () => {
 
       if (exists.rowCount && exists.rowCount > 0) {
         console.log(`skip ${version}`);
+        continue;
+      }
+
+      if (dryRun) {
+        console.log(`[dry-run] would apply ${version}`);
+        pendingCount++;
         continue;
       }
 
@@ -58,6 +75,10 @@ const main = async () => {
         await client.query("ROLLBACK");
         throw error;
       }
+    }
+
+    if (dryRun) {
+      console.log(`[dry-run] ${pendingCount} migration(s) pending`);
     }
   } finally {
     await client.end();
