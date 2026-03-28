@@ -37,6 +37,11 @@ export class WsClient {
   connect(): void {
     if (this.shuttingDown) return;
 
+    const url = this.config.platformUrl;
+    if (url.startsWith('ws://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+      log.warn('WARNING: unencrypted ws:// connection to remote server, consider using wss://');
+    }
+
     log.info('connecting', { url: this.config.platformUrl });
 
     this.ws = new WebSocket(this.config.platformUrl);

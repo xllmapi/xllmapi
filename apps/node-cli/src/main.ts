@@ -3,10 +3,11 @@
 
 import * as readline from 'node:readline';
 import type { NodeConfig, ProviderConfig } from './config.js';
+import { loadSavedConfig, saveConfig, getConfigPath } from './config.js';
 import { WsClient } from './ws-client.js';
 
 const VERSION = '0.1.0';
-const DEFAULT_PLATFORM_URL = 'ws://localhost:3000/ws/node';
+const DEFAULT_PLATFORM_URL = process.env.XLLMAPI_PLATFORM_URL || 'wss://xllmapi.com/ws/node';
 
 // ── Built-in provider presets ─────────────────────────────────────
 
@@ -41,7 +42,7 @@ function ask(rl: readline.Interface, question: string): Promise<string> {
 
 // ── Interactive TUI ───────────────────────────────────────────────
 
-async function interactiveTUI(): Promise<NodeConfig> {
+async function interactiveTUI(): Promise<{ config: NodeConfig; preset: ProviderPreset; platformUrl: string; baseUrl: string }> {
   const rl = createRL();
 
   console.log('');
@@ -95,10 +96,33 @@ async function interactiveTUI(): Promise<NodeConfig> {
   // Step 5: API Key
   let apiKey: string | undefined;
   if (preset.needsKey) {
-    apiKey = await ask(rl, `${preset.name} API Key: `);
-    if (!apiKey) {
-      console.error('错误: API Key 不能为空');
-      process.exit(1);
+    apiKey = process.env.XLLMAPI_API_KEY;
+    if (apiKey) {
+      console.log(`\n已从 XLLMAPI_API_KEY 环境变量读取 API Key`);
+    } else {
+      apiKey = await ask(rl, `${preset.name} API Key: `);
+      if (!apiKey) {
+        console.error('错误: API Key 不能为空');
+        process.exit(1);
+      }
+    }
+  }
+
+  // Step 6: Save config
+  const shouldSave = await ask(rl, '\n保存配置以便下次快速启动? (Y/n): ');
+  if (shouldSave.toLowerCase() !== 'n') {
+    saveConfig({
+      platformUrl,
+      token,
+      provider: {
+        type: preset.type,
+        baseUrl,
+        presetKey: preset.key !== 'custom' ? preset.key : undefined,
+      }
+    });
+    console.log(`✓ 配置已保存 (${getConfigPath()})`);
+    if (preset.needsKey) {
+      console.log('  提示: API Key 不保存到磁盘，设置 XLLMAPI_API_KEY 环境变量可免输入');
     }
   }
 
@@ -110,7 +134,7 @@ async function interactiveTUI(): Promise<NodeConfig> {
     baseUrl,
   }];
 
-  return { token, platformUrl, providers };
+  return { config: { token, platformUrl, providers }, preset, platformUrl, baseUrl };
 }
 
 // ── CLI args mode (non-interactive) ───────────────────────────────
@@ -118,9 +142,14 @@ async function interactiveTUI(): Promise<NodeConfig> {
 function parseArgs(argv: string[]): NodeConfig | null {
   const args = argv.slice(2);
 
-  // If no args or only "start", use interactive mode
+  // If no args, "start", or "--setup", use interactive mode
   if (args.length === 0 || (args.length === 1 && args[0] === 'start')) {
-    return null; // signal to use TUI
+    return null; // signal to use saved config or TUI
+  }
+
+  // --setup forces TUI regardless
+  if (args.includes('--setup')) {
+    return null;
   }
 
   let token: string | undefined;
@@ -151,6 +180,11 @@ function parseArgs(argv: string[]): NodeConfig | null {
   if (!token) {
     console.error('错误: --token 是必填项');
     process.exit(1);
+  }
+
+  // Resolve API key from env if not provided via --api-key
+  if (!apiKey && process.env.XLLMAPI_API_KEY) {
+    apiKey = process.env.XLLMAPI_API_KEY;
   }
 
   const providers: ProviderConfig[] = [];
@@ -201,23 +235,32 @@ xllmapi-node v${VERSION} — 分布式模型节点
 内置供应商:
 ${presetList}
 
+选项:
+  --setup                重新配置（忽略已保存配置）
+  --token <ntok_xxx>     节点令牌
+  --provider <name>      供应商名称
+  --api-key <key>        供应商 API Key
+  --platform-url <url>   平台 WebSocket 地址
+  --base-url <url>       自定义 API 地址
+  -h, --help             显示此帮助
+
+环境变量:
+  XLLMAPI_PLATFORM_URL   平台地址 (默认 ${DEFAULT_PLATFORM_URL})
+  XLLMAPI_API_KEY        供应商 API Key（避免每次输入）
+
+配置文件: ${getConfigPath()}
+  首次交互式配置后自动保存（不含 API Key）
+  使用 --setup 重新配置
+
 示例:
   xllmapi-node --token ntok_xxx --provider deepseek --api-key sk-xxx
   xllmapi-node --token ntok_xxx --provider kimi --api-key sk-xxx
   xllmapi-node --token ntok_xxx --provider ollama
+  XLLMAPI_API_KEY=sk-xxx xllmapi-node
 `);
 }
 
-// ── Main ─────────────────────────────────────────────────────────────
-
-async function main() {
-  let config = parseArgs(process.argv);
-
-  if (!config) {
-    // Interactive TUI mode
-    config = await interactiveTUI();
-  }
-
+function startClient(config: NodeConfig): void {
   console.log('');
   console.log(`xllmapi-node v${VERSION}`);
   console.log(`平台: ${config.platformUrl}`);
@@ -235,6 +278,68 @@ async function main() {
 
   process.on('SIGINT', handleShutdown);
   process.on('SIGTERM', handleShutdown);
+}
+
+// ── Main ─────────────────────────────────────────────────────────────
+
+async function main() {
+  // --help
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    printHelp();
+    process.exit(0);
+  }
+
+  // --setup: force interactive TUI
+  if (process.argv.includes('--setup')) {
+    const { config } = await interactiveTUI();
+    startClient(config);
+    return;
+  }
+
+  // CLI args mode (if --token provided)
+  const cliConfig = parseArgs(process.argv);
+  if (cliConfig) {
+    startClient(cliConfig);
+    return;
+  }
+
+  // Try loading saved config
+  const saved = loadSavedConfig();
+  if (saved) {
+    console.log(`[node] 已加载配置: ${getConfigPath()}`);
+    console.log(`[node] 平台: ${saved.platformUrl}`);
+    const preset = PRESETS.find(p => p.key === saved.provider.presetKey);
+    console.log(`[node] 供应商: ${preset?.name ?? saved.provider.type}`);
+
+    // Resolve API Key
+    let apiKey: string | undefined;
+    const needsKey = preset ? preset.needsKey : (saved.provider.type !== 'ollama' && saved.provider.type !== 'vllm');
+    if (needsKey) {
+      apiKey = process.env.XLLMAPI_API_KEY;
+      if (apiKey) {
+        console.log('[node] API Key: 从 XLLMAPI_API_KEY 环境变量读取');
+      } else {
+        const rl = createRL();
+        apiKey = await ask(rl, `${preset?.name ?? saved.provider.type} API Key (或设置 XLLMAPI_API_KEY): `);
+        rl.close();
+        if (!apiKey) {
+          console.error('错误: API Key 不能为空');
+          process.exit(1);
+        }
+      }
+    }
+
+    startClient({
+      token: saved.token,
+      platformUrl: saved.platformUrl,
+      providers: [{ type: saved.provider.type, apiKey, baseUrl: saved.provider.baseUrl }]
+    });
+    return;
+  }
+
+  // First run: interactive TUI
+  const { config } = await interactiveTUI();
+  startClient(config);
 }
 
 void main();
