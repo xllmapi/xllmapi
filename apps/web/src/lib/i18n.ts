@@ -714,6 +714,7 @@ const messages: Record<string, Record<string, string>> = {
     "nodeDetail.totalRequests": "总请求",
     "nodeDetail.price": "价格",
     "nodeDetail.config": "配置",
+    "node.privacyInfo": "对话内容经 AES-256 加密后传输至节点，由安全模块在隔离环境中处理，标准节点程序无法访问对话明文。",
 
     // Admin auto-approve
     "admin.autoApprove": "自动审核模式",
@@ -1457,6 +1458,7 @@ const messages: Record<string, Record<string, string>> = {
     "nodeDetail.totalRequests": "Total Requests",
     "nodeDetail.price": "Price",
     "nodeDetail.config": "Configuration",
+    "node.privacyInfo": "Conversations are AES-256 encrypted before reaching nodes. A secure native module processes them in isolation — standard node software cannot access plaintext.",
 
     // Admin auto-approve
     "admin.autoApprove": "Auto-approve Mode",

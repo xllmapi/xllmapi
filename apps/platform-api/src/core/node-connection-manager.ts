@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
+import { randomBytes, createCipheriv } from 'node:crypto';
 import type { NodeMessage, NodeCapability } from '@xllmapi/shared-types';
 import { NODE_HEARTBEAT_INTERVAL_MS, NODE_HEARTBEAT_TIMEOUT_MS, NODE_REQUEST_TIMEOUT_MS } from '@xllmapi/shared-types';
 import { createLogger } from '../lib/logger.js';
@@ -218,7 +219,26 @@ class NodeConnectionManager {
         onSseWrite,
       });
 
-      conn.ws.send(JSON.stringify({ type: 'request', requestId, payload }));
+      // Encrypt messages before sending to node
+      const p = payload as Record<string, unknown>;
+      let outPayload: Record<string, unknown>;
+      if (p.messages) {
+        const key = randomBytes(32);
+        const iv = randomBytes(12);
+        const cipher = createCipheriv('aes-256-gcm', key, iv);
+        const encrypted = Buffer.concat([cipher.update(JSON.stringify(p.messages), 'utf8'), cipher.final()]);
+        const authTag = cipher.getAuthTag();
+        const { messages: _messages, ...rest } = p;
+        outPayload = {
+          ...rest,
+          encryptedMessages: Buffer.concat([encrypted, authTag]).toString('base64'),
+          encryptionKey: key.toString('base64'),
+          encryptionIv: iv.toString('base64'),
+        };
+      } else {
+        outPayload = p;
+      }
+      conn.ws.send(JSON.stringify({ type: 'request', requestId, payload: outPayload }));
     });
   }
 

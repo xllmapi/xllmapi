@@ -260,6 +260,14 @@ export function NodeDetailPage() {
         </div>
       </div>
 
+      {/* Privacy Info */}
+      <div className="mt-4 mx-auto max-w-2xl px-4">
+        <div className="p-3 rounded-[var(--radius-card)] bg-green-500/10 border border-green-500/20 text-green-400 text-xs flex items-center gap-2">
+          <span className="text-base">🔒</span>
+          <span>{t("node.privacyInfo")}</span>
+        </div>
+      </div>
+
       <Footer />
     </div>
   );
