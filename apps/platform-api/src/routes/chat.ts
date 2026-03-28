@@ -9,6 +9,7 @@ import { stripThinking, trimToContextWindow } from "@xllmapi/core";
 import { cacheService } from "../cache.js";
 import { config } from "../config.js";
 import { executeStreamingRequest } from "../core/provider-executor.js";
+import { routeRequest, recordRouteResult } from "../core/router.js";
 import {
   json,
   read_json,
@@ -20,89 +21,6 @@ import {
 } from "../lib/http.js";
 import { metricsService } from "../metrics.js";
 import { platformService } from "../services/platform-service.js";
-
-/**
- * Fetch offerings for a model, including node-backed offerings.
- * Node offerings are mapped to CandidateOffering shape with executionMode/nodeId.
- * If includeNodes is false, only platform offerings are returned.
- *
- * When userId is provided, tries the user's usage list (offering_favorites) first.
- * Falls back to all offerings if the user's list is empty (backward compat).
- */
-async function findOfferingsIncludingNodes(
-  logicalModel: string,
-  includeNodes: boolean,
-  userId?: string
-): Promise<CandidateOffering[]> {
-  let offerings: CandidateOffering[];
-
-  // If userId is available, check user's usage list
-  if (userId) {
-    // Check if user has ANY items in usage list (not just for this model)
-    const allUserOfferings = await platformService.listConnectionPool(userId);
-    if (allUserOfferings.length > 0) {
-      // User has a usage list — only route to models in their list
-      offerings = await platformService.findUserOfferingsForModel(userId, logicalModel);
-    } else {
-      // No usage list — only platform offerings (distributed nodes require explicit join)
-      offerings = await getAllOfferings(logicalModel, false);
-    }
-  } else {
-    offerings = await getAllOfferings(logicalModel, includeNodes);
-  }
-
-  // Apply user's max price config if set
-  if (userId) {
-    const config = await platformService.getUserModelConfig(userId, logicalModel);
-    if (config) {
-      offerings = offerings.filter((o: CandidateOffering) => {
-        if (config.maxInputPrice != null && (o.fixedPricePer1kInput ?? 0) > config.maxInputPrice) return false;
-        if (config.maxOutputPrice != null && (o.fixedPricePer1kOutput ?? 0) > config.maxOutputPrice) return false;
-        return true;
-      });
-    }
-  }
-
-  return offerings;
-}
-
-async function getAllOfferings(
-  logicalModel: string,
-  includeNodes: boolean
-): Promise<CandidateOffering[]> {
-  const platformOfferings = await platformService.findOfferingsForModel(logicalModel);
-
-  if (!includeNodes) {
-    // Filter out any node offerings that might have been returned
-    return platformOfferings.filter(
-      (o: CandidateOffering) => o.executionMode !== 'node'
-    );
-  }
-
-  // Fetch node offerings and map to CandidateOffering shape
-  const nodeOfferings = await platformService.findOfferingsForModelWithNodes({
-    logicalModel,
-  });
-
-  const mappedNodeOfferings: CandidateOffering[] = nodeOfferings.map((no: any) => ({
-    offeringId: no.id ?? no.offeringId,
-    ownerUserId: no.ownerUserId,
-    providerType: 'openai_compatible' as const,
-    credentialId: '',
-    realModel: no.realModel,
-    pricingMode: no.pricingMode ?? 'fixed',
-    fixedPricePer1kInput: no.fixedPricePer1kInput,
-    fixedPricePer1kOutput: no.fixedPricePer1kOutput,
-    successRate1h: 0.99,
-    p95LatencyMs1h: 2000,
-    recentErrorRate10m: 0,
-    enabled: true,
-    executionMode: 'node' as const,
-    nodeId: no.nodeId,
-  }));
-
-  return [...platformOfferings, ...mappedNodeOfferings];
-}
 
 export async function handleChatRoutes(
   req: IncomingMessage,
@@ -329,14 +247,6 @@ export async function handleChatRoutes(
       return true;
     }
 
-    const candidateOfferings = await findOfferingsIncludingNodes(logicalModel, true, auth.userId);
-    if (candidateOfferings.length === 0) {
-      const response = json(404, { error: { message: `no offering available for ${logicalModel}`, requestId } });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
-      return true;
-    }
-
     const history = await platformService.listChatMessages({
       ownerUserId: auth.userId,
       conversationId,
@@ -386,7 +296,25 @@ export async function handleChatRoutes(
       stream: true,
       messages: contextMessages
     };
-    console.log(`[chat-stream] requestId=${requestId} candidateCount=${candidateOfferings.length}`);
+    const messageCount = history.length + 1;
+
+    let route: Awaited<ReturnType<typeof routeRequest>>;
+    try {
+      route = await routeRequest({
+        logicalModel,
+        userId: auth.userId,
+        conversationId,
+        requestId,
+        messageCount
+      });
+    } catch {
+      const response = json(404, { error: { message: `no offering available for ${logicalModel}`, requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    console.log(`[chat-stream] requestId=${requestId} → ${route.offering.offeringId} (${route.affinityLevel})`);
 
     res.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
@@ -397,14 +325,24 @@ export async function handleChatRoutes(
     try {
       const result = await executeStreamingRequest({
         requestId,
-        offerings: candidateOfferings,
+        offerings: [route.offering],
         messages: mappedBody.messages,
         temperature: mappedBody.temperature,
         maxTokens: mappedBody.max_tokens,
         onSseWrite: (chunk) => { res.write(chunk); }
       });
 
-      console.log(`[chat-stream] completed offering=${result.chosenOffering.offeringId} usage=${JSON.stringify(result.usage)}`);
+      recordRouteResult({
+        success: true,
+        conversationId,
+        userId: auth.userId,
+        logicalModel,
+        offeringId: route.offering.offeringId,
+        messageCount,
+        latencyMs: result.timing.totalMs
+      });
+
+      console.log(`[chat-stream] completed offering=${result.chosenOffering.offeringId} (${route.affinityLevel}) usage=${JSON.stringify(result.usage)}`);
 
       try {
         await platformService.recordChatSettlement({
@@ -454,9 +392,20 @@ export async function handleChatRoutes(
         requestId
       });
     } catch (err) {
+      recordRouteResult({
+        success: false,
+        conversationId,
+        userId: auth.userId,
+        logicalModel,
+        offeringId: route.offering.offeringId,
+        messageCount,
+        latencyMs: 0
+      });
       console.error(`[chat-stream] provider execution failed:`, err);
       const errorMsg = err instanceof Error ? err.message : "provider execution failed";
       res.write(`event: error\ndata: ${JSON.stringify({ error: errorMsg })}\n\n`);
+    } finally {
+      route.release();
     }
 
     res.end();
