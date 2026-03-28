@@ -44,8 +44,8 @@ async function findOfferingsIncludingNodes(
       // User has a usage list — only route to models in their list
       offerings = await platformService.findUserOfferingsForModel(userId, logicalModel);
     } else {
-      // No usage list at all — fallback to all offerings for backward compat
-      offerings = await getAllOfferings(logicalModel, includeNodes);
+      // No usage list — only platform offerings (distributed nodes require explicit join)
+      offerings = await getAllOfferings(logicalModel, false);
     }
   } else {
     offerings = await getAllOfferings(logicalModel, includeNodes);
