@@ -38,7 +38,7 @@ echo "[deploy] installing dependencies"
 npm ci
 
 echo "[deploy] building"
-XLLMAPI_RELEASE_ID="${RELEASE_ID}" npm run build
+XLLMAPI_RELEASE_ID="${RELEASE_ID}" XLLMAPI_DOCS_URL="${XLLMAPI_DOCS_URL:-https://docs.xllmapi.com/docs}" npm run build
 
 echo "[deploy] persisting frontend assets for release ${RELEASE_ID}"
 mkdir -p "${RELEASES_DIR}/${RELEASE_ID}"
