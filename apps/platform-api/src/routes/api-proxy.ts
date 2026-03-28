@@ -16,6 +16,7 @@ import type { ApiFormatId } from "../core/adapters/index.js";
 import { cacheService } from "../cache.js";
 import { config } from "../config.js";
 import { proxyApiRequest } from "../core/provider-executor.js";
+import { resolveOfferings, recordRouteResult } from "../core/router.js";
 import {
   json,
   read_json,
@@ -25,62 +26,7 @@ import {
 import { metricsService } from "../metrics.js";
 import { platformService } from "../services/platform-service.js";
 
-// ── Shared offering resolution ──────────────────────────────────────
-
-async function findOfferingsIncludingNodes(
-  logicalModel: string,
-  userId?: string
-): Promise<CandidateOffering[]> {
-  let offerings: CandidateOffering[];
-
-  if (userId) {
-    const allUserOfferings = await platformService.listConnectionPool(userId);
-    if (allUserOfferings.length > 0) {
-      offerings = await platformService.findUserOfferingsForModel(userId, logicalModel);
-    } else {
-      offerings = await getAllOfferings(logicalModel);
-    }
-  } else {
-    offerings = await getAllOfferings(logicalModel);
-  }
-
-  if (userId) {
-    const userConfig = await platformService.getUserModelConfig(userId, logicalModel);
-    if (userConfig) {
-      offerings = offerings.filter((o: CandidateOffering) => {
-        if (userConfig.maxInputPrice != null && (o.fixedPricePer1kInput ?? 0) > userConfig.maxInputPrice) return false;
-        if (userConfig.maxOutputPrice != null && (o.fixedPricePer1kOutput ?? 0) > userConfig.maxOutputPrice) return false;
-        return true;
-      });
-    }
-  }
-
-  return offerings;
-}
-
-async function getAllOfferings(logicalModel: string): Promise<CandidateOffering[]> {
-  const platformOfferings = await platformService.findOfferingsForModel(logicalModel);
-
-  const nodeOfferings = await platformService.findOfferingsForModelWithNodes({ logicalModel });
-  const mappedNodeOfferings: CandidateOffering[] = nodeOfferings.map((no: any) => ({
-    offeringId: no.id ?? no.offeringId,
-    ownerUserId: no.ownerUserId,
-    providerType: "openai_compatible" as const,
-    credentialId: "",
-    realModel: no.realModel,
-    pricingMode: no.pricingMode ?? "fixed",
-    fixedPricePer1kInput: no.fixedPricePer1kInput,
-    fixedPricePer1kOutput: no.fixedPricePer1kOutput,
-    successRate1h: 0.99,
-    p95LatencyMs1h: 2000,
-    recentErrorRate10m: 0,
-    enabled: true,
-    executionMode: "node" as const,
-    nodeId: no.nodeId,
-  }));
-
-  return [...platformOfferings, ...mappedNodeOfferings];
-}
+// Offering resolution now handled by core/router.ts
 
 // ── Shared pre-check: auth → rate limit → wallet → offerings ────────
 
@@ -131,7 +77,7 @@ async function validateApiRequest(
     return null;
   }
 
-  const offerings = await findOfferingsIncludingNodes(model, auth.userId);
+  const offerings = await resolveOfferings(model, auth.userId);
   if (offerings.length === 0) {
     const response = json(404, { error: { message: `no offering available for ${model}`, requestId } });
     res.writeHead(response.statusCode, response.headers);
