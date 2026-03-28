@@ -43,6 +43,12 @@ interface DistributedOffering {
   fixedPricePer1kOutput?: number;
   uptimeSeconds?: number;
   publicNodeId?: string;
+  contextLength?: number;
+  maxConcurrency?: number;
+  favoriteCount?: number;
+  totalRequests?: number;
+  requests7d?: number;
+  last7dTrendRaw?: string;
 }
 
 type TrendMetric = "requests" | "tokens" | "price";
@@ -229,6 +235,15 @@ function Sparkline({ data }: { data: number[] }) {
   );
 }
 
+function formatUptime(seconds?: number): string {
+  if (!seconds || seconds <= 0) return "--";
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  if (days > 0) return `${days}d ${hours}h`;
+  const mins = Math.floor((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+}
+
 function HeatBar({ value, max }: { value: number; max: number }) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
@@ -238,14 +253,6 @@ function HeatBar({ value, max }: { value: number; max: number }) {
   );
 }
 
-function formatUptime(seconds?: number): string {
-  if (!seconds || seconds <= 0) return "—";
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  if (days > 0) return `${days}d ${hours}h`;
-  const mins = Math.floor((seconds % 3600) / 60);
-  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-}
 
 type SortKey = "popular" | "requests" | "tokens" | "price" | "newest";
 
@@ -488,29 +495,54 @@ export function ModelsPage() {
               return (
                 <div key={o.id} onClick={() => navigate(`/mnetwork/node/${encodeURIComponent(o.publicNodeId || o.id)}`)}
                   className="rounded-[var(--radius-card)] border border-purple-500/20 bg-purple-500/5 p-5 transition-colors hover:border-purple-500/40 cursor-pointer">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-mono text-text-tertiary shrink-0">{o.id.slice(0, 7)}</span>
+                  {/* Row 1: Model + badge + connections + status */}
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <span className="text-sm font-mono font-medium text-text-primary truncate">{o.logicalModel}</span>
+                      <span className="text-[10px] px-1 py-0.5 rounded font-medium bg-purple-500/10 text-purple-400 shrink-0">🖥️</span>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="relative flex h-2 w-2">
-                        {isOnline && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />}
-                        <span className={`relative inline-flex h-2 w-2 rounded-full ${isOnline ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
-                      </span>
-                      <span className="text-[10px] text-text-tertiary">{isOnline ? "在线" : "离线"}</span>
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-[11px] text-text-tertiary" title={t("models.usersJoined")}>🔗 {o.favoriteCount ?? 0}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="relative flex h-2 w-2">
+                          {isOnline && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-40 animate-ping" />}
+                          <span className={`relative inline-flex h-2 w-2 rounded-full ${isOnline ? "bg-emerald-400" : "bg-text-tertiary/40"}`} />
+                        </span>
+                        <span className="text-[10px] text-text-tertiary">{isOnline ? t("models.online") : t("models.offline")}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-text-secondary mb-2">
-                    <span className="truncate">@{o.ownerHandle || o.ownerDisplayName || "—"}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-500/10 text-purple-400">🖥️ 分布式</span>
-                    <span className="font-mono text-text-tertiary">{formatTokens(o.fixedPricePer1kInput ?? 0)}/{formatTokens(o.fixedPricePer1kOutput ?? 0)}</span>
+                  {/* Row 2: Operator */}
+                  <div className="text-xs text-text-secondary mb-3 truncate">
+                    @{o.ownerHandle || "—"}
+                    {o.ownerDisplayName && o.ownerHandle !== o.ownerDisplayName ? ` (${o.ownerDisplayName})` : ""}
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-text-tertiary">
-                    <span>👍 {o.upvotes ?? 0}</span>
-                    {o.uptimeSeconds != null && o.uptimeSeconds > 0 && (
-                      <span>连续运行: {formatUptime(o.uptimeSeconds)}</span>
-                    )}
+                  {/* Row 3: Price + ctx · concurrency  |  requests */}
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-accent font-medium">{formatTokens(o.fixedPricePer1kInput ?? 0)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(o.fixedPricePer1kOutput ?? 0)}</span>
+                      {o.contextLength != null && o.contextLength > 0 && (
+                        <><span className="text-text-tertiary/30">·</span><span className="text-text-tertiary">{formatContextLength(o.contextLength)}</span></>
+                      )}
+                      {o.maxConcurrency != null && (
+                        <><span className="text-text-tertiary/30">·</span><span className="text-text-tertiary">{t("models.concurrency")} {o.maxConcurrency}</span></>
+                      )}
+                    </div>
+                    <span className="text-text-tertiary">{o.requests7d ?? 0} {t("models.requests")}</span>
+                  </div>
+                  {/* Row 4: uptime · latency  |  sparkline */}
+                  <div className="flex items-center justify-between text-[11px] text-text-tertiary">
+                    <div className="flex items-center gap-1.5">
+                      <span>{t("nodeDetail.uptime")} {formatUptime(o.uptimeSeconds)}</span>
+                      <span className="text-text-tertiary/30">·</span>
+                      <span>{t("nodeDetail.avgLatency")} --</span>
+                    </div>
+                    {(() => {
+                      try {
+                        const trend: number[] = o.last7dTrendRaw ? JSON.parse(o.last7dTrendRaw) : [];
+                        return trend.length > 0 ? <Sparkline data={trend} /> : null;
+                      } catch { return null; }
+                    })()}
                   </div>
                 </div>
               );

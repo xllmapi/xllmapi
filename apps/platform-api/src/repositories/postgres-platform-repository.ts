@@ -3812,9 +3812,14 @@ export const postgresPlatformRepository: PlatformRepository = {
         u.handle AS "ownerHandle",
         COALESCE(v.up, 0)::int AS "upvotes",
         COALESCE(v.down, 0)::int AS "downvotes",
-        COALESCE(fav.cnt, 0)::int AS "favoriteCount"
+        COALESCE(fav.cnt, 0)::int AS "favoriteCount",
+        COALESCE(n.total_requests_served, 0)::int AS "totalRequests",
+        COALESCE(req7d.cnt, 0)::int AS "requests7d",
+        COALESCE(req7d.daily, '[]')::text AS "last7dTrendRaw",
+        CASE WHEN n.connected_at IS NOT NULL AND n.status = 'online' THEN EXTRACT(EPOCH FROM (NOW() - n.connected_at))::int ELSE NULL END AS "uptimeSeconds"
       FROM offerings o
       JOIN users u ON u.id = o.owner_user_id
+      LEFT JOIN nodes n ON n.id = o.node_id
       LEFT JOIN (
         SELECT offering_id,
           SUM(CASE WHEN vote = 'upvote' THEN 1 ELSE 0 END) AS up,
@@ -3824,6 +3829,18 @@ export const postgresPlatformRepository: PlatformRepository = {
       LEFT JOIN (
         SELECT offering_id, COUNT(*) AS cnt FROM offering_favorites GROUP BY offering_id
       ) fav ON fav.offering_id = o.id
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*) AS cnt,
+          (SELECT json_agg(dc.c ORDER BY dc.d)::text FROM (
+            SELECT d::date AS d, COUNT(ar2.id) AS c
+            FROM generate_series((NOW() - INTERVAL '6 days')::date, NOW()::date, '1 day') AS d
+            LEFT JOIN api_requests ar2 ON ar2.chosen_offering_id = o.id AND ar2.created_at::date = d::date
+            GROUP BY d
+          ) dc) AS daily
+        FROM api_requests ar
+        WHERE ar.chosen_offering_id = o.id AND ar.created_at > NOW() - INTERVAL '7 days'
+      ) req7d ON true
       WHERE ${whereClause}
       ORDER BY ${orderBy}
       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
