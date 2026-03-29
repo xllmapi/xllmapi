@@ -399,6 +399,8 @@ export const sqlitePlatformRepository: PlatformRepository = {
   },
 
   recordFailedRequest() {},
+  getAdminOfferingHealthList() { return []; },
+  adminStopOffering() {},
 
   getAdminSettlements() {
     return { data: [], summary: { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 } };
