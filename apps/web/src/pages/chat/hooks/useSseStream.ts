@@ -51,6 +51,12 @@ export async function streamResponse(
             continue;
           }
 
+          if (currentEvent === "error") {
+            onError(parsed.error ?? parsed.message ?? "Provider error");
+            currentEvent = "";
+            continue;
+          }
+
           // Support both core-router format {"delta":"..."} and OpenAI format
           const delta = parsed.delta ?? parsed.choices?.[0]?.delta?.content;
           if (delta) {

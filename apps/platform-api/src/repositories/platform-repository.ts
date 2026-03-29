@@ -245,6 +245,9 @@ export type PlatformRepository = {
     upstreamUserAgent?: string;
     apiKeyId?: string;
     providerLabel?: string;
+    clientFormat?: string;
+    upstreamFormat?: string;
+    formatConverted?: boolean;
   }): MaybePromise<void>;
   recordSettlementFailure(params: {
     requestId: string;

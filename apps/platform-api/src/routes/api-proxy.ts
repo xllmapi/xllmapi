@@ -133,6 +133,9 @@ async function handleProxyRequest(
         apiKeyId: validated.apiKeyId,
         providerLabel: result.chosenOffering.providerLabel,
         responseBody: result.failedAttempts ? { fallbackAttempts: result.failedAttempts } : undefined,
+        clientFormat: clientFormat,
+        upstreamFormat: result.targetFormat,
+        formatConverted: clientFormat !== result.targetFormat,
       });
     } catch (settlementErr) {
       metricsService.increment("settlementFailures");

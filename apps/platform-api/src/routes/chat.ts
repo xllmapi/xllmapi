@@ -366,6 +366,9 @@ export async function handleChatRoutes(
           upstreamUserAgent: result.upstreamUserAgent,
           providerLabel: result.chosenOffering.providerLabel,
           responseBody: result.failedAttempts ? { fallbackAttempts: result.failedAttempts } : undefined,
+          clientFormat: "openai",
+          upstreamFormat: "openai",
+          formatConverted: false,
         });
       } catch (err) {
         metricsService.increment("settlementFailures");

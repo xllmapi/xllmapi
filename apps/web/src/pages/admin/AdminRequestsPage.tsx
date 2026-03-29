@@ -52,6 +52,10 @@ interface RequestDetail {
   fixedPricePer1kInput: number | null;
   fixedPricePer1kOutput: number | null;
   providerLabel: string | null;
+  responseBody: { fallbackAttempts?: Array<{ offeringId: string; error: string; errorClass: string }> } | null;
+  clientFormat: string | null;
+  upstreamFormat: string | null;
+  formatConverted: boolean | null;
 }
 
 type TimeRange = 7 | 30 | 0;
@@ -116,6 +120,9 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
         { label: t("admin.requests.detail.clientUA"), value: detail.clientUserAgent, mono: true },
         { label: t("admin.requests.detail.upstreamUA"), value: detail.upstreamUserAgent, mono: true },
         { label: "API Key ID", value: detail.apiKeyId, mono: true },
+        { label: "Client Format", value: detail.clientFormat?.toUpperCase() },
+        { label: "Upstream Format", value: detail.upstreamFormat?.toUpperCase() },
+        { label: "Format Converted", value: detail.formatConverted ? "Yes" : detail.formatConverted === false ? "No" : "-" },
       ],
     },
     {
@@ -153,6 +160,13 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
         { label: t("admin.requests.detail.outputPrice"), value: detail.fixedPricePer1kOutput != null ? `${detail.fixedPricePer1kOutput} xt/1k tokens` : "-" },
       ],
     },
+    ...(detail.responseBody?.fallbackAttempts?.length ? [{
+      title: "Fallback",
+      rows: detail.responseBody.fallbackAttempts.map((a, i) => ({
+        label: `#${i + 1} ${a.offeringId.slice(0, 16)}...`,
+        value: <span className="text-danger text-xs">[{a.errorClass}] {a.error.slice(0, 120)}</span>,
+      })),
+    }] : []),
   ];
 
   return (

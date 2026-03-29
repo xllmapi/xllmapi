@@ -13,7 +13,9 @@ import {
   type ReviewOfferingBody,
   type InvitationBody
 } from "../lib/http.js";
+import { readdir, readFile } from "node:fs/promises";
 import { metricsService } from "../metrics.js";
+import { config } from "../config.js";
 import { platformService } from "../services/platform-service.js";
 import { platformRepository } from "../repositories/index.js";
 
@@ -850,6 +852,53 @@ export async function handleAdminRoutes(
     const commentId = adminDeleteCommentMatch[1];
     await platformService.adminDeleteComment(commentId);
     const response = json(200, { requestId, ok: true });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/v1/admin/releases") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const releasesDir = "/opt/xllmapi/app/releases";
+    const releases: Array<{ releaseId: string; deployedAt: string; gitCommit: string; backupPath: string | null; status: string }> = [];
+
+    try {
+      const files = await readdir(releasesDir);
+      for (const file of files) {
+        if (!file.endsWith(".json")) continue;
+        try {
+          const content = await readFile(`${releasesDir}/${file}`, "utf-8");
+          const record = JSON.parse(content);
+          releases.push({
+            releaseId: record.releaseId ?? file.replace(/\.json$/, ""),
+            deployedAt: record.deployedAt ?? "",
+            gitCommit: record.gitCommit ?? "",
+            backupPath: record.backupPath ?? null,
+            status: record.status ?? "unknown",
+          });
+        } catch { /* skip malformed files */ }
+      }
+      // Sort by deployedAt descending
+      releases.sort((a, b) => (b.deployedAt || "").localeCompare(a.deployedAt || ""));
+    } catch {
+      // releases dir doesn't exist — return current release as single item
+      releases.push({
+        releaseId: config.releaseId,
+        deployedAt: new Date().toISOString(),
+        gitCommit: "",
+        backupPath: null,
+        status: "success",
+      });
+    }
+
+    const response = json(200, { requestId, data: releases });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
