@@ -44,6 +44,7 @@ export function AdminLayout() {
         <SidebarLink to="/admin/requests" label={t("admin.sidebar.requests")} />
         <SidebarLink to="/admin/settlements" label={t("admin.sidebar.settlements")} />
         <SidebarLink to="/admin/settlement-failures" label={t("admin.sidebar.settlementFailures")} />
+        <SidebarLink to="/admin/node-health" label={t("admin.sidebar.nodeHealth")} />
         <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
         <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
         <SidebarLink to="/admin/banner" label={t("admin.sidebar.banner")} />
@@ -63,17 +64,23 @@ export function AdminLayout() {
             <SidebarLink to="/admin" label={t("admin.sidebar.overview")} end />
             <SidebarLink to="/admin/users" label={t("admin.sidebar.users")} />
             <SidebarLink to="/admin/invitations" label={t("admin.sidebar.invitations")} />
-            <SidebarLink to="/admin/reviews" label={t("admin.sidebar.reviews")} />
             <SidebarLink to="/admin/usage" label={t("admin.sidebar.usage")} />
             <SidebarLink to="/admin/requests" label={t("admin.sidebar.requests")} />
             <SidebarLink to="/admin/settlements" label={t("admin.sidebar.settlements")} />
             <SidebarLink to="/admin/settlement-failures" label={t("admin.sidebar.settlementFailures")} />
 
             <p className="text-text-tertiary text-[10px] font-semibold uppercase tracking-wider px-3 py-2 mt-4">
+              {t("admin.sidebar.modelNodes")}
+            </p>
+            <SidebarLink to="/admin/reviews" label={t("admin.sidebar.reviews")} />
+            <SidebarLink to="/admin/node-health" label={t("admin.sidebar.nodeHealth")} />
+
+            <p className="text-text-tertiary text-[10px] font-semibold uppercase tracking-wider px-3 py-2 mt-4">
               {t("admin.sidebar.system")}
             </p>
             <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
             <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
+            <SidebarLink to="/admin/logs" label={t("admin.sidebar.logs")} />
             <SidebarLink to="/admin/banner" label={t("admin.sidebar.banner")} />
             <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
             <SidebarLink to="/admin/email-deliveries" label={t("admin.sidebar.emailDeliveries")} />

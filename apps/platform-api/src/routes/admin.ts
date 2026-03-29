@@ -286,6 +286,86 @@ export async function handleAdminRoutes(
     return true;
   }
 
+  // ── Offering Health ─────────────────────────────────────────────────
+
+  // GET /v1/admin/offering-health — list all offerings with breaker state
+  if (req.method === "GET" && url.pathname === "/v1/admin/offering-health") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const { getAllBreakerStates } = await import("@xllmapi/core");
+    const breakers = getAllBreakerStates();
+    // Get all active offerings from DB
+    const offerings = await platformRepository.getAdminOfferingHealthList();
+    // Merge breaker state
+    const data = offerings.map((o: Record<string, unknown>) => {
+      const bs = breakers.get(o.offeringId as string);
+      return {
+        ...o,
+        breakerState: bs?.state ?? "closed",
+        errorClass: bs?.errorClass ?? null,
+        failures: bs?.failures ?? 0,
+        cooldownMs: bs?.cooldownMs ?? 0,
+        lastFailureAt: bs?.lastFailureAt ? new Date(bs.lastFailureAt).toISOString() : null,
+        lastErrorMessage: bs?.lastErrorMessage ?? null,
+        autoDisabled: bs?.autoDisabled ?? false,
+      };
+    });
+    const response = json(200, { ok: true, data, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // POST /v1/admin/offering-health/:id/reset — manual breaker reset
+  const healthResetMatch = url.pathname.match(/^\/v1\/admin\/offering-health\/([^/]+)\/reset$/);
+  if (req.method === "POST" && healthResetMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const { resetBreaker } = await import("@xllmapi/core");
+    const offeringId = decodeURIComponent(healthResetMatch[1]);
+    resetBreaker(offeringId);
+    await platformRepository.writeAuditLog({
+      actorUserId: auth.userId, action: "reset_breaker", targetType: "offering", targetId: offeringId, payload: {},
+    });
+    const response = json(200, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // POST /v1/admin/offering-health/:id/stop — admin stop offering (enabled=false)
+  const healthStopMatch = url.pathname.match(/^\/v1\/admin\/offering-health\/([^/]+)\/stop$/);
+  if (req.method === "POST" && healthStopMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const offeringId = decodeURIComponent(healthStopMatch[1]);
+    await platformRepository.adminStopOffering(offeringId);
+    const { resetBreaker } = await import("@xllmapi/core");
+    resetBreaker(offeringId);
+    await platformRepository.writeAuditLog({
+      actorUserId: auth.userId, action: "admin_stop", targetType: "offering", targetId: offeringId, payload: {},
+    });
+    const response = json(200, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/v1/admin/settlements") {
     const auth = await authenticate_session_only_(req);
     if (!auth || auth.role !== "admin") {
@@ -350,6 +430,71 @@ export async function handleAdminRoutes(
     res.end(response.payload);
     return true;
   }
+  // GET /v1/admin/logs — read PM2 log files
+  if (req.method === "GET" && url.pathname === "/v1/admin/logs") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 200), 1000);
+    const level = url.searchParams.get("level") ?? "";
+    const search = url.searchParams.get("search") ?? "";
+
+    const { readFileSync, existsSync } = await import("node:fs");
+    const logPaths = ["/var/log/xllmapi/out.log", "/var/log/xllmapi/error.log", "/tmp/xllmapi-dev/platform.log"];
+    let rawLines: string[] = [];
+    for (const p of logPaths) {
+      if (existsSync(p)) {
+        try {
+          const content = readFileSync(p, "utf-8");
+          const lines = content.split("\n").filter(Boolean);
+          rawLines = lines.slice(-limit * 2); // read extra for filtering
+          break;
+        } catch { /* skip */ }
+      }
+    }
+
+    // Parse and filter
+    const parsed: Array<{ timestamp: string; level: string; message: string; module?: string; raw: string }> = [];
+    for (const line of rawLines) {
+      try {
+        const obj = JSON.parse(line);
+        parsed.push({
+          timestamp: obj.timestamp ?? "",
+          level: obj.level ?? "info",
+          message: obj.message ?? "",
+          module: obj.module ?? "",
+          raw: line,
+        });
+      } catch {
+        // Non-JSON line (PM2 prefix or plain text)
+        const levelMatch = line.match(/\b(ERROR|WARN|INFO|DEBUG|FATAL)\b/i);
+        parsed.push({
+          timestamp: "",
+          level: levelMatch ? levelMatch[1].toLowerCase() : "info",
+          message: line.replace(/^\d+\|xllmapi\s+\|\s*/, "").replace(/^\d{4}-\d{2}-\d{2}.*?:\s*/, ""),
+          raw: line,
+        });
+      }
+    }
+
+    let filtered = parsed;
+    if (level) filtered = filtered.filter(l => l.level === level.toLowerCase());
+    if (search) {
+      const s = search.toLowerCase();
+      filtered = filtered.filter(l => l.raw.toLowerCase().includes(s));
+    }
+
+    const data = filtered.slice(-limit).reverse(); // newest first
+    const response = json(200, { ok: true, data, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/v1/admin/audit-logs") {
     const auth = await authenticate_session_only_(req);
     if (!auth || auth.role !== "admin") {

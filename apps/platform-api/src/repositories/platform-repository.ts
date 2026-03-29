@@ -331,6 +331,8 @@ export type PlatformRepository = {
     limit: number;
   }): MaybePromise<{ data: any[]; total: number }>;
   getAdminRequestDetail(requestId: string): MaybePromise<any>;
+  getAdminOfferingHealthList(): MaybePromise<any[]>;
+  adminStopOffering(offeringId: string): MaybePromise<void>;
   recordFailedRequest(params: {
     requestId: string;
     requesterUserId: string;

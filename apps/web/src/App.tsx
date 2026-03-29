@@ -68,6 +68,8 @@ const AdminSecurityEventsPage = lazy(() => import("@/pages/admin/AdminSecurityEv
 const AdminRequestsPage = lazy(() => import("@/pages/admin/AdminRequestsPage").then((m) => ({ default: m.AdminRequestsPage })));
 const AdminSettlementsPage = lazy(() => import("@/pages/admin/AdminSettlementsPage").then((m) => ({ default: m.AdminSettlementsPage })));
 const AdminSettlementFailuresPage = lazy(() => import("@/pages/admin/AdminSettlementFailuresPage").then((m) => ({ default: m.AdminSettlementFailuresPage })));
+const AdminNodeHealthPage = lazy(() => import("@/pages/admin/AdminNodeHealthPage").then((m) => ({ default: m.AdminNodeHealthPage })));
+const AdminLogsPage = lazy(() => import("@/pages/admin/AdminLogsPage").then((m) => ({ default: m.AdminLogsPage })));
 const AdminAuditPage = lazy(() => import("@/pages/admin/AdminAuditPage").then((m) => ({ default: m.AdminAuditPage })));
 const AdminBannerPage = lazy(() => import("@/pages/admin/AdminBannerPage").then((m) => ({ default: m.AdminBannerPage })));
 const ModelsManagePage = lazy(() => import("@/pages/app/ModelsManagePage").then((m) => ({ default: m.ModelsManagePage })));
@@ -138,8 +140,10 @@ export function App() {
             <Route path="users" element={<UsersPage />} />
             <Route path="invitations" element={<AdminInvitationsPage />} />
             <Route path="reviews" element={<ReviewsPage />} />
+            <Route path="node-health" element={<AdminNodeHealthPage />} />
             <Route path="usage" element={<UsagePage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="logs" element={<AdminLogsPage />} />
             <Route path="providers" element={<ProvidersPage />} />
             <Route path="notifications" element={<AdminNotificationsPage />} />
             <Route path="email-deliveries" element={<AdminEmailDeliveriesPage />} />

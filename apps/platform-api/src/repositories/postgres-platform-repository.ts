@@ -2990,6 +2990,38 @@ export const postgresPlatformRepository: PlatformRepository = {
     ]);
   },
 
+  async getAdminOfferingHealthList() {
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        o.id AS "offeringId",
+        o.logical_model AS "logicalModel",
+        o.real_model AS "realModel",
+        o.enabled,
+        o.execution_mode AS "executionMode",
+        o.owner_user_id AS "ownerUserId",
+        u.display_name AS "ownerName",
+        i.email AS "ownerEmail",
+        c.provider_type AS "providerType",
+        COALESCE(p.label, c.provider_label, c.provider_type) AS "providerLabel",
+        o.daily_token_limit AS "dailyTokenLimit",
+        o.max_concurrency AS "maxConcurrency"
+      FROM offerings o
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN provider_presets p ON RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%' AND p.provider_type = c.provider_type
+      LEFT JOIN users u ON u.id = o.owner_user_id
+      LEFT JOIN user_identities i ON i.user_id = o.owner_user_id
+      WHERE o.review_status = 'approved'
+      ORDER BY o.enabled DESC, o.logical_model ASC
+    `);
+    return result.rows;
+  },
+
+  async adminStopOffering(offeringId: string) {
+    const currentPool = getPool();
+    await currentPool.query("UPDATE offerings SET enabled = FALSE WHERE id = $1", [offeringId]);
+  },
+
   async getAdminSettlements(params: { days?: number; page: number; limit: number }) {
     await ensureDevSeed();
     const currentPool = getPool();
