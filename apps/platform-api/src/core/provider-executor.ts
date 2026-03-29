@@ -77,6 +77,12 @@ async function isDailyLimitExceeded(offeringId: string, dailyTokenLimit: number)
   }
 }
 
+export interface FailedAttempt {
+  offeringId: string;
+  error: string;
+  errorClass: string;
+}
+
 export interface ProviderResult {
   chosenOffering: CandidateOffering;
   content: string;
@@ -84,6 +90,7 @@ export interface ProviderResult {
   timing: { totalMs: number };
   finishReason: string;
   upstreamUserAgent?: string;
+  failedAttempts?: FailedAttempt[];
 }
 
 function resolveApiKey(offering: CandidateOffering): string {
@@ -210,11 +217,12 @@ export async function proxyApiRequest(params: {
   signal?: AbortSignal;
   writeHead: (status: number, headers: Record<string, string>) => void;
   res: import("node:http").ServerResponse;
-}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage; upstreamUserAgent?: string }> {
+}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage; upstreamUserAgent?: string; failedAttempts?: FailedAttempt[] }> {
   const available = params.offerings.filter((o) => isAvailable(o.offeringId));
   const candidates = available.length > 0 ? available : params.offerings;
   const isStreaming = params.body.stream === true;
   const defaultUA = await getDefaultProxyUA();
+  const failedAttempts: FailedAttempt[] = [];
 
   // Sort offerings: prefer those with a matching endpoint for the client format
   const sorted = [...candidates].sort((a, b) => {
@@ -270,6 +278,7 @@ export async function proxyApiRequest(params: {
         const errClass = classifyError(resp.status, errText);
         recordFailure(offering.offeringId, errClass, errText);
         checkAutoDisable(offering.offeringId);
+        failedAttempts.push({ offeringId: offering.offeringId, error: `${resp.status}: ${errText.slice(0, 200)}`, errorClass: errClass });
         lastError = new Error(`provider returned ${resp.status}: ${errText}`);
         continue;
       }
@@ -347,7 +356,7 @@ export async function proxyApiRequest(params: {
         }
       }
 
-      return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"] };
+      return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"], failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined };
     } catch (err) {
       recordFailure(offering.offeringId, "transient", err instanceof Error ? err.message : "");
       lastError = err;
@@ -396,6 +405,7 @@ export async function executeStreamingRequest(params: {
       ]
     : [...candidates].sort(() => Math.random() - 0.5);
 
+  const failedAttempts: FailedAttempt[] = [];
   let lastError: unknown;
   for (const offering of ordered) {
     // Check daily token limit
@@ -478,6 +488,7 @@ export async function executeStreamingRequest(params: {
           timing: { totalMs: Date.now() - startTime },
           finishReason: nodeResult.finishReason,
           upstreamUserAgent: nodeExtraHeaders["user-agent"],
+          failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined,
         };
       }
 
@@ -572,6 +583,7 @@ export async function executeStreamingRequest(params: {
         timing: { totalMs: Date.now() - startTime },
         finishReason: result.finishReason,
         upstreamUserAgent: extraHeaders["user-agent"],
+        failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined,
       };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -580,6 +592,7 @@ export async function executeStreamingRequest(params: {
       const errClass = statusMatch ? classifyError(Number(statusMatch[1]), errMsg) : "transient";
       recordFailure(offering.offeringId, errClass, errMsg);
       checkAutoDisable(offering.offeringId);
+      failedAttempts.push({ offeringId: offering.offeringId, error: errMsg.slice(0, 200), errorClass: errClass });
       lastError = err;
       console.error(`[provider-executor] offering=${offering.offeringId} provider=${offering.providerType} error:`, err);
       // Try next offering
