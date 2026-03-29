@@ -326,7 +326,8 @@ export async function handleChatRoutes(
     try {
       const result = await executeStreamingRequest({
         requestId,
-        offerings: [route.offering],
+        offerings: route.candidates,
+        preferredOfferingId: route.offering.offeringId,
         messages: mappedBody.messages,
         temperature: mappedBody.temperature,
         maxTokens: mappedBody.max_tokens,
@@ -407,8 +408,23 @@ export async function handleChatRoutes(
         messageCount,
         latencyMs: 0
       });
-      console.error(`[chat-stream] provider execution failed:`, err);
       const errorMsg = err instanceof Error ? err.message : "provider execution failed";
+      console.error(`[chat-stream] provider execution failed:`, errorMsg);
+      // Record failed request for admin visibility
+      try {
+        await platformService.recordFailedRequest({
+          requestId,
+          requesterUserId: auth.userId,
+          logicalModel,
+          offeringId: route.offering.offeringId,
+          provider: route.offering.providerType,
+          realModel: route.offering.realModel,
+          errorMessage: errorMsg,
+          clientIp: get_request_ip_(req),
+          clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+          providerLabel: route.offering.providerLabel,
+        });
+      } catch { /* best-effort */ }
       res.write(`event: error\ndata: ${JSON.stringify({ error: errorMsg })}\n\n`);
     } finally {
       route.release();

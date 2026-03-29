@@ -3,7 +3,7 @@
 // Replaces duplicated routing logic in chat.ts and api-proxy.ts.
 
 import type { CandidateOffering } from "@xllmapi/shared-types";
-import { isAvailable, recordSuccess, recordFailure } from "@xllmapi/core";
+import { isAvailable, recordSuccess, recordFailure, getBreakerState } from "@xllmapi/core";
 import { platformService } from "../services/platform-service.js";
 import {
   getConvAffinity,
@@ -72,7 +72,15 @@ async function filterAvailable(offerings: CandidateOffering[]): Promise<Candidat
     results.push(o);
   }
 
-  return results.length > 0 ? results : offerings;
+  if (results.length > 0) return results;
+
+  // All filtered out — allow half-open probes only (not open/disabled)
+  const probes = offerings.filter(o => {
+    const s = getBreakerState(o.offeringId);
+    return s.state === "closed" || s.state === "half-open";
+  });
+  // Last resort: 1 offering for probe (prefer first)
+  return probes.length > 0 ? probes : offerings.slice(0, 1);
 }
 
 // ── Offering Selection (affinity → fastest) ────────────────────────
@@ -139,6 +147,7 @@ export async function routeRequest(params: {
   messageCount: number;
 }): Promise<{
   offering: CandidateOffering;
+  candidates: CandidateOffering[];
   release: () => void;
   affinityLevel: AffinityLevel;
 }> {
@@ -164,7 +173,7 @@ export async function routeRequest(params: {
 
   const release = await queue.acquire(thresholdMs);
   if (release) {
-    return { offering, release, affinityLevel };
+    return { offering, candidates: available, release, affinityLevel };
   }
 
   // Fallback: try another offering
@@ -174,11 +183,11 @@ export async function routeRequest(params: {
     const fbQueue = getOrCreateQueue(fb.offeringId, fb.maxConcurrency ?? 10);
     const fbRelease = await fbQueue.acquire(5000);
     if (fbRelease) {
-      return { offering: fb, release: fbRelease, affinityLevel: "fallback" };
+      return { offering: fb, candidates: available, release: fbRelease, affinityLevel: "fallback" };
     }
   }
 
-  return { offering, release: () => {}, affinityLevel: "fallback" };
+  return { offering, candidates: available, release: () => {}, affinityLevel: "fallback" };
 }
 
 // ── Post-Request Feedback ──────────────────────────────────────────

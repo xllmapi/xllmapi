@@ -1018,6 +1018,7 @@ export const platformService = {
 
   recordChatSettlement: platformRepository.recordChatSettlement,
   recordSettlementFailure: platformRepository.recordSettlementFailure,
+  recordFailedRequest: platformRepository.recordFailedRequest,
 
   getAdminSettlementFailures(params: { page: number; limit: number; status?: "open" | "resolved" | "all" }) {
     return platformRepository.getAdminSettlementFailures(params);

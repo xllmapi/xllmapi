@@ -398,6 +398,8 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return null;
   },
 
+  recordFailedRequest() {},
+
   getAdminSettlements() {
     return { data: [], summary: { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 } };
   },
