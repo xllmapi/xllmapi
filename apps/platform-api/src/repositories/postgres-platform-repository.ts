@@ -3305,8 +3305,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         user_id AS "userId",
         label,
         status,
-        created_at AS "createdAt",
-        last_used_at AS "lastUsedAt"
+        created_at AS "createdAt"
       FROM node_tokens
       WHERE user_id = $1
       ORDER BY created_at DESC

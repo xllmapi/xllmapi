@@ -448,70 +448,74 @@ export async function handleAdminRoutes(
     // Merge out.log + error.log (production) or platform.log (dev)
     const prodLogs = ["/var/log/xllmapi/out.log", "/var/log/xllmapi/error.log"];
     const devLogs = ["/tmp/xllmapi-dev/platform.log"];
-    const logSets = existsSync(prodLogs[0]) ? prodLogs : devLogs;
+    const logSets = existsSync(prodLogs[0]!) ? prodLogs : devLogs;
 
-    let rawLines: string[] = [];
+    // Read lines with source tag (error.log lines default to error level)
+    const taggedLines: Array<{ line: string; source: "out" | "error" | "dev" }> = [];
     for (const p of logSets) {
-      if (existsSync(p)) {
-        try {
-          const content = readFileSync(p, "utf-8");
-          const lines = content.split("\n").filter(Boolean);
-          rawLines.push(...lines.slice(-limit * 2));
-        } catch { /* skip */ }
-      }
+      if (!existsSync(p!)) continue;
+      try {
+        const content = readFileSync(p!, "utf-8");
+        const lines = content.split("\n").filter(Boolean).slice(-limit * 3);
+        const source = p!.includes("error.log") ? "error" as const : p!.includes("out.log") ? "out" as const : "dev" as const;
+        for (const line of lines) taggedLines.push({ line, source });
+      } catch { /* skip */ }
     }
 
-    // Parse PM2 log format: "0|xllmapi  | 2026-03-30 03:27:00 +08:00: [module] message"
-    // or JSON format: {"timestamp":"...","level":"info","message":"..."}
+    // Parse and merge multi-line entries
     const PM2_RE = /^\d+\|\w+\s*\|\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+[+-]\d{2}:\d{2}):\s*(.*)/;
-    const parsed: Array<{ timestamp: string; level: string; message: string; module?: string; raw: string }> = [];
-    for (const line of rawLines) {
-      // Try JSON first
+
+    function detectLevel(msg: string, source: string): string {
+      if (source === "error") return "error";
+      if (msg.includes("error:") || msg.includes("Error:") || msg.includes("request failed")) return "error";
+      if (msg.includes("WARN") || msg.includes("warning")) return "warn";
+      return "info";
+    }
+
+    type LogEntry = { timestamp: string; level: string; message: string; module?: string; raw: string };
+    const entries: LogEntry[] = [];
+    let current: LogEntry | null = null;
+
+    for (const { line, source } of taggedLines) {
+      // Try JSON
       try {
         const obj = JSON.parse(line);
         if (obj.timestamp) {
-          parsed.push({
-            timestamp: obj.timestamp,
-            level: obj.level ?? "info",
-            message: obj.message ?? "",
-            module: obj.module ?? "",
-            raw: line,
-          });
+          if (current) entries.push(current);
+          current = { timestamp: obj.timestamp, level: obj.level ?? "info", message: obj.message ?? "", module: obj.module ?? "", raw: line };
           continue;
         }
       } catch { /* not JSON */ }
 
-      // PM2 format
+      // PM2 format — starts a new entry
       const pm2Match = line.match(PM2_RE);
       if (pm2Match) {
-        const msg = pm2Match[2];
-        // Detect level from message content
-        let lvl = "info";
-        if (msg.includes("[provider-executor]") && msg.includes("error:")) lvl = "error";
-        else if (msg.includes("provider execution failed")) lvl = "error";
-        else if (msg.includes("[server] request failed")) lvl = "error";
-        else if (msg.includes("settlement FAILED")) lvl = "error";
-        else if (msg.includes("Error:") || msg.includes("error:")) lvl = "error";
-        else if (msg.includes("WARN") || msg.includes("warning")) lvl = "warn";
-        // Extract module from [xxx]
+        if (current) entries.push(current);
+        const msg = pm2Match[2]!;
         const modMatch = msg.match(/^\[([^\]]+)\]/);
-        parsed.push({
-          timestamp: new Date(pm2Match[1]).toISOString(),
-          level: lvl,
+        current = {
+          timestamp: new Date(pm2Match[1]!).toISOString(),
+          level: detectLevel(msg, source),
           message: msg,
           module: modMatch?.[1] ?? "",
           raw: line,
-        });
+        };
         continue;
       }
 
-      // Fallback: plain line
-      if (line.trim()) {
-        parsed.push({ timestamp: "", level: "info", message: line.replace(/^\d+\|\w+\s*\|\s*/, ""), raw: line });
+      // Continuation line (no timestamp) — merge into current entry
+      if (current) {
+        current.message += "\n" + line.replace(/^\d+\|\w+\s*\|\s*/, "");
+        current.raw += "\n" + line;
+      } else if (line.trim()) {
+        // Orphan line
+        entries.push({ timestamp: "", level: source === "error" ? "error" : "info", message: line.replace(/^\d+\|\w+\s*\|\s*/, ""), raw: line });
       }
     }
+    if (current) entries.push(current);
 
-    // Sort by timestamp (merged files may be interleaved)
+    // Sort by timestamp
+    const parsed = entries;
     parsed.sort((a, b) => (a.timestamp > b.timestamp ? 1 : a.timestamp < b.timestamp ? -1 : 0));
 
     let filtered = parsed;

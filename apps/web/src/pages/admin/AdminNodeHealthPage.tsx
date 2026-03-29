@@ -77,7 +77,8 @@ export function AdminNodeHealthPage() {
 
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
-  const unhealthy = data.filter(o => o.breakerState !== "closed" || !o.enabled);
+  const unhealthy = data.filter(o => o.breakerState !== "closed" && o.enabled);
+  const stopped = data.filter(o => !o.enabled);
   const healthy = data.filter(o => o.breakerState === "closed" && o.enabled);
 
   return (
@@ -94,6 +95,15 @@ export function AdminNodeHealthPage() {
           <h2 className="text-sm font-semibold text-danger mb-3">{t("admin.nodeHealth.unhealthy")} ({unhealthy.length})</h2>
           <div className="space-y-2">
             {unhealthy.map((o) => <OfferingCard key={o.offeringId} o={o} acting={acting} onReset={handleReset} onStop={handleStop} t={t} />)}
+          </div>
+        </div>
+      )}
+
+      {stopped.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold text-text-tertiary mb-3">{t("admin.nodeHealth.stopped")} ({stopped.length})</h2>
+          <div className="space-y-2">
+            {stopped.map((o) => <OfferingCard key={o.offeringId} o={o} acting={acting} onReset={handleReset} onStop={handleStop} t={t} />)}
           </div>
         </div>
       )}
