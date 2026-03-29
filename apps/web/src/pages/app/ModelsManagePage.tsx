@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiJson, getApiKey } from "@/lib/api";
-import { formatTokens, getContextLimit, formatContextLength } from "@/lib/utils";
+import { formatTokens, getContextLimit, formatContextLength, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
@@ -1893,7 +1893,7 @@ node dist/main.js start \\
                                     <div key={cap.realModel} className="flex items-center gap-2 pl-2">
                                       <span className="text-text-tertiary text-xs">{"\u2022"}</span>
                                       <span className="font-mono text-xs text-text-primary">{cap.realModel}</span>
-                                      <span className="text-[10px] text-text-tertiary">({cap.providerType})</span>
+                                      <span className="text-[10px] text-text-tertiary">({formatProviderType(cap.providerType || "")})</span>
                                       {!alreadyPublished && (
                                         <button
                                           onClick={() => setPublishTarget({ nodeId: node.id, realModel: cap.realModel, providerType: cap.providerType })}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiJson } from "@/lib/api";
-import { formatTokens } from "@/lib/utils";
+import { formatTokens, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { FormButton } from "@/components/ui/FormButton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -148,7 +148,7 @@ export function ReviewsPage() {
                     {o.executionMode === "node" ? (
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-purple-500/10 text-purple-400">🖥️ 分布式</span>
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ {o.providerType || "平台节点"}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400">☁️ {formatProviderType(o.providerType || "")}</span>
                     )}
                     <span>&middot;</span>
                     <span>

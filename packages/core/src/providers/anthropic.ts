@@ -18,6 +18,7 @@ export async function streamAnthropic(params: {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  extraHeaders?: Record<string, string>;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
 }): Promise<StreamResult> {
@@ -41,7 +42,8 @@ export async function streamAnthropic(params: {
     headers: {
       "content-type": "application/json",
       "x-api-key": params.apiKey,
-      "anthropic-version": "2023-06-01"
+      "anthropic-version": "2023-06-01",
+      ...params.extraHeaders,
     },
     body: JSON.stringify(body),
     signal: params.signal
@@ -109,6 +111,7 @@ export async function callAnthropic(params: {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  extraHeaders?: Record<string, string>;
   signal?: AbortSignal;
 }): Promise<StreamResult> {
   const systemMessages = params.messages.filter((m) => m.role === "system");
@@ -129,7 +132,8 @@ export async function callAnthropic(params: {
     headers: {
       "content-type": "application/json",
       "x-api-key": params.apiKey,
-      "anthropic-version": "2023-06-01"
+      "anthropic-version": "2023-06-01",
+      ...params.extraHeaders,
     },
     body: JSON.stringify(body),
     signal: params.signal

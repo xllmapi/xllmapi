@@ -8,12 +8,12 @@ export const anthropicAdapter: ProviderAdapter = {
     return base.endsWith("/v1") ? `${base}/messages` : `${base}/v1/messages`;
   },
 
-  buildHeaders(apiKey: string): Record<string, string> {
+  buildHeaders(apiKey: string, defaultUserAgent?: string): Record<string, string> {
     return {
       "content-type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
-      "user-agent": "xllmapi/1.0",
+      "user-agent": defaultUserAgent || "xllmapi/1.0",
     };
   },
 

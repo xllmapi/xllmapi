@@ -207,6 +207,11 @@ type SettlementParams = {
   fixedPricePer1kInput: number;
   fixedPricePer1kOutput: number;
   responseBody?: unknown;
+  clientIp?: string;
+  clientUserAgent?: string;
+  upstreamUserAgent?: string;
+  apiKeyId?: string;
+  providerLabel?: string;
 };
 
 const getMeProfile = async (userId: string): Promise<MeProfile | null> => {
@@ -1601,6 +1606,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         ar.id AS "requestId",
         ar.logical_model AS "logicalModel",
         ar.provider,
+        ar.provider_label AS "providerLabel",
         ar.real_model AS "realModel",
         LEAST(ar.input_tokens, 2147483647)::text AS "inputTokens",
         LEAST(ar.output_tokens, 2147483647)::text AS "outputTokens",
@@ -1625,6 +1631,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         ar.id AS "requestId",
         ar.logical_model AS "logicalModel",
         ar.provider,
+        ar.provider_label AS "providerLabel",
         ar.real_model AS "realModel",
         LEAST(ar.input_tokens, 2147483647)::text AS "inputTokens",
         LEAST(ar.output_tokens, 2147483647)::text AS "outputTokens",
@@ -1854,8 +1861,11 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.context_length AS "contextLength"
       , o.execution_mode AS "executionMode"
       , o.node_id AS "nodeId"
+      , c.custom_headers AS "customHeaders"
+      , COALESCE(p.label, c.provider_label) AS "providerLabel"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN provider_presets p ON RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%' AND p.provider_type = c.provider_type
       WHERE o.logical_model = $1 AND o.enabled = TRUE AND o.review_status = 'approved' AND (c.status = 'active' OR o.credential_id IS NULL)
       ORDER BY o.id ASC
     `, [logicalModel]);
@@ -1885,10 +1895,13 @@ export const postgresPlatformRepository: PlatformRepository = {
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
         c.base_url AS "baseUrl",
-        c.anthropic_base_url AS "anthropicBaseUrl"
+        c.anthropic_base_url AS "anthropicBaseUrl",
+        c.custom_headers AS "customHeaders",
+        COALESCE(p.label, c.provider_label) AS "providerLabel"
       FROM offerings o
       JOIN offering_favorites f ON f.offering_id = o.id AND f.user_id = $1
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN provider_presets p ON RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%' AND p.provider_type = c.provider_type
       WHERE o.logical_model = $2
         AND o.enabled = true
         AND o.review_status = 'approved'
@@ -1963,8 +1976,8 @@ export const postgresPlatformRepository: PlatformRepository = {
     }
     await currentPool.query(`
       INSERT INTO provider_credentials (
-        id, owner_user_id, provider_type, base_url, anthropic_base_url, encrypted_secret, api_key_env_name, status, api_key_fingerprint
-      ) VALUES ($1, $2, $3, $4, $5, $6, '', 'active', $7)
+        id, owner_user_id, provider_type, base_url, anthropic_base_url, encrypted_secret, api_key_env_name, status, api_key_fingerprint, custom_headers, provider_label
+      ) VALUES ($1, $2, $3, $4, $5, $6, '', 'active', $7, $8, $9)
     `, [
       params.id,
       params.ownerUserId,
@@ -1972,7 +1985,9 @@ export const postgresPlatformRepository: PlatformRepository = {
       normalizedBaseUrl,
       params.anthropicBaseUrl ?? null,
       encryptSecret(params.apiKey),
-      fingerprint
+      fingerprint,
+      params.customHeaders ? JSON.stringify(params.customHeaders) : null,
+      params.providerLabel ?? null
     ]);
     return {
       ok: true as const,
@@ -2279,8 +2294,9 @@ export const postgresPlatformRepository: PlatformRepository = {
       await client.query(`
         INSERT INTO api_requests (
           id, requester_user_id, logical_model, chosen_offering_id, provider, real_model,
-          input_tokens, output_tokens, total_tokens, status, idempotency_key, response_body
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11::jsonb)
+          input_tokens, output_tokens, total_tokens, status, idempotency_key, response_body,
+          client_ip, client_user_agent, upstream_user_agent, api_key_id, provider_label
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11::jsonb, $12, $13, $14, $15, $16)
       `, [
         params.requestId,
         params.requesterUserId,
@@ -2292,7 +2308,12 @@ export const postgresPlatformRepository: PlatformRepository = {
         params.outputTokens,
         params.totalTokens,
         params.idempotencyKey ?? null,
-        params.responseBody ? JSON.stringify(params.responseBody) : null
+        params.responseBody ? JSON.stringify(params.responseBody) : null,
+        params.clientIp ?? null,
+        params.clientUserAgent ?? null,
+        params.upstreamUserAgent ?? null,
+        params.apiKeyId ?? null,
+        params.providerLabel ?? null
       ]);
       await client.query("UPDATE wallets SET available_token_credit = available_token_credit - $1 WHERE user_id = $2", [consumerCost, params.requesterUserId]);
       await client.query("UPDATE wallets SET available_token_credit = available_token_credit + $1 WHERE user_id = $2", [supplierReward, params.supplierUserId]);
@@ -2681,6 +2702,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         ar.id AS "requestId",
         ar.logical_model AS "logicalModel",
         ar.provider,
+        ar.provider_label AS "providerLabel",
         ar.total_tokens AS "totalTokens",
         ar.created_at AS "createdAt",
         u.display_name AS "userName",
@@ -2740,12 +2762,14 @@ export const postgresPlatformRepository: PlatformRepository = {
     const result = await currentPool.query(`
       SELECT
         c.provider_type AS "providerType",
+        COALESCE(p.label, c.provider_label, c.provider_type) AS "providerLabel",
         COUNT(DISTINCT o.id)::text AS "offeringCount",
         COUNT(DISTINCT ar.id)::text AS "requestCount"
       FROM provider_credentials c
+      LEFT JOIN provider_presets p ON RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%' AND p.provider_type = c.provider_type
       LEFT JOIN offerings o ON o.credential_id = c.id AND o.enabled = TRUE
       LEFT JOIN api_requests ar ON ar.chosen_offering_id = o.id
-      GROUP BY c.provider_type
+      GROUP BY c.provider_type, COALESCE(p.label, c.provider_label, c.provider_type)
     `);
     return result.rows;
   },
@@ -2795,6 +2819,28 @@ export const postgresPlatformRepository: PlatformRepository = {
     return result.rows;
   },
 
+  async getAuditLogsByTargetType(targetType: string, limit: number) {
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        al.id,
+        al.action,
+        al.target_type AS "targetType",
+        al.target_id AS "targetId",
+        al.payload,
+        al.created_at AS "createdAt",
+        u.display_name AS "actorName",
+        i.email AS "actorEmail"
+      FROM audit_logs al
+      LEFT JOIN users u ON u.id = al.actor_user_id
+      LEFT JOIN user_identities i ON i.user_id = al.actor_user_id
+      WHERE al.target_type = $1
+      ORDER BY al.created_at DESC
+      LIMIT $2
+    `, [targetType, limit]);
+    return result.rows;
+  },
+
   async getAdminRequests(params: { model?: string; provider?: string; user?: string; days?: number; page: number; limit: number }) {
     await ensureDevSeed();
     const currentPool = getPool();
@@ -2839,6 +2885,8 @@ export const postgresPlatformRepository: PlatformRepository = {
           ar.total_tokens AS "totalTokens",
           ar.status,
           ar.chosen_offering_id AS "chosenOfferingId",
+          ar.client_user_agent AS "clientUserAgent",
+          ar.provider_label AS "providerLabel",
           sr.consumer_cost AS "consumerCost",
           sr.supplier_reward AS "supplierReward",
           sr.platform_margin AS "platformMargin",
@@ -2864,6 +2912,48 @@ export const postgresPlatformRepository: PlatformRepository = {
     ]);
 
     return { data: dataResult.rows, total: Number(countResult.rows[0]?.total ?? 0) };
+  },
+
+  async getAdminRequestDetail(requestId: string) {
+    const currentPool = getPool();
+    const result = await currentPool.query(`
+      SELECT
+        ar.id,
+        ar.created_at AS "createdAt",
+        ar.status,
+        ar.logical_model AS "logicalModel",
+        ar.real_model AS "realModel",
+        ar.provider,
+        ar.input_tokens AS "inputTokens",
+        ar.output_tokens AS "outputTokens",
+        ar.total_tokens AS "totalTokens",
+        ar.chosen_offering_id AS "chosenOfferingId",
+        ar.client_ip AS "clientIp",
+        ar.client_user_agent AS "clientUserAgent",
+        ar.upstream_user_agent AS "upstreamUserAgent",
+        ar.api_key_id AS "apiKeyId",
+        ar.provider_label AS "providerLabel",
+        u.display_name AS "userName",
+        i.email AS "userEmail",
+        ar.requester_user_id AS "requesterUserId",
+        sr.consumer_cost AS "consumerCost",
+        sr.supplier_reward AS "supplierReward",
+        sr.platform_margin AS "platformMargin",
+        sr.supplier_reward_rate AS "supplierRewardRate",
+        sr.created_at AS "settledAt",
+        sr.supplier_user_id AS "supplierUserId",
+        si.email AS "supplierEmail",
+        o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput"
+      FROM api_requests ar
+      LEFT JOIN users u ON u.id = ar.requester_user_id
+      LEFT JOIN user_identities i ON i.user_id = ar.requester_user_id
+      LEFT JOIN settlement_records sr ON sr.request_id = ar.id
+      LEFT JOIN user_identities si ON si.user_id = sr.supplier_user_id
+      LEFT JOIN offerings o ON o.id = ar.chosen_offering_id
+      WHERE ar.id = $1
+    `, [requestId]);
+    return result.rows[0] ?? null;
   },
 
   async getAdminSettlements(params: { days?: number; page: number; limit: number }) {
@@ -3922,12 +4012,14 @@ export const postgresPlatformRepository: PlatformRepository = {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl: string | null; models: unknown[]; enabled: boolean;
     sortOrder: number; updatedAt: string; updatedBy: string | null;
+    customHeaders: unknown | null;
   }>> {
     const pool = getPool();
     const result = await pool.query(`
       SELECT id, label, provider_type AS "providerType", base_url AS "baseUrl",
         anthropic_base_url AS "anthropicBaseUrl", models, enabled,
-        sort_order AS "sortOrder", updated_at AS "updatedAt", updated_by AS "updatedBy"
+        sort_order AS "sortOrder", updated_at AS "updatedAt", updated_by AS "updatedBy",
+        custom_headers AS "customHeaders"
       FROM provider_presets
       ORDER BY sort_order ASC, id ASC
     `);
@@ -3937,12 +4029,12 @@ export const postgresPlatformRepository: PlatformRepository = {
   async upsertProviderPreset(params: {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
-    sortOrder?: number; updatedBy?: string;
+    sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
   }): Promise<void> {
     const pool = getPool();
     await pool.query(`
-      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9)
+      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by, custom_headers)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10)
       ON CONFLICT (id) DO UPDATE SET
         label = EXCLUDED.label,
         provider_type = EXCLUDED.provider_type,
@@ -3952,10 +4044,12 @@ export const postgresPlatformRepository: PlatformRepository = {
         enabled = EXCLUDED.enabled,
         sort_order = EXCLUDED.sort_order,
         updated_at = NOW(),
-        updated_by = EXCLUDED.updated_by
+        updated_by = EXCLUDED.updated_by,
+        custom_headers = EXCLUDED.custom_headers
     `, [params.id, params.label, params.providerType, params.baseUrl,
         params.anthropicBaseUrl ?? null, JSON.stringify(params.models),
-        params.enabled ?? true, params.sortOrder ?? 0, params.updatedBy ?? null]);
+        params.enabled ?? true, params.sortOrder ?? 0, params.updatedBy ?? null,
+        params.customHeaders ? JSON.stringify(params.customHeaders) : null]);
   },
 
   async deleteProviderPreset(id: string): Promise<boolean> {

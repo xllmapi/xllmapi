@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiJson } from "@/lib/api";
-import { formatTokens } from "@/lib/utils";
+import { formatTokens, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { StatCard } from "@/components/ui/StatCard";
 import { ContributionGraph } from "@/components/ui/ContributionGraph";
@@ -28,6 +28,7 @@ interface RequestRecord {
   requestId: string;
   logicalModel: string;
   provider: string;
+  providerLabel?: string;
   realModel: string;
   inputTokens: number;
   outputTokens: number;
@@ -50,6 +51,7 @@ interface MergedRecord {
   type: "consume" | "supply";
   logicalModel: string;
   provider?: string;
+  providerLabel?: string;
   realModel?: string;
   inputTokens: number;
   outputTokens: number;
@@ -165,6 +167,7 @@ export function OverviewPage() {
     type: "consume" as const,
     logicalModel: r.logicalModel,
     provider: r.provider,
+    providerLabel: r.providerLabel,
     realModel: r.realModel,
     inputTokens: Number(r.inputTokens),
     outputTokens: Number(r.outputTokens),
@@ -181,6 +184,7 @@ export function OverviewPage() {
         type: "supply",
         logicalModel: s.logicalModel,
         provider: s.provider,
+        providerLabel: s.providerLabel,
         realModel: s.realModel,
         inputTokens: Number(s.inputTokens),
         outputTokens: Number(s.outputTokens),
@@ -226,8 +230,8 @@ export function OverviewPage() {
   for (const s of supplyModelItems) {
     const key = s.logicalModel;
     const row = modelMap.get(key) ?? { logicalModel: key, cTokens: 0, sTokens: 0, cRequests: 0, sRequests: 0, cInput: 0, sInput: 0, cOutput: 0, sOutput: 0 };
-    row.sTokens = Number(s.totalTokens); row.sRequests = Number(s.requestCount);
-    row.sInput = Number(s.inputTokens); row.sOutput = Number(s.outputTokens);
+    row.sTokens += Number(s.totalTokens); row.sRequests += Number(s.requestCount);
+    row.sInput += Number(s.inputTokens); row.sOutput += Number(s.outputTokens);
     modelMap.set(key, row);
   }
   const mergedModels = [...modelMap.values()];
@@ -295,7 +299,7 @@ export function OverviewPage() {
       key: "provider",
       header: "Provider",
       className: "text-xs text-text-tertiary",
-      render: (r) => r.type === "supply" ? t("overview.viewSupply") : (r.provider ?? "—"),
+      render: (r) => r.type === "supply" ? t("overview.viewSupply") : formatProviderType(r.provider ?? "", r.providerLabel),
     },
   ];
 
@@ -415,8 +419,8 @@ export function OverviewPage() {
 
           {/* Color legend */}
           <div className="flex items-center gap-2 text-[10px] text-text-tertiary">
-            <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-3 rounded-full bg-amber-300/50" />消费</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-3 rounded-full bg-emerald-400/60" />供应</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-3 rounded-full bg-amber-300/50" />{t("overview.consumed")}</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-3 rounded-full bg-emerald-400/60" />{t("overview.supply")}</span>
           </div>
 
           {/* Active filter badge */}

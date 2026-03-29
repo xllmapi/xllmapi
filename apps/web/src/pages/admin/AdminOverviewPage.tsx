@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiJson } from "@/lib/api";
-import { formatNumber, formatTokens } from "@/lib/utils";
+import { formatNumber, formatTokens, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { StatCard } from "@/components/ui/StatCard";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -12,6 +12,7 @@ interface RecentRequest {
   requestId: string;
   logicalModel: string;
   provider: string;
+  providerLabel?: string;
   totalTokens: number;
   createdAt: string;
   userName: string;
@@ -20,6 +21,7 @@ interface RecentRequest {
 
 interface ProviderInfo {
   providerType: string;
+  providerLabel?: string;
   offeringCount: number;
   requestCount: number;
 }
@@ -86,7 +88,7 @@ export function AdminOverviewPage() {
     {
       key: "provider",
       header: t("admin.overview.provider"),
-      render: (r) => <span className="text-text-secondary text-xs">{r.provider}</span>,
+      render: (r) => <span className="text-text-secondary text-xs">{formatProviderType(r.provider, r.providerLabel)}</span>,
     },
     {
       key: "totalTokens",
@@ -156,11 +158,11 @@ export function AdminOverviewPage() {
             ) : (
               providers.map((p) => (
                 <div
-                  key={p.providerType}
+                  key={p.providerLabel || p.providerType}
                   className="rounded-[var(--radius-card)] border border-line bg-panel p-4"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-sm">{p.providerType}</span>
+                    <span className="font-medium text-sm">{p.providerLabel || formatProviderType(p.providerType)}</span>
                     <Badge variant={p.requestCount > 0 ? "success" : "default"}>
                       {p.requestCount > 0 ? "active" : "idle"}
                     </Badge>

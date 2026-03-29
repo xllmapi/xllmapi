@@ -284,7 +284,9 @@ export async function handleProviderRoutes(
       providerType: resolvedProviderType,
       baseUrl: resolvedBaseUrl,
       anthropicBaseUrl: providerPreset?.anthropicBaseUrl,
-      apiKey: body.apiKey
+      apiKey: body.apiKey,
+      customHeaders: providerPreset?.customHeaders ?? null,
+      providerLabel: providerPreset?.label ?? null
     });
     if (created && typeof created === "object" && "ok" in created && created.ok === false) {
       const response = json(created.code === "duplicate_provider_key" ? 409 : 400, {

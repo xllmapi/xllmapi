@@ -386,8 +386,16 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return [];
   },
 
+  getAuditLogsByTargetType() {
+    return [];
+  },
+
   getAdminRequests() {
     return { data: [], total: 0 };
+  },
+
+  getAdminRequestDetail() {
+    return null;
   },
 
   getAdminSettlements() {

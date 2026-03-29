@@ -15,6 +15,7 @@ import {
 } from "../lib/http.js";
 import { metricsService } from "../metrics.js";
 import { platformService } from "../services/platform-service.js";
+import { platformRepository } from "../repositories/index.js";
 
 export async function handleAdminRoutes(
   req: IncomingMessage,
@@ -256,6 +257,30 @@ export async function handleAdminRoutes(
     const user = url.searchParams.get("user") || undefined;
     const result = await platformService.getAdminRequests({ model, provider, user, days, page, limit });
     const response = json(200, { requestId, ...result });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // GET /v1/admin/requests/:id — request detail
+  const requestDetailMatch = url.pathname.match(/^\/v1\/admin\/requests\/([^/]+)$/);
+  if (req.method === "GET" && requestDetailMatch && url.pathname !== "/v1/admin/requests") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const reqId = decodeURIComponent(requestDetailMatch[1]);
+    const detail = await platformRepository.getAdminRequestDetail(reqId);
+    if (!detail) {
+      const response = json(404, { error: { code: "not_found", message: "request not found", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const response = json(200, { ok: true, data: detail, requestId });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
@@ -514,6 +539,24 @@ export async function handleAdminRoutes(
     return true;
   }
 
+  // GET /v1/admin/provider-presets/audit-log
+  if (req.method === "GET" && url.pathname === "/v1/admin/provider-presets/audit-log") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
+    const currentPool = (await import("../repositories/index.js")).platformRepository;
+    const result = await currentPool.getAuditLogsByTargetType("provider_preset", limit);
+    const response = json(200, { ok: true, data: result, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   // PUT /v1/admin/provider-presets/:id  &  DELETE /v1/admin/provider-presets/:id
   const presetMatch = url.pathname.match(/^\/v1\/admin\/provider-presets\/([^/]+)$/);
 
@@ -526,7 +569,7 @@ export async function handleAdminRoutes(
       return true;
     }
     const presetId = decodeURIComponent(presetMatch[1]);
-    const body = await read_json<{ label: string; providerType: string; baseUrl: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number }>(req);
+    const body = await read_json<{ label: string; providerType: string; baseUrl: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown }>(req);
     await platformService.upsertProviderPreset({
       id: presetId,
       label: body.label,
@@ -537,6 +580,11 @@ export async function handleAdminRoutes(
       enabled: body.enabled,
       sortOrder: body.sortOrder,
       updatedBy: auth.userId,
+      customHeaders: body.customHeaders ?? null,
+    });
+    await platformRepository.writeAuditLog({
+      actorUserId: auth.userId, action: "update", targetType: "provider_preset", targetId: presetId,
+      payload: { label: body.label, providerType: body.providerType, baseUrl: body.baseUrl },
     });
     const response = json(200, { ok: true, requestId });
     res.writeHead(response.statusCode, response.headers);
@@ -553,7 +601,7 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const body = await read_json<{ id?: string; label?: string; providerType?: string; baseUrl?: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number }>(req);
+    const body = await read_json<{ id?: string; label?: string; providerType?: string; baseUrl?: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown }>(req);
     if (!body.id || !body.label || !body.providerType || !body.baseUrl) {
       const response = json(400, { error: { code: "invalid_request", message: "id, label, providerType, and baseUrl are required", requestId } });
       res.writeHead(response.statusCode, response.headers);
@@ -570,6 +618,11 @@ export async function handleAdminRoutes(
       enabled: body.enabled ?? true,
       sortOrder: body.sortOrder ?? 0,
       updatedBy: auth.userId,
+      customHeaders: body.customHeaders ?? null,
+    });
+    await platformRepository.writeAuditLog({
+      actorUserId: auth.userId, action: "create", targetType: "provider_preset", targetId: body.id,
+      payload: { label: body.label, providerType: body.providerType, baseUrl: body.baseUrl },
     });
     const response = json(201, { ok: true, requestId });
     res.writeHead(response.statusCode, response.headers);
@@ -586,7 +639,14 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const deleted = await platformService.deleteProviderPreset(decodeURIComponent(presetMatch[1]));
+    const presetIdToDelete = decodeURIComponent(presetMatch[1]);
+    const deleted = await platformService.deleteProviderPreset(presetIdToDelete);
+    if (deleted) {
+      await platformRepository.writeAuditLog({
+        actorUserId: auth.userId, action: "delete", targetType: "provider_preset", targetId: presetIdToDelete,
+        payload: {},
+      });
+    }
     const response = json(deleted ? 200 : 404, { ok: deleted, requestId });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);

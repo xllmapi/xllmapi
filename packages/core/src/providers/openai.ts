@@ -22,6 +22,7 @@ export async function streamOpenAI(params: {
   tools?: unknown[];
   toolChoice?: unknown;
   extraBody?: Record<string, unknown>;
+  extraHeaders?: Record<string, string>;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
   onRawChunk?: (parsed: Record<string, unknown>) => void;
@@ -46,7 +47,8 @@ export async function streamOpenAI(params: {
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${params.apiKey}`,
-      "user-agent": "claude-code/1.0"
+      "user-agent": "claude-code/1.0",
+      ...params.extraHeaders,
     },
     body: JSON.stringify(body),
     signal: params.signal
@@ -125,6 +127,7 @@ export async function callOpenAI(params: {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  extraHeaders?: Record<string, string>;
   signal?: AbortSignal;
 }): Promise<StreamResult> {
   const base2 = params.baseUrl.replace(/\/+$/, "");
@@ -143,7 +146,8 @@ export async function callOpenAI(params: {
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${params.apiKey}`,
-      "user-agent": "claude-code/1.0"
+      "user-agent": "claude-code/1.0",
+      ...params.extraHeaders,
     },
     body: JSON.stringify(body),
     signal: params.signal

@@ -26,6 +26,7 @@ export interface ExecuteRequestPayload {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
+  extraHeaders?: Record<string, string>;
 }
 
 export interface UsageInfo {
@@ -164,6 +165,7 @@ async function executeOpenAIRequest(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': 'claude-code/1.0',
+    ...payload.extraHeaders,
   };
   if (provider.apiKey) {
     headers['Authorization'] = `Bearer ${provider.apiKey}`;

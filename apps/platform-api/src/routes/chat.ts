@@ -16,6 +16,7 @@ import {
   authenticate_session_only_,
   unauthorized_,
   has_legacy_model_prefix_,
+  get_request_ip_,
   type CreateConversationBody,
   type StreamConversationBody
 } from "../lib/http.js";
@@ -329,6 +330,7 @@ export async function handleChatRoutes(
         messages: mappedBody.messages,
         temperature: mappedBody.temperature,
         maxTokens: mappedBody.max_tokens,
+        clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
         onSseWrite: (chunk) => { res.write(chunk); }
       });
 
@@ -357,7 +359,11 @@ export async function handleChatRoutes(
           outputTokens: result.usage.outputTokens,
           totalTokens: result.usage.totalTokens,
           fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
-          fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0
+          fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0,
+          clientIp: get_request_ip_(req),
+          clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+          upstreamUserAgent: result.upstreamUserAgent,
+          providerLabel: result.chosenOffering.providerLabel,
         });
       } catch (err) {
         metricsService.increment("settlementFailures");
