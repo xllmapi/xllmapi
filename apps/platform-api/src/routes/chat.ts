@@ -340,7 +340,7 @@ export async function handleChatRoutes(
         conversationId,
         userId: auth.userId,
         logicalModel,
-        offeringId: route.offering.offeringId,
+        offeringId: result.chosenOffering.offeringId,
         messageCount,
         latencyMs: result.timing.totalMs
       });
@@ -365,6 +365,7 @@ export async function handleChatRoutes(
           clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
           upstreamUserAgent: result.upstreamUserAgent,
           providerLabel: result.chosenOffering.providerLabel,
+          responseBody: result.failedAttempts ? { fallbackAttempts: result.failedAttempts } : undefined,
         });
       } catch (err) {
         metricsService.increment("settlementFailures");
