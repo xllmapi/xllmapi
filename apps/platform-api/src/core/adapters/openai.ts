@@ -8,11 +8,11 @@ export const openaiAdapter: ProviderAdapter = {
     return base.endsWith("/v1") ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
   },
 
-  buildHeaders(apiKey: string): Record<string, string> {
+  buildHeaders(apiKey: string, defaultUserAgent?: string): Record<string, string> {
     return {
       "content-type": "application/json",
       "authorization": `Bearer ${apiKey}`,
-      "user-agent": "xllmapi/1.0",
+      "user-agent": defaultUserAgent || "xllmapi/1.0",
     };
   },
 

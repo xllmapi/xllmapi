@@ -1,5 +1,15 @@
 export type PricingMode = "free" | "fixed_price" | "market_auto";
 
+export interface CustomHeaderRule {
+  value: string;
+  mode: "force" | "fallback";
+}
+
+export interface CustomHeadersConfig {
+  headers?: Record<string, CustomHeaderRule>;
+  passthrough?: boolean;
+}
+
 export interface CandidateOffering {
   offeringId: string;
   ownerUserId: string;
@@ -23,4 +33,6 @@ export interface CandidateOffering {
   nodeId?: string;
   dailyTokenLimit?: number;
   maxConcurrency?: number;
+  customHeaders?: CustomHeadersConfig;
+  providerLabel?: string;
 }

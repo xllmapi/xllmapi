@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiJson } from "@/lib/api";
-import { formatNumber } from "@/lib/utils";
+import { formatNumber, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FormInput } from "@/components/ui/FormInput";
@@ -30,6 +30,7 @@ interface ProviderPreset {
   models: PresetModel[];
   enabled: boolean;
   sortOrder: number;
+  customHeaders: unknown | null;
 }
 
 type Tab = "presets" | "status";
@@ -45,20 +46,8 @@ const EMPTY_PRESET: ProviderPreset = {
   models: [],
   enabled: true,
   sortOrder: 0,
+  customHeaders: null,
 };
-
-function formatProviderType(t: (k: string) => string, type: string): string {
-  switch (type) {
-    case "openai_compatible":
-      return t("admin.providers.formatBoth");
-    case "openai":
-      return t("admin.providers.formatOpenai");
-    case "anthropic":
-      return t("admin.providers.formatAnthropic");
-    default:
-      return type;
-  }
-}
 
 /* ---------- Presets Tab ---------- */
 
@@ -71,6 +60,7 @@ function PresetsTab() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [modelsText, setModelsText] = useState("");
+  const [customHeadersText, setCustomHeadersText] = useState("");
 
   const loadPresets = useCallback(async () => {
     try {
@@ -90,6 +80,7 @@ function PresetsTab() {
   const openCreate = () => {
     setEditing({ ...EMPTY_PRESET });
     setModelsText("[]");
+    setCustomHeadersText("");
     setIsNew(true);
     setMessage(null);
   };
@@ -97,6 +88,7 @@ function PresetsTab() {
   const openEdit = (preset: ProviderPreset) => {
     setEditing({ ...preset });
     setModelsText(JSON.stringify(preset.models, null, 2));
+    setCustomHeadersText(preset.customHeaders ? JSON.stringify(preset.customHeaders, null, 2) : "");
     setIsNew(false);
     setMessage(null);
   };
@@ -119,7 +111,17 @@ function PresetsTab() {
         setSaving(false);
         return;
       }
-      const body = { ...editing, models };
+      let customHeaders: unknown = null;
+      if (customHeadersText.trim()) {
+        try {
+          customHeaders = JSON.parse(customHeadersText);
+        } catch {
+          setMessage({ type: "error", text: "Invalid JSON for custom headers" });
+          setSaving(false);
+          return;
+        }
+      }
+      const body = { ...editing, models, customHeaders };
       if (isNew) {
         await apiJson("/v1/admin/provider-presets", {
           method: "POST",
@@ -246,6 +248,21 @@ function PresetsTab() {
           />
         </div>
 
+        {/* custom headers JSON */}
+        <div className="mb-4">
+          <label className="text-text-secondary text-xs block mb-1.5">
+            Custom Headers (JSON)
+          </label>
+          <textarea
+            value={customHeadersText}
+            onChange={(e) => setCustomHeadersText(e.target.value)}
+            rows={4}
+            placeholder='{"headers":{"user-agent":{"value":"claude-code/1.0","mode":"fallback"}},"passthrough":true}'
+            className="w-full rounded-[var(--radius-input)] border border-line bg-[rgba(16,21,34,0.6)] px-4 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent transition-colors font-mono"
+          />
+          <p className="text-text-tertiary text-[10px] mt-1">mode: &quot;force&quot; | &quot;fallback&quot;. Placeholder: $CLIENT_USER_AGENT</p>
+        </div>
+
         <div className="flex gap-3">
           <FormButton onClick={() => void handleSave()} disabled={saving}>
             {saving ? t("common.loading") : t("admin.providers.presetSave")}
@@ -274,7 +291,7 @@ function PresetsTab() {
       key: "providerType",
       header: t("admin.providers.presetType"),
       render: (p) => (
-        <span className="text-xs text-text-secondary">{formatProviderType(t, p.providerType)}</span>
+        <span className="text-xs text-text-secondary">{formatProviderType(p.providerType)}</span>
       ),
     },
     {
@@ -360,7 +377,7 @@ function StatusTab() {
     {
       key: "providerType",
       header: t("admin.providers.type"),
-      render: (p) => <span className="font-medium">{p.providerType}</span>,
+      render: (p) => <span className="font-medium">{formatProviderType(p.providerType)}</span>,
     },
     {
       key: "status",
@@ -400,6 +417,76 @@ function StatusTab() {
   );
 }
 
+/* ---------- Audit Log ---------- */
+
+interface AuditEntry {
+  id: number;
+  action: string;
+  targetId: string;
+  payload: { label?: string; providerType?: string; baseUrl?: string };
+  createdAt: string;
+  actorName: string | null;
+  actorEmail: string | null;
+}
+
+const ACTION_LABELS: Record<string, { zh: string; color: string }> = {
+  create: { zh: "新增", color: "text-emerald-400" },
+  update: { zh: "修改", color: "text-amber-300" },
+  delete: { zh: "删除", color: "text-red-400" },
+};
+
+function PresetAuditLog() {
+  const [logs, setLogs] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiJson<{ data: AuditEntry[] }>("/v1/admin/provider-presets/audit-log?limit=20")
+      .then((r) => setLogs(r.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || logs.length === 0) return null;
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-sm font-semibold mb-3 text-text-secondary">变更记录</h2>
+      <div className="rounded-[var(--radius-card)] border border-line bg-panel overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-line bg-[rgba(16,21,34,0.5)]">
+              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">时间</th>
+              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">操作</th>
+              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">供应商</th>
+              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">详情</th>
+              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">操作人</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => {
+              const a = ACTION_LABELS[log.action] ?? { zh: log.action, color: "text-text-secondary" };
+              return (
+                <tr key={log.id} className="border-b border-line/50 last:border-b-0">
+                  <td className="px-4 py-2.5 text-text-tertiary whitespace-nowrap">
+                    {new Date(log.createdAt).toLocaleString()}
+                  </td>
+                  <td className={`px-4 py-2.5 font-medium ${a.color}`}>{a.zh}</td>
+                  <td className="px-4 py-2.5 font-mono text-text-primary">{log.targetId}</td>
+                  <td className="px-4 py-2.5 text-text-secondary">
+                    {log.payload?.label && <span>{log.payload.label}</span>}
+                    {log.payload?.baseUrl && <span className="ml-2 text-text-tertiary">{log.payload.baseUrl}</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-text-secondary">{log.actorName || log.actorEmail || "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Main Page ---------- */
 
 export function ProvidersPage() {
@@ -434,6 +521,9 @@ export function ProvidersPage() {
 
       {tab === "presets" && <PresetsTab />}
       {tab === "status" && <StatusTab />}
+
+      {/* Audit log */}
+      <PresetAuditLog />
     </div>
   );
 }

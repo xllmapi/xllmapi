@@ -1,4 +1,4 @@
-import type { CandidateOffering, ChatMessage } from "@xllmapi/shared-types";
+import type { CandidateOffering, ChatMessage, CustomHeadersConfig } from "@xllmapi/shared-types";
 import { decryptSecret } from "../crypto-utils.js";
 import {
   isAvailable,
@@ -13,6 +13,27 @@ import {
 } from "@xllmapi/core";
 
 const limiter = new ConcurrencyLimiter(32);
+
+// ── Default proxy User-Agent (from platform_config, cached 60s) ──
+let _cachedDefaultUA: string | null = null;
+let _cachedDefaultUAAt = 0;
+const DEFAULT_UA_CACHE_MS = 60_000;
+const FALLBACK_UA = "xllmapi/1.0";
+
+async function getDefaultProxyUA(): Promise<string> {
+  if (_cachedDefaultUA && Date.now() - _cachedDefaultUAAt < DEFAULT_UA_CACHE_MS) {
+    return _cachedDefaultUA;
+  }
+  try {
+    const { platformService } = await import('../services/platform-service.js');
+    const val = await platformService.getConfigValue("default_proxy_user_agent");
+    _cachedDefaultUA = (val && typeof val === "string" && val.trim()) ? val.trim() : FALLBACK_UA;
+  } catch {
+    _cachedDefaultUA = FALLBACK_UA;
+  }
+  _cachedDefaultUAAt = Date.now();
+  return _cachedDefaultUA;
+}
 
 // ── Per-offering concurrency tracking ──
 const activeConcurrency = new Map<string, number>();
@@ -49,6 +70,7 @@ export interface ProviderResult {
   usage: { inputTokens: number; outputTokens: number; totalTokens: number };
   timing: { totalMs: number };
   finishReason: string;
+  upstreamUserAgent?: string;
 }
 
 function resolveApiKey(offering: CandidateOffering): string {
@@ -109,6 +131,54 @@ function resolveEndpoint(offering: CandidateOffering, clientFormat: ApiFormatId)
   return { targetFormat: "anthropic", baseUrl: resolveBaseUrl(offering) };
 }
 
+// ── Upstream header resolution ──
+
+/** Check if a User-Agent looks like a coding agent (not a browser) */
+function isCodingAgentUA(ua: string): boolean {
+  // Browsers send Mozilla/5.0... or similar long UA strings
+  // Coding agents send short identifiers like "claude-code/1.0", "roo-code/1.2", "kilo-code/1.0"
+  return !ua.startsWith("Mozilla/") && !ua.includes("AppleWebKit") && !ua.includes("Chrome/");
+}
+
+export function resolveUpstreamHeaders(
+  adapterHeaders: Record<string, string>,
+  customHeaders: CustomHeadersConfig | undefined,
+  clientUserAgent?: string
+): Record<string, string> {
+  const headers = { ...adapterHeaders };
+  const agentUA = clientUserAgent && isCodingAgentUA(clientUserAgent) ? clientUserAgent : undefined;
+
+  // No config: default to transparent passthrough of coding agent UA
+  if (!customHeaders) {
+    if (agentUA) headers["user-agent"] = agentUA;
+    return headers;
+  }
+
+  // Apply per-header rules
+  if (customHeaders.headers) {
+    for (const [name, rule] of Object.entries(customHeaders.headers)) {
+      const resolvedValue = rule.value === "$CLIENT_USER_AGENT"
+        ? (agentUA ?? "claude-code/1.0")
+        : rule.value;
+
+      if (rule.mode === "force") {
+        headers[name] = resolvedValue;
+      } else if (rule.mode === "fallback") {
+        // Use coding agent UA if available, otherwise use configured fallback
+        const clientValue = name === "user-agent" ? agentUA : undefined;
+        headers[name] = clientValue || resolvedValue;
+      }
+    }
+  }
+
+  // Passthrough: forward coding agent UA if not already handled by a rule
+  if (customHeaders.passthrough !== false && agentUA && !customHeaders.headers?.["user-agent"]) {
+    headers["user-agent"] = agentUA;
+  }
+
+  return headers;
+}
+
 /**
  * Proxy an API request to the best available offering.
  * Supports OpenAI and Anthropic formats, with automatic format routing:
@@ -123,13 +193,15 @@ export async function proxyApiRequest(params: {
   body: Record<string, unknown>;
   /** Client-side API format: "openai" for /chat/completions, "anthropic" for /messages */
   clientFormat: ApiFormatId;
+  clientUserAgent?: string;
   signal?: AbortSignal;
   writeHead: (status: number, headers: Record<string, string>) => void;
   res: import("node:http").ServerResponse;
-}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage }> {
+}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage; upstreamUserAgent?: string }> {
   const available = params.offerings.filter((o) => isAvailable(o.offeringId));
   const candidates = available.length > 0 ? available : params.offerings;
   const isStreaming = params.body.stream === true;
+  const defaultUA = await getDefaultProxyUA();
 
   // Sort offerings: prefer those with a matching endpoint for the client format
   const sorted = [...candidates].sort((a, b) => {
@@ -160,7 +232,11 @@ export async function proxyApiRequest(params: {
 
       // Build request
       const url = adapter.buildUrl(baseUrl);
-      const headers = adapter.buildHeaders(apiKey);
+      const headers = resolveUpstreamHeaders(
+        adapter.buildHeaders(apiKey, defaultUA),
+        offering.customHeaders,
+        params.clientUserAgent
+      );
 
       // If client format differs from target, convert the body
       const rawBody = (params.clientFormat === targetFormat)
@@ -256,7 +332,7 @@ export async function proxyApiRequest(params: {
         }
       }
 
-      return { chosenOffering: offering, usage };
+      return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"] };
     } catch (err) {
       recordFailure(offering.offeringId);
       lastError = err;
@@ -288,11 +364,13 @@ export async function executeStreamingRequest(params: {
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
+  clientUserAgent?: string;
   signal?: AbortSignal;
   onSseWrite: (chunk: string) => void;
 }): Promise<ProviderResult> {
   const available = params.offerings.filter((o) => isAvailable(o.offeringId));
   const candidates = available.length > 0 ? available : params.offerings;
+  const defaultUA = await getDefaultProxyUA();
 
   // Shuffle for balanced routing
   const shuffled = [...candidates].sort(() => Math.random() - 0.5);
@@ -324,6 +402,13 @@ export async function executeStreamingRequest(params: {
           throw new Error('Node is offline');
         }
 
+        // Resolve custom headers for node dispatch
+        const nodeExtraHeaders = resolveUpstreamHeaders(
+          { "user-agent": defaultUA },
+          offering.customHeaders,
+          params.clientUserAgent
+        );
+
         const nodeResult = await nodeConnectionManager.dispatch(
           offering.nodeId,
           params.requestId,
@@ -333,6 +418,7 @@ export async function executeStreamingRequest(params: {
             temperature: params.temperature,
             maxTokens: params.maxTokens,
             stream: true,
+            extraHeaders: nodeExtraHeaders,
           },
           params.onSseWrite
         );
@@ -370,12 +456,25 @@ export async function executeStreamingRequest(params: {
           usage: nodeResult.usage,
           timing: { totalMs: Date.now() - startTime },
           finishReason: nodeResult.finishReason,
+          upstreamUserAgent: nodeExtraHeaders["user-agent"],
         };
       }
 
       const apiKey = resolveApiKey(offering);
       const baseUrl = resolveBaseUrl(offering);
       const isAnthropic = offering.providerType === "anthropic";
+
+      // Resolve custom headers for this offering
+      const baseHeaders: Record<string, string> = { "user-agent": defaultUA };
+      const extraHeaders = resolveUpstreamHeaders(baseHeaders, offering.customHeaders, params.clientUserAgent);
+      // Pass all resolved headers as extraHeaders to core functions (overrides their hardcoded defaults)
+      const extraHeadersForCore: Record<string, string> = {};
+      for (const [k, v] of Object.entries(extraHeaders)) {
+        if (k !== "content-type" && k !== "authorization" && k !== "x-api-key" && k !== "anthropic-version") {
+          extraHeadersForCore[k] = v;
+        }
+      }
+      const hasExtraHeaders = Object.keys(extraHeadersForCore).length > 0;
 
       const result = await withRetry(
         async () => {
@@ -386,6 +485,7 @@ export async function executeStreamingRequest(params: {
               messages: params.messages,
               temperature: params.temperature,
               maxTokens: params.maxTokens,
+              extraHeaders: hasExtraHeaders ? extraHeadersForCore : undefined,
               signal: params.signal,
               onDelta(text) {
                 // Write OpenAI-compatible SSE format to client
@@ -403,6 +503,7 @@ export async function executeStreamingRequest(params: {
               messages: params.messages,
               temperature: params.temperature,
               maxTokens: params.maxTokens,
+              extraHeaders: hasExtraHeaders ? extraHeadersForCore : undefined,
               signal: params.signal,
               onDelta(text) {
                 const chunk = {
@@ -448,7 +549,8 @@ export async function executeStreamingRequest(params: {
         content: result.content,
         usage: result.usage,
         timing: { totalMs: Date.now() - startTime },
-        finishReason: result.finishReason
+        finishReason: result.finishReason,
+        upstreamUserAgent: extraHeaders["user-agent"],
       };
     } catch (err) {
       recordFailure(offering.offeringId);

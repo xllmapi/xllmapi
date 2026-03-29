@@ -17,6 +17,7 @@ type ProviderPreset = {
   anthropicBaseUrl?: string;
   logicalModel: string;
   realModel: string;
+  customHeaders?: unknown | null;
 };
 
 const PROVIDER_PRESETS: ProviderPreset[] = [
@@ -297,6 +298,7 @@ export const platformService = {
               anthropicBaseUrl: p.anthropicBaseUrl ?? undefined,
               logicalModel: m.logicalModel,
               realModel: m.realModel,
+              customHeaders: p.customHeaders ?? null,
             });
           }
         }
@@ -320,7 +322,7 @@ export const platformService = {
   async upsertProviderPreset(params: {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
-    sortOrder?: number; updatedBy?: string;
+    sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
   }) {
     return platformRepository.upsertProviderPreset(params);
   },
@@ -870,6 +872,8 @@ export const platformService = {
     baseUrl?: string;
     anthropicBaseUrl?: string;
     apiKey: string;
+    customHeaders?: unknown | null;
+    providerLabel?: string | null;
   }) {
     return platformRepository.createProviderCredential(params);
   },

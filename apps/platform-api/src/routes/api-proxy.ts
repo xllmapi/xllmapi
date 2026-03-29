@@ -22,6 +22,7 @@ import {
   read_json,
   authenticate_request_,
   unauthorized_,
+  get_request_ip_,
 } from "../lib/http.js";
 import { metricsService } from "../metrics.js";
 import { platformService } from "../services/platform-service.js";
@@ -35,7 +36,7 @@ async function validateApiRequest(
   res: ServerResponse,
   requestId: string,
   model: string
-): Promise<{ userId: string; offerings: CandidateOffering[] } | null> {
+): Promise<{ userId: string; offerings: CandidateOffering[]; apiKeyId?: string } | null> {
   const auth = await authenticate_request_(req);
   if (!auth) {
     metricsService.increment("authFailures");
@@ -85,7 +86,7 @@ async function validateApiRequest(
     return null;
   }
 
-  return { userId: auth.userId, offerings };
+  return { userId: auth.userId, offerings, apiKeyId: "apiKeyId" in auth ? (auth as { apiKeyId?: string }).apiKeyId : undefined };
 }
 
 // ── Core proxy + settlement logic ───────────────────────────────────
@@ -107,6 +108,7 @@ async function handleProxyRequest(
       offerings: validated.offerings,
       body,
       clientFormat,
+      clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
       writeHead: (status, headers) => res.writeHead(status, headers),
       res,
     });
@@ -125,6 +127,11 @@ async function handleProxyRequest(
         totalTokens: result.usage.totalTokens,
         fixedPricePer1kInput: result.chosenOffering.fixedPricePer1kInput ?? 0,
         fixedPricePer1kOutput: result.chosenOffering.fixedPricePer1kOutput ?? 0,
+        clientIp: get_request_ip_(req),
+        clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+        upstreamUserAgent: result.upstreamUserAgent,
+        apiKeyId: validated.apiKeyId,
+        providerLabel: result.chosenOffering.providerLabel,
       });
     } catch (settlementErr) {
       metricsService.increment("settlementFailures");

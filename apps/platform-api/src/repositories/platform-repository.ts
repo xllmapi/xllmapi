@@ -175,6 +175,8 @@ export type PlatformRepository = {
     baseUrl?: string;
     anthropicBaseUrl?: string;
     apiKey: string;
+    customHeaders?: unknown | null;
+    providerLabel?: string | null;
   }): MaybePromise<any>;
   updateProviderCredentialStatus(params: {
     ownerUserId: string;
@@ -238,6 +240,11 @@ export type PlatformRepository = {
     fixedPricePer1kInput: number;
     fixedPricePer1kOutput: number;
     responseBody?: unknown;
+    clientIp?: string;
+    clientUserAgent?: string;
+    upstreamUserAgent?: string;
+    apiKeyId?: string;
+    providerLabel?: string;
   }): MaybePromise<void>;
   recordSettlementFailure(params: {
     requestId: string;
@@ -314,6 +321,7 @@ export type PlatformRepository = {
   getConfigValue(key: string): MaybePromise<string | null>;
   updateAdminConfig(key: string, value: string, updatedBy: string): MaybePromise<any>;
   getAdminAuditLogs(limit: number): MaybePromise<any[]>;
+  getAuditLogsByTargetType(targetType: string, limit: number): MaybePromise<any[]>;
   getAdminRequests(params: {
     model?: string;
     provider?: string;
@@ -322,6 +330,7 @@ export type PlatformRepository = {
     page: number;
     limit: number;
   }): MaybePromise<{ data: any[]; total: number }>;
+  getAdminRequestDetail(requestId: string): MaybePromise<any>;
   getAdminSettlements(params: {
     days?: number;
     page: number;
@@ -411,11 +420,12 @@ export type PlatformRepository = {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl: string | null; models: unknown[]; enabled: boolean;
     sortOrder: number; updatedAt: string; updatedBy: string | null;
+    customHeaders: unknown | null;
   }>>;
   upsertProviderPreset(params: {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
-    sortOrder?: number; updatedBy?: string;
+    sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
   }): MaybePromise<void>;
   deleteProviderPreset(id: string): MaybePromise<boolean>;
 

@@ -34,6 +34,9 @@ const CONFIG_GROUPS: Record<string, string[]> = {
     "default_input_price_per_1k",
     "default_output_price_per_1k",
   ],
+  proxy: [
+    "default_proxy_user_agent",
+  ],
 };
 
 export function SettingsPage() {
@@ -126,6 +129,7 @@ export function SettingsPage() {
       {renderGroup(t("admin.settings.economy"), CONFIG_GROUPS.economy!)}
       {renderGroup(t("admin.settings.pricing"), CONFIG_GROUPS.pricing!)}
       {renderGroup(t("admin.settings.nodeDefaults"), CONFIG_GROUPS.nodeDefaults!)}
+      {renderGroup(t("admin.settings.proxy"), CONFIG_GROUPS.proxy!)}
 
       {otherConfigs.length > 0 &&
         renderGroup(

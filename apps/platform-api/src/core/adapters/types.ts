@@ -19,8 +19,8 @@ export interface ProviderAdapter {
   /** Build the full request URL from a base URL */
   buildUrl(baseUrl: string): string;
 
-  /** Build auth + content-type headers */
-  buildHeaders(apiKey: string): Record<string, string>;
+  /** Build auth + content-type headers. defaultUserAgent overrides the built-in fallback. */
+  buildHeaders(apiKey: string, defaultUserAgent?: string): Record<string, string>;
 
   /** Transform request body: swap model, clamp limits, etc. No format conversion. */
   prepareBody(body: Record<string, unknown>, realModel: string): Record<string, unknown>;

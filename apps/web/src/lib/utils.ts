@@ -59,3 +59,14 @@ export function escapeHtml(str: string): string {
   };
   return str.replace(/[&<>"']/g, (c) => map[c] ?? c);
 }
+
+/** Format provider type for display. Prefers providerLabel if available. */
+export function formatProviderType(type: string, label?: string | null): string {
+  if (label) return label;
+  switch (type) {
+    case "openai_compatible": return "OpenAI Compatible";
+    case "openai": return "OpenAI";
+    case "anthropic": return "Anthropic";
+    default: return type;
+  }
+}

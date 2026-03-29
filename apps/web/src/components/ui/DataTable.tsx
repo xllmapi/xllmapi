@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 export interface Column<T> {
   key: string;
@@ -14,9 +14,12 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string;
   emptyText?: string;
   rowClassName?: (row: T) => string;
+  onRowClick?: (row: T) => void;
+  activeRowKey?: string | null;
+  renderExpanded?: (row: T) => ReactNode | null;
 }
 
-export function DataTable<T>({ columns, data, rowKey, emptyText, rowClassName }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, rowKey, emptyText, rowClassName, onRowClick, activeRowKey, renderExpanded }: DataTableProps<T>) {
   if (data.length === 0) {
     return (
       <div className="rounded-[var(--radius-card)] border border-line bg-panel px-6 py-12 text-center">
@@ -43,20 +46,39 @@ export function DataTable<T>({ columns, data, rowKey, emptyText, rowClassName }:
           </tr>
         </thead>
         <tbody>
-          {data.map((row) => (
-            <tr key={rowKey(row)} className={`border-b border-line/50 last:border-b-0 hover:bg-accent-bg/30 transition-colors ${rowClassName?.(row) ?? ""}`}>
-              {columns.map((col) => (
-                <td
-                  key={col.key}
-                  className={`px-4 py-3 ${col.align === "right" ? "text-right" : ""} ${col.className ?? ""}`}
+          {data.map((row) => {
+            const key = rowKey(row);
+            const isActive = activeRowKey === key;
+            const expanded = renderExpanded?.(row);
+            return (
+              <Fragment key={key}>
+                <tr
+                  className={`border-b border-line/50 transition-colors ${
+                    onRowClick ? "cursor-pointer" : ""
+                  } ${isActive ? "bg-accent-bg/20" : "hover:bg-accent-bg/30"} ${rowClassName?.(row) ?? ""}`}
+                  onClick={() => onRowClick?.(row)}
                 >
-                  {col.render
-                    ? col.render(row)
-                    : String((row as Record<string, unknown>)[col.key] ?? "")}
-                </td>
-              ))}
-            </tr>
-          ))}
+                  {columns.map((col) => (
+                    <td
+                      key={col.key}
+                      className={`px-4 py-3 ${col.align === "right" ? "text-right" : ""} ${col.className ?? ""}`}
+                    >
+                      {col.render
+                        ? col.render(row)
+                        : String((row as Record<string, unknown>)[col.key] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+                {expanded && (
+                  <tr className="border-b border-line/50">
+                    <td colSpan={columns.length} className="p-0">
+                      {expanded}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -1755,7 +1755,7 @@ export const list_offerings_for_model = (logicalModel: string): OfferingRow[] =>
       AND o.owner_user_id NOT LIKE '%_demo'
     ORDER BY o.id ASC
   `).all(logicalModel).map((row) => {
-    const typedRow = row as OfferingDbRow;
+    const typedRow = row as unknown as OfferingDbRow;
     return {
       ...typedRow,
       encryptedSecret: typedRow.encryptedSecret ?? undefined,
