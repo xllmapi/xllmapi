@@ -212,6 +212,9 @@ type SettlementParams = {
   upstreamUserAgent?: string;
   apiKeyId?: string;
   providerLabel?: string;
+  clientFormat?: string;
+  upstreamFormat?: string;
+  formatConverted?: boolean;
 };
 
 const getMeProfile = async (userId: string): Promise<MeProfile | null> => {
@@ -2295,8 +2298,9 @@ export const postgresPlatformRepository: PlatformRepository = {
         INSERT INTO api_requests (
           id, requester_user_id, logical_model, chosen_offering_id, provider, real_model,
           input_tokens, output_tokens, total_tokens, status, idempotency_key, response_body,
-          client_ip, client_user_agent, upstream_user_agent, api_key_id, provider_label
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11::jsonb, $12, $13, $14, $15, $16)
+          client_ip, client_user_agent, upstream_user_agent, api_key_id, provider_label,
+          client_format, upstream_format, format_converted
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11::jsonb, $12, $13, $14, $15, $16, $17, $18, $19)
       `, [
         params.requestId,
         params.requesterUserId,
@@ -2313,7 +2317,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         params.clientUserAgent ?? null,
         params.upstreamUserAgent ?? null,
         params.apiKeyId ?? null,
-        params.providerLabel ?? null
+        params.providerLabel ?? null,
+        params.clientFormat ?? null,
+        params.upstreamFormat ?? null,
+        params.formatConverted ?? null
       ]);
       await client.query("UPDATE wallets SET available_token_credit = available_token_credit - $1 WHERE user_id = $2", [consumerCost, params.requesterUserId]);
       await client.query("UPDATE wallets SET available_token_credit = available_token_credit + $1 WHERE user_id = $2", [supplierReward, params.supplierUserId]);
@@ -2933,6 +2940,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         ar.upstream_user_agent AS "upstreamUserAgent",
         ar.api_key_id AS "apiKeyId",
         ar.provider_label AS "providerLabel",
+        ar.response_body AS "responseBody",
+        ar.client_format AS "clientFormat",
+        ar.upstream_format AS "upstreamFormat",
+        ar.format_converted AS "formatConverted",
         u.display_name AS "userName",
         i.email AS "userEmail",
         ar.requester_user_id AS "requesterUserId",

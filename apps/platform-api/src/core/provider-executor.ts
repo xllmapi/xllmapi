@@ -217,7 +217,7 @@ export async function proxyApiRequest(params: {
   signal?: AbortSignal;
   writeHead: (status: number, headers: Record<string, string>) => void;
   res: import("node:http").ServerResponse;
-}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage; upstreamUserAgent?: string; failedAttempts?: FailedAttempt[] }> {
+}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage; upstreamUserAgent?: string; failedAttempts?: FailedAttempt[]; targetFormat?: string }> {
   const available = params.offerings.filter((o) => isAvailable(o.offeringId));
   const candidates = available.length > 0 ? available : params.offerings;
   const isStreaming = params.body.stream === true;
@@ -356,7 +356,7 @@ export async function proxyApiRequest(params: {
         }
       }
 
-      return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"], failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined };
+      return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"], failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined, targetFormat };
     } catch (err) {
       recordFailure(offering.offeringId, "transient", err instanceof Error ? err.message : "");
       lastError = err;

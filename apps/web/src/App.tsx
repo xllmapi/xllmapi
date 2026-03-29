@@ -70,6 +70,7 @@ const AdminSettlementsPage = lazy(() => import("@/pages/admin/AdminSettlementsPa
 const AdminSettlementFailuresPage = lazy(() => import("@/pages/admin/AdminSettlementFailuresPage").then((m) => ({ default: m.AdminSettlementFailuresPage })));
 const AdminNodeHealthPage = lazy(() => import("@/pages/admin/AdminNodeHealthPage").then((m) => ({ default: m.AdminNodeHealthPage })));
 const AdminLogsPage = lazy(() => import("@/pages/admin/AdminLogsPage").then((m) => ({ default: m.AdminLogsPage })));
+const AdminReleasesPage = lazy(() => import("@/pages/admin/AdminReleasesPage").then((m) => ({ default: m.AdminReleasesPage })));
 const AdminAuditPage = lazy(() => import("@/pages/admin/AdminAuditPage").then((m) => ({ default: m.AdminAuditPage })));
 const AdminBannerPage = lazy(() => import("@/pages/admin/AdminBannerPage").then((m) => ({ default: m.AdminBannerPage })));
 const ModelsManagePage = lazy(() => import("@/pages/app/ModelsManagePage").then((m) => ({ default: m.ModelsManagePage })));
@@ -153,6 +154,7 @@ export function App() {
             <Route path="settlement-failures" element={<AdminSettlementFailuresPage />} />
             <Route path="audit" element={<AdminAuditPage />} />
             <Route path="banner" element={<AdminBannerPage />} />
+            <Route path="releases" element={<AdminReleasesPage />} />
           </Route>
         </Routes>
         </Suspense>

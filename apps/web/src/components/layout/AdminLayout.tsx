@@ -47,6 +47,7 @@ export function AdminLayout() {
         <SidebarLink to="/admin/node-health" label={t("admin.sidebar.nodeHealth")} />
         <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
         <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
+        <SidebarLink to="/admin/releases" label={t("admin.sidebar.releases")} />
         <SidebarLink to="/admin/banner" label={t("admin.sidebar.banner")} />
         <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
         <SidebarLink to="/admin/email-deliveries" label={t("admin.sidebar.emailDeliveries")} />
@@ -81,6 +82,7 @@ export function AdminLayout() {
             <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
             <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
             <SidebarLink to="/admin/logs" label={t("admin.sidebar.logs")} />
+            <SidebarLink to="/admin/releases" label={t("admin.sidebar.releases")} />
             <SidebarLink to="/admin/banner" label={t("admin.sidebar.banner")} />
             <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
             <SidebarLink to="/admin/email-deliveries" label={t("admin.sidebar.emailDeliveries")} />
