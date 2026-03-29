@@ -159,8 +159,19 @@ async function handleProxyRequest(
     }
   } catch (err) {
     metricsService.increment("coreErrors");
+    const errorMsg = err instanceof Error ? err.message : "provider execution failed";
+    // Record failed request for admin visibility
+    try {
+      await platformService.recordFailedRequest({
+        requestId,
+        requesterUserId: validated.userId,
+        logicalModel: model,
+        errorMessage: errorMsg,
+        clientIp: get_request_ip_(req),
+        clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+      });
+    } catch { /* best-effort */ }
     if (!res.headersSent) {
-      const errorMsg = err instanceof Error ? err.message : "provider execution failed";
       const response = json(502, { error: { message: errorMsg, requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);

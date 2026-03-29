@@ -4,15 +4,28 @@ import {
   isAvailable,
   recordSuccess,
   recordFailure,
+  checkAutoDisable,
   ConcurrencyLimiter,
   withRetry,
   streamOpenAI,
   callOpenAI,
   streamAnthropic,
   callAnthropic,
+  type ErrorClass,
 } from "@xllmapi/core";
 
 const limiter = new ConcurrencyLimiter(32);
+
+/** Classify HTTP error into circuit breaker error class */
+export function classifyError(status: number, body: string): ErrorClass {
+  if (status === 401) return "fatal";
+  if (status === 403) {
+    if (body.includes("usage limit") || body.includes("quota") || body.includes("billing")) return "degraded";
+    if (body.includes("only available for") || body.includes("access_terminated")) return "fatal";
+    return "degraded";
+  }
+  return "transient"; // 429, 5xx, network errors
+}
 
 // ── Default proxy User-Agent (from platform_config, cached 60s) ──
 let _cachedDefaultUA: string | null = null;
@@ -254,7 +267,9 @@ export async function proxyApiRequest(params: {
 
       if (!resp.ok) {
         const errText = await resp.text().catch(() => "");
-        recordFailure(offering.offeringId);
+        const errClass = classifyError(resp.status, errText);
+        recordFailure(offering.offeringId, errClass, errText);
+        checkAutoDisable(offering.offeringId);
         lastError = new Error(`provider returned ${resp.status}: ${errText}`);
         continue;
       }
@@ -334,7 +349,7 @@ export async function proxyApiRequest(params: {
 
       return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"] };
     } catch (err) {
-      recordFailure(offering.offeringId);
+      recordFailure(offering.offeringId, "transient", err instanceof Error ? err.message : "");
       lastError = err;
       console.error(`[proxy] offering=${offering.offeringId} provider=${offering.providerType} error:`, err instanceof Error ? err.message : err);
     } finally {
@@ -361,6 +376,7 @@ export async function proxyApiRequest(params: {
 export async function executeStreamingRequest(params: {
   requestId: string;
   offerings: CandidateOffering[];
+  preferredOfferingId?: string;
   messages: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
@@ -372,11 +388,16 @@ export async function executeStreamingRequest(params: {
   const candidates = available.length > 0 ? available : params.offerings;
   const defaultUA = await getDefaultProxyUA();
 
-  // Shuffle for balanced routing
-  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+  // Preferred offering first, then shuffle rest
+  const ordered = params.preferredOfferingId
+    ? [
+        ...candidates.filter(o => o.offeringId === params.preferredOfferingId),
+        ...candidates.filter(o => o.offeringId !== params.preferredOfferingId).sort(() => Math.random() - 0.5),
+      ]
+    : [...candidates].sort(() => Math.random() - 0.5);
 
   let lastError: unknown;
-  for (const offering of shuffled) {
+  for (const offering of ordered) {
     // Check daily token limit
     if (offering.dailyTokenLimit && offering.dailyTokenLimit > 0) {
       const exceeded = await isDailyLimitExceeded(offering.offeringId, offering.dailyTokenLimit);
@@ -553,7 +574,12 @@ export async function executeStreamingRequest(params: {
         upstreamUserAgent: extraHeaders["user-agent"],
       };
     } catch (err) {
-      recordFailure(offering.offeringId);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      // Parse "provider returned {status}: {body}" to classify
+      const statusMatch = errMsg.match(/returned (\d+):/);
+      const errClass = statusMatch ? classifyError(Number(statusMatch[1]), errMsg) : "transient";
+      recordFailure(offering.offeringId, errClass, errMsg);
+      checkAutoDisable(offering.offeringId);
       lastError = err;
       console.error(`[provider-executor] offering=${offering.offeringId} provider=${offering.providerType} error:`, err);
       // Try next offering
@@ -671,7 +697,11 @@ export async function executeRequest(params: {
         finishReason: result.finishReason
       };
     } catch (err) {
-      recordFailure(offering.offeringId);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const statusMatch = errMsg.match(/returned (\d+):/);
+      const errClass = statusMatch ? classifyError(Number(statusMatch[1]), errMsg) : "transient";
+      recordFailure(offering.offeringId, errClass, errMsg);
+      checkAutoDisable(offering.offeringId);
       lastError = err;
       console.error(`[provider-executor] offering=${offering.offeringId} provider=${offering.providerType} error:`, err);
     } finally {

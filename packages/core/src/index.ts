@@ -1,4 +1,8 @@
-export { isAvailable, recordSuccess, recordFailure } from './resilience/circuit-breaker.js';
+export {
+  isAvailable, recordSuccess, recordFailure,
+  getHealthWeight, getBreakerState, getAllBreakerStates, resetBreaker, checkAutoDisable,
+  type ErrorClass, type BreakerState,
+} from './resilience/circuit-breaker.js';
 export { withRetry, isRetryableError, isRetryableStatus } from './resilience/retry.js';
 export { ConcurrencyLimiter } from './executor/concurrency-limiter.js';
 export { parseSseStream } from './providers/sse-parser.js';

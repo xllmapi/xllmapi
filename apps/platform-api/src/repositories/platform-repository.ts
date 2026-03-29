@@ -331,6 +331,18 @@ export type PlatformRepository = {
     limit: number;
   }): MaybePromise<{ data: any[]; total: number }>;
   getAdminRequestDetail(requestId: string): MaybePromise<any>;
+  recordFailedRequest(params: {
+    requestId: string;
+    requesterUserId: string;
+    logicalModel: string;
+    offeringId?: string;
+    provider?: string;
+    realModel?: string;
+    errorMessage: string;
+    clientIp?: string;
+    clientUserAgent?: string;
+    providerLabel?: string;
+  }): MaybePromise<void>;
   getAdminSettlements(params: {
     days?: number;
     page: number;

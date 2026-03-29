@@ -2956,6 +2956,40 @@ export const postgresPlatformRepository: PlatformRepository = {
     return result.rows[0] ?? null;
   },
 
+  async recordFailedRequest(params: {
+    requestId: string;
+    requesterUserId: string;
+    logicalModel: string;
+    offeringId?: string;
+    provider?: string;
+    realModel?: string;
+    errorMessage: string;
+    clientIp?: string;
+    clientUserAgent?: string;
+    providerLabel?: string;
+  }) {
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO api_requests (
+        id, requester_user_id, logical_model, chosen_offering_id, provider, real_model,
+        input_tokens, output_tokens, total_tokens, status,
+        client_ip, client_user_agent, response_body, provider_label
+      ) VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 0, 'error', $7, $8, $9::jsonb, $10)
+      ON CONFLICT (id) DO NOTHING
+    `, [
+      params.requestId,
+      params.requesterUserId,
+      params.logicalModel,
+      params.offeringId ?? null,
+      params.provider ?? null,
+      params.realModel ?? null,
+      params.clientIp ?? null,
+      params.clientUserAgent ?? null,
+      JSON.stringify({ error: params.errorMessage }),
+      params.providerLabel ?? null,
+    ]);
+  },
+
   async getAdminSettlements(params: { days?: number; page: number; limit: number }) {
     await ensureDevSeed();
     const currentPool = getPool();
