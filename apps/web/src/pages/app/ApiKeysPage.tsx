@@ -4,6 +4,7 @@ import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
 import { Badge } from "@/components/ui/Badge";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface ApiKeyRecord {
   id: string;
@@ -52,6 +53,7 @@ export function ApiKeysPage() {
   // Test state per credential
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; message: string }>>({});
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const fetchKeys = useCallback(async () => {
     try {
@@ -124,14 +126,14 @@ export function ApiKeysPage() {
       return next;
     });
     try {
-      const res = await apiJson<{ ok: boolean; status?: string; message?: string }>(
+      const res = await apiJson<{ ok: boolean; data: { ok: boolean; status?: string; message?: string } }>(
         `/v1/provider-credentials/${credId}/test`,
         { method: "POST" },
       );
-      if (res.ok !== false) {
+      if (res.data?.ok !== false) {
         setTestResult((prev) => ({ ...prev, [credId]: { ok: true, message: t("apiKeys.testOk") } }));
       } else {
-        setTestResult((prev) => ({ ...prev, [credId]: { ok: false, message: res.message ?? t("apiKeys.testFail") } }));
+        setTestResult((prev) => ({ ...prev, [credId]: { ok: false, message: res.data?.message ?? t("apiKeys.testFail") } }));
       }
       fetchCredentials();
     } catch (err: unknown) {
@@ -141,8 +143,7 @@ export function ApiKeysPage() {
     }
   };
 
-  const handleDeleteCredential = async (credId: string) => {
-    if (!confirm(t("apiKeys.deleteKeyConfirm"))) return;
+  const executeDeleteCredential = async (credId: string) => {
     try {
       await apiJson(`/v1/provider-credentials/${credId}?cascade=true`, { method: "DELETE" });
       fetchCredentials();
@@ -157,6 +158,8 @@ export function ApiKeysPage() {
         return <Badge variant="success">{t("apiKeys.active")}</Badge>;
       case "disabled":
         return <Badge variant="default">{t("modelsMgmt.status.stopped")}</Badge>;
+      case "deleted":
+        return <Badge variant="danger">{t("apiKeys.statusDeleted")}</Badge>;
       case "invalid":
         return <Badge variant="danger">{t("apiKeys.invalid")}</Badge>;
       case "quota_exceeded":
@@ -324,7 +327,7 @@ export function ApiKeysPage() {
                             {testingId === cred.id ? t("apiKeys.testing") : t("apiKeys.test")}
                           </button>
                           <button
-                            onClick={() => void handleDeleteCredential(cred.id)}
+                            onClick={() => setDeleteConfirmId(cred.id)}
                             className="text-xs text-danger hover:text-danger/80 transition-colors"
                           >
                             {t("apiKeys.deleteKey")}
@@ -381,6 +384,18 @@ export function ApiKeysPage() {
           </table>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirmId !== null}
+        onCancel={() => setDeleteConfirmId(null)}
+        onConfirm={() => {
+          if (deleteConfirmId) void executeDeleteCredential(deleteConfirmId);
+          setDeleteConfirmId(null);
+        }}
+        title={t("apiKeys.deleteKeyTitle")}
+        description={t("apiKeys.deleteKeyWarning")}
+        countdown={5}
+      />
     </div>
   );
 }

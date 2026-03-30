@@ -901,6 +901,7 @@ export const platformService = {
     const cred = await platformRepository.getProviderCredential(userId, credentialId);
     if (!cred) return { ok: false, status: "not_found", message: "credential not found" };
     if (!cred.hasEncryptedSecret) return { ok: false, status: "no_key", message: "no encrypted key stored" };
+    if (cred.status === "deleted") return { ok: false, status: "deleted", message: "credential has been deleted" };
 
     try {
       const { decryptSecret } = await import("../crypto-utils.js");
@@ -912,7 +913,7 @@ export const platformService = {
       });
       // Update credential status based on result
       const newStatus = result.ok ? "active" : "invalid";
-      if (cred.status !== newStatus) {
+      if (cred.status !== newStatus && cred.status !== "deleted") {
         await platformRepository.updateProviderCredentialStatus({
           ownerUserId: userId, credentialId, status: newStatus as "active" | "disabled"
         });

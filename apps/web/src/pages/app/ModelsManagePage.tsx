@@ -6,6 +6,7 @@ import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { Badge } from "@/components/ui/Badge";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Link } from "react-router-dom";
 import { invalidateUserModels } from "@/hooks/useUserModels";
 
@@ -896,6 +897,7 @@ function ProvidingTab() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [togglingId, setTogglingId] = useState("");
+  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
 
   // ── Node data ──
   const [tokens, setTokens] = useState<NodeToken[]>([]);
@@ -1226,8 +1228,7 @@ function ProvidingTab() {
     }
   };
 
-  const handleArchiveOffering = async (offeringId: string) => {
-    if (!confirm(t("modelsMgmt.stopConfirm"))) return;
+  const executeArchiveOffering = async (offeringId: string) => {
     setTogglingId(offeringId);
     try {
       await apiJson(`/v1/offerings/${encodeURIComponent(offeringId)}/archive`, {
@@ -1744,6 +1745,15 @@ node dist/main.js start \\
                         {t("modelsMgmt.publishToNetwork")}
                       </button>
                     )}
+                    {!enabled && !o.archivedAt && (
+                      <button
+                        onClick={() => setArchiveConfirmId(o.id)}
+                        disabled={togglingId === o.id}
+                        className="rounded-[var(--radius-btn)] px-3 py-1.5 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
+                      >
+                        {togglingId === o.id ? "..." : t("modelsMgmt.stopNode")}
+                      </button>
+                    )}
                     <button
                       onClick={() => !enabled ? setConfigOffering(o) : undefined}
                       disabled={enabled}
@@ -1767,15 +1777,6 @@ node dist/main.js start \\
                     >
                       {togglingId === o.id ? "..." : enabled ? t("network.stop") : t("network.start")}
                     </button>
-                    {!enabled && !o.archivedAt && (
-                      <button
-                        onClick={() => void handleArchiveOffering(o.id)}
-                        disabled={togglingId === o.id}
-                        className="rounded-[var(--radius-btn)] px-3 py-1.5 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
-                      >
-                        {togglingId === o.id ? "..." : t("modelsMgmt.stopNode")}
-                      </button>
-                    )}
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-line flex flex-wrap gap-x-6 gap-y-1 text-xs">
@@ -2127,6 +2128,19 @@ node dist/main.js start \\
           t={t}
         />
       )}
+
+      <ConfirmDialog
+        open={archiveConfirmId !== null}
+        onCancel={() => setArchiveConfirmId(null)}
+        onConfirm={() => {
+          if (archiveConfirmId) void executeArchiveOffering(archiveConfirmId);
+          setArchiveConfirmId(null);
+        }}
+        title={t("modelsMgmt.stopNodeTitle")}
+        description={t("modelsMgmt.stopNodeWarning")}
+        countdown={5}
+        variant="warning"
+      />
     </div>
   );
 }
