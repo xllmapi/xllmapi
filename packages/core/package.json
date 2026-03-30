@@ -9,13 +9,15 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test src/**/__tests__/*.test.ts"
   },
   "dependencies": {
     "@xllmapi/shared-types": "0.1.0",
     "@xllmapi/logger": "0.1.0"
   },
   "devDependencies": {
+    "tsx": "^4.20.3",
     "typescript": "^5.7.3"
   }
 }

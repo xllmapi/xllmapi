@@ -138,6 +138,65 @@ test("routeRequest: multiple offerings, one in cooldown → routes to available 
   resetBreaker("cool_off_b");
 });
 
+// ── resolveOfferings: price filtering ─────────────────────────────
+
+test("resolveOfferings: maxInputPrice filters expensive offerings", async (t) => {
+  const offerings = [
+    makeOffering({ offeringId: "cheap_in", fixedPricePer1kInput: 0.005 }),
+    makeOffering({ offeringId: "mid_in", fixedPricePer1kInput: 0.01 }),
+    makeOffering({ offeringId: "expensive_in", fixedPricePer1kInput: 0.05 }),
+  ];
+
+  t.mock.method(platformService, "listConnectionPool", async () => []);
+  t.mock.method(platformService, "findOfferingsForModel", async () => offerings);
+  t.mock.method(platformService, "getUserModelConfig", async () => ({ maxInputPrice: 0.01 }));
+
+  const result = await resolveOfferings("deepseek-chat", "user_1");
+  assert.equal(result.length, 2);
+  const ids = result.map(o => o.offeringId);
+  assert.ok(ids.includes("cheap_in"));
+  assert.ok(ids.includes("mid_in"));
+  assert.ok(!ids.includes("expensive_in"));
+});
+
+test("resolveOfferings: maxOutputPrice filters expensive offerings", async (t) => {
+  const offerings = [
+    makeOffering({ offeringId: "cheap_out", fixedPricePer1kOutput: 0.002 }),
+    makeOffering({ offeringId: "mid_out", fixedPricePer1kOutput: 0.01 }),
+    makeOffering({ offeringId: "expensive_out", fixedPricePer1kOutput: 0.08 }),
+  ];
+
+  t.mock.method(platformService, "listConnectionPool", async () => []);
+  t.mock.method(platformService, "findOfferingsForModel", async () => offerings);
+  t.mock.method(platformService, "getUserModelConfig", async () => ({ maxOutputPrice: 0.01 }));
+
+  const result = await resolveOfferings("deepseek-chat", "user_1");
+  assert.equal(result.length, 2);
+  const ids = result.map(o => o.offeringId);
+  assert.ok(ids.includes("cheap_out"));
+  assert.ok(ids.includes("mid_out"));
+  assert.ok(!ids.includes("expensive_out"));
+});
+
+test("resolveOfferings: no price config → no filtering", async (t) => {
+  const offerings = [
+    makeOffering({ offeringId: "any_1", fixedPricePer1kInput: 0.5, fixedPricePer1kOutput: 0.8 }),
+    makeOffering({ offeringId: "any_2", fixedPricePer1kInput: 1.0, fixedPricePer1kOutput: 2.0 }),
+  ];
+
+  t.mock.method(platformService, "listConnectionPool", async () => []);
+  t.mock.method(platformService, "findOfferingsForModel", async () => offerings);
+  t.mock.method(platformService, "getUserModelConfig", async () => null);
+
+  const result = await resolveOfferings("deepseek-chat", "user_1");
+  assert.equal(result.length, 2);
+  const ids = result.map(o => o.offeringId);
+  assert.ok(ids.includes("any_1"));
+  assert.ok(ids.includes("any_2"));
+});
+
+// ── filterAvailable / routeRequest: cooldown behavior (continued) ─
+
 test("routeRequest: offering in half-open state → allowed as probe", async (t) => {
   _resetQueuesForTest();
 

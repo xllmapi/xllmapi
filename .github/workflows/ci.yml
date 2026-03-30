@@ -82,6 +82,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://xllmapi:xllmapi@127.0.0.1:5432/xllmapi
 
+      - name: Unit tests (core)
+        run: npx tsx --test --test-force-exit --test-timeout 30000 packages/core/src/**/__tests__/*.test.ts
+
       - name: Unit tests (platform-api)
         run: npx tsx --test --test-force-exit --test-timeout 30000 apps/platform-api/src/tests/*.test.ts
         env:
