@@ -187,6 +187,10 @@ export type PlatformRepository = {
     ownerUserId: string;
     credentialId: string;
   }): MaybePromise<any>;
+  deleteProviderCredentialCascade(params: {
+    ownerUserId: string;
+    credentialId: string;
+  }): MaybePromise<any>;
   listOfferings(userId: string): MaybePromise<any>;
   listPendingOfferings(): MaybePromise<any>;
   createOffering(params: {
@@ -216,6 +220,11 @@ export type PlatformRepository = {
   removeOffering(params: {
     ownerUserId: string;
     offeringId: string;
+  }): MaybePromise<any>;
+  archiveOffering(params: {
+    ownerUserId: string;
+    offeringId: string;
+    reason: string;
   }): MaybePromise<any>;
   reviewOffering(params: {
     offeringId: string;

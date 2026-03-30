@@ -42,6 +42,8 @@ interface Offering {
   maxConcurrency?: number;
   nodeId?: string;
   contextLength?: number;
+  archivedAt?: string | null;
+  archiveReason?: string | null;
 }
 
 interface SupplyUsageItem {
@@ -1223,6 +1225,22 @@ function ProvidingTab() {
     }
   };
 
+  const handleArchiveOffering = async (offeringId: string) => {
+    if (!confirm(t("modelsMgmt.stopConfirm"))) return;
+    setTogglingId(offeringId);
+    try {
+      await apiJson(`/v1/offerings/${encodeURIComponent(offeringId)}/archive`, {
+        method: "POST",
+        body: JSON.stringify({ reason: "user_stopped" }),
+      });
+      await loadData();
+    } catch (err: unknown) {
+      setError(extractError(err));
+    } finally {
+      setTogglingId("");
+    }
+  };
+
   const getUsageForOffering = (offeringId: string): SupplyUsageItem | undefined => {
     return supplyUsage.find((u) => u.offeringId === offeringId);
   };
@@ -1665,8 +1683,10 @@ node dist/main.js start \\
         </div>
       ) : (
         (() => {
-          const activeOfferings = offerings.filter((o) => isOfferingActive(o, nodes));
-          const inactiveOfferings = offerings.filter((o) => !isOfferingActive(o, nodes));
+          const nonArchived = offerings.filter((o) => !o.archivedAt);
+          const archivedOfferings = offerings.filter((o) => !!o.archivedAt);
+          const activeOfferings = nonArchived.filter((o) => isOfferingActive(o, nodes));
+          const inactiveOfferings = nonArchived.filter((o) => !isOfferingActive(o, nodes));
 
           const renderOfferingCard = (o: Offering, isInactive: boolean) => {
             const usage = getUsageForOffering(o.id);
@@ -1746,6 +1766,15 @@ node dist/main.js start \\
                     >
                       {togglingId === o.id ? "..." : enabled ? t("network.stop") : t("network.start")}
                     </button>
+                    {!enabled && !o.archivedAt && (
+                      <button
+                        onClick={() => void handleArchiveOffering(o.id)}
+                        disabled={togglingId === o.id}
+                        className="rounded-[var(--radius-btn)] px-3 py-1.5 text-xs font-medium cursor-pointer border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 bg-transparent transition-colors disabled:opacity-50"
+                      >
+                        {togglingId === o.id ? "..." : t("modelsMgmt.stopNode")}
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-line flex flex-wrap gap-x-6 gap-y-1 text-xs">
@@ -1819,6 +1848,75 @@ node dist/main.js start \\
                   </h3>
                   <div className="flex flex-col gap-3">
                     {inactiveOfferings.map((o) => renderOfferingCard(o, true))}
+                  </div>
+                </div>
+              )}
+
+              {/* Archived (history) offerings */}
+              {archivedOfferings.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-text-tertiary mb-3">
+                    {t("modelsMgmt.history")} ({archivedOfferings.length})
+                  </h3>
+                  <div className="flex flex-col gap-3">
+                    {archivedOfferings.map((o) => {
+                      const usage = getUsageForOffering(o.id);
+                      const isL3 = o.executionMode === "node" || o.executionMode === "local";
+                      const reasonKey: Record<string, string> = {
+                        user_stopped: "modelsMgmt.stoppedByUser",
+                        key_deleted: "modelsMgmt.stoppedByKeyDelete",
+                        admin_stopped: "modelsMgmt.stoppedByAdmin",
+                        auto_disabled: "modelsMgmt.stoppedAuto",
+                      };
+                      const reasonText = o.archiveReason ? t(reasonKey[o.archiveReason] ?? o.archiveReason) : "";
+
+                      return (
+                        <div
+                          key={o.id}
+                          className="rounded-[var(--radius-card)] border border-line bg-panel p-5 opacity-50"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2.5 mb-2">
+                                <span className="font-mono text-sm font-medium text-text-tertiary line-through">{o.logicalModel}</span>
+                                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-panel border border-line font-medium text-text-tertiary">
+                                  {t("modelsMgmt.status.stopped")}
+                                </span>
+                                {isL3 ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400/50 font-medium">{"\u{1F5A5}\uFE0F"}</span>
+                                ) : (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400/50 font-medium">{"\u2601\uFE0F"}</span>
+                                )}
+                                {reasonText && (
+                                  <span className="text-[10px] text-text-tertiary">{reasonText}</span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-tertiary">
+                                <span>{t("network.realModel")}: <span className="font-mono">{o.realModel}</span></span>
+                                <span>{t("network.created")}: {new Date(o.createdAt).toLocaleDateString()}</span>
+                                {o.archivedAt && (
+                                  <span>{t("modelsMgmt.history")}: {new Date(o.archivedAt).toLocaleDateString()}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-line flex gap-6 text-xs text-text-tertiary">
+                            <div>
+                              <span>{t("network.requests")}</span>
+                              <span className="ml-1.5 font-medium">{usage?.requestCount ?? 0}</span>
+                            </div>
+                            <div>
+                              <span>{t("network.tokensUsed")}</span>
+                              <span className="ml-1.5 font-medium">{formatTokens(usage?.totalTokens ?? 0)}</span>
+                            </div>
+                            <div>
+                              <span>{t("network.earned")}</span>
+                              <span className="ml-1.5 font-medium">{formatTokens(usage?.supplierReward ?? 0)} xt</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
