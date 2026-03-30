@@ -321,12 +321,29 @@ export async function proxyApiRequest(params: {
         const nodeStream = Readable.fromWeb(resp.body as import("stream/web").ReadableStream);
         const TAIL_SIZE = 4096;
         let tailBuf = "";
+        // Capture Anthropic message_start input_tokens early (before tail buffer truncates it)
+        let earlyInputTokens = 0;
 
         await new Promise<void>((resolve, reject) => {
           nodeStream.on("data", (chunk: Buffer) => {
             const str = chunk.toString();
             const lines = converter.transform(str);
             for (const line of lines) params.res.write(line);
+            // Capture input_tokens from Anthropic message_start before tail buffer overflow
+            if (earlyInputTokens === 0 && str.includes('"message_start"')) {
+              try {
+                for (const rawLine of str.split("\n")) {
+                  const trimmed = rawLine.trim();
+                  if (!trimmed.startsWith("data:")) continue;
+                  const jsonStr = trimmed.startsWith("data: ") ? trimmed.slice(6) : trimmed.slice(5);
+                  const parsed = JSON.parse(jsonStr);
+                  if (parsed.type === "message_start" && parsed.message?.usage) {
+                    const u = parsed.message.usage;
+                    earlyInputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
+                  }
+                }
+              } catch { /* ignore parse errors */ }
+            }
             tailBuf += str;
             if (tailBuf.length > TAIL_SIZE * 2) tailBuf = tailBuf.slice(-TAIL_SIZE);
           });
@@ -340,6 +357,11 @@ export async function proxyApiRequest(params: {
         });
 
         usage = adapter.extractUsageFromStream(tailBuf) ?? usage;
+        // Merge early-captured inputTokens if tail buffer lost message_start
+        if (usage.inputTokens === 0 && earlyInputTokens > 0) {
+          usage.inputTokens = earlyInputTokens;
+          usage.totalTokens = earlyInputTokens + usage.outputTokens;
+        }
       } else {
         const bodyText = await resp.text();
         if (needsConversion) {
@@ -363,6 +385,11 @@ export async function proxyApiRequest(params: {
             usage = adapter.extractUsageFromJson(parsed) ?? usage;
           } catch { /* ignore */ }
         }
+      }
+
+      // Warn when usage is zero for a successful response — may indicate billing gap
+      if (usage.totalTokens === 0) {
+        console.warn(`[proxy] WARNING: zero usage for offering=${offering.offeringId} provider=${offering.providerType} model=${offering.realModel} streaming=${isStreaming} — upstream may not report token usage`);
       }
 
       return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"], failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined, targetFormat };
