@@ -301,7 +301,7 @@ function createAnthropicToOpenaiStreamConverter(): StreamConverter {
         break;
       }
       case "content_block_delta": {
-        const delta = parsed.delta as { type?: string; text?: string } | undefined;
+        const delta = parsed.delta as { type?: string; text?: string; thinking?: string } | undefined;
         if (delta?.type === "text_delta" && delta.text) {
           results.push(formatOpenaiChunk({
             id: messageId,
@@ -309,6 +309,15 @@ function createAnthropicToOpenaiStreamConverter(): StreamConverter {
             created: Math.floor(Date.now() / 1000),
             model,
             choices: [{ index: 0, delta: { content: delta.text }, finish_reason: null }],
+          }));
+        } else if (delta?.type === "thinking_delta" && delta.thinking) {
+          // Map Anthropic thinking blocks to OpenAI reasoning_content
+          results.push(formatOpenaiChunk({
+            id: messageId,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model,
+            choices: [{ index: 0, delta: { reasoning_content: delta.thinking }, finish_reason: null }],
           }));
         }
         break;

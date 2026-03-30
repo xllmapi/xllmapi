@@ -244,3 +244,40 @@ test("undefined optional parameters not included in output", () => {
   assert.ok(!("top_p" in anthToOai));
   assert.ok(!("stop" in anthToOai));
 });
+
+// ── Thinking field preservation ──
+
+test("openai→anthropic: thinking field preserved when present", () => {
+  const body = {
+    model: "kimi-for-coding",
+    messages: [{ role: "user", content: "Hi" }],
+    thinking: { type: "enabled", budget_tokens: 2048 },
+  };
+
+  const result = convertRequestBody("openai", "anthropic", body) as any;
+  assert.deepEqual(result.thinking, { type: "enabled", budget_tokens: 2048 });
+});
+
+test("anthropic→openai: thinking field preserved when present", () => {
+  const body = {
+    model: "kimi-for-coding",
+    messages: [{ role: "user", content: "Hi" }],
+    thinking: { type: "enabled", budget_tokens: 1024 },
+  };
+
+  const result = convertRequestBody("anthropic", "openai", body) as any;
+  assert.deepEqual(result.thinking, { type: "enabled", budget_tokens: 1024 });
+});
+
+test("thinking field not included when absent", () => {
+  const body = {
+    model: "test",
+    messages: [{ role: "user", content: "Hi" }],
+  };
+
+  const oaiToAnth = convertRequestBody("openai", "anthropic", body) as any;
+  assert.ok(!("thinking" in oaiToAnth));
+
+  const anthToOai = convertRequestBody("anthropic", "openai", body) as any;
+  assert.ok(!("thinking" in anthToOai));
+});

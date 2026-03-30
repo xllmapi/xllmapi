@@ -38,6 +38,8 @@ function openaiToAnthropic(body: Record<string, unknown>): Record<string, unknow
   if (body.stream !== undefined) result.stream = body.stream;
   if (body.top_p !== undefined) result.top_p = body.top_p;
   if (body.stop !== undefined) result.stop_sequences = body.stop;
+  // Preserve thinking/reasoning fields for providers that support extended thinking
+  if (body.thinking !== undefined) result.thinking = body.thinking;
 
   return result;
 }
@@ -86,6 +88,8 @@ function anthropicToOpenai(body: Record<string, unknown>): Record<string, unknow
   if (body.stream !== undefined) result.stream = body.stream;
   if (body.top_p !== undefined) result.top_p = body.top_p;
   if (body.stop_sequences !== undefined) result.stop = body.stop_sequences;
+  // Preserve thinking/reasoning fields for providers that support extended thinking
+  if (body.thinking !== undefined) result.thinking = body.thinking;
 
   return result;
 }

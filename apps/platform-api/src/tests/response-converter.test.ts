@@ -460,3 +460,55 @@ test("OpenAI→Anthropic converter handles reasoning_content only (no regular co
   assert.ok(joined.includes("message_start"), "should have started the stream");
   assert.ok(joined.includes("message_stop"), "should have stopped the stream");
 });
+
+// ── thinking_delta in Anthropic→OpenAI ─────────────────────────
+
+test("Anthropic→OpenAI converter maps thinking_delta to reasoning_content", () => {
+  const converter = createStreamConverter("anthropic", "openai");
+
+  const events = [
+    'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_t1","type":"message","role":"assistant","model":"kimi","content":[],"usage":{"input_tokens":5,"output_tokens":0}}}\n\n',
+    'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}\n\n',
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me think..."}}\n\n',
+    'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
+    'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}\n\n',
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"The answer is 2"}}\n\n',
+    'event: content_block_stop\ndata: {"type":"content_block_stop","index":1}\n\n',
+    'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":10}}\n\n',
+    'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+  ];
+
+  const allOutput: string[] = [];
+  for (const evt of events) {
+    allOutput.push(...converter.transform(evt));
+  }
+  allOutput.push(...converter.flush());
+
+  const joined = allOutput.join("");
+  assert.ok(joined.includes("reasoning_content"), "thinking_delta should map to reasoning_content");
+  assert.ok(joined.includes("Let me think..."), "should contain thinking text");
+  assert.ok(joined.includes("The answer is 2"), "should contain regular content");
+  assert.ok(joined.includes("[DONE]"), "should end with [DONE]");
+});
+
+test("Anthropic→OpenAI converter handles thinking_delta only (no text)", () => {
+  const converter = createStreamConverter("anthropic", "openai");
+
+  const events = [
+    'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_t2","type":"message","role":"assistant","model":"test","content":[],"usage":{"input_tokens":5,"output_tokens":0}}}\n\n',
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Deep reasoning..."}}\n\n',
+    'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n',
+    'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+  ];
+
+  const allOutput: string[] = [];
+  for (const evt of events) {
+    allOutput.push(...converter.transform(evt));
+  }
+  allOutput.push(...converter.flush());
+
+  const joined = allOutput.join("");
+  assert.ok(joined.includes("reasoning_content"), "should have reasoning_content");
+  assert.ok(joined.includes("Deep reasoning..."), "should contain thinking text");
+  assert.ok(joined.includes("[DONE]"), "should end with [DONE]");
+});
