@@ -886,6 +886,7 @@ function NodePublishModal({
 function ProvidingTab() {
   const { t } = useLocale();
   const myKey = getApiKey() ?? "";
+  const platformWsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/node`;
 
   // ── Offering data ──
   const [catalog, setCatalog] = useState<ProviderPreset[]>([]);
@@ -1337,20 +1338,20 @@ cd apps/node-cli && npm run build
 # ${t("nodes.installStep2")}
 node dist/main.js start \\
   --token ${newTokenValue} \\
-  --platform-url ws://localhost:3000/ws/node \\
+  --platform-url ${platformWsUrl} \\
   --local-ollama http://localhost:11434
 
 # ${t("nodes.installStep3")}
 node dist/main.js start \\
   --token ${newTokenValue} \\
-  --platform-url ws://localhost:3000/ws/node \\
+  --platform-url ${platformWsUrl} \\
   --provider openai_compatible \\
   --api-key YOUR_API_KEY \\
   --base-url https://api.deepseek.com`}
             </pre>
             <div className="absolute top-2 right-2">
               <CopyButton
-                text={`cd apps/node-cli && npm run build\n\nnode dist/main.js start \\\n  --token ${newTokenValue} \\\n  --platform-url ws://localhost:3000/ws/node \\\n  --local-ollama http://localhost:11434`}
+                text={`cd apps/node-cli && npm run build\n\nnode dist/main.js start \\\n  --token ${newTokenValue} \\\n  --platform-url ${platformWsUrl} \\\n  --local-ollama http://localhost:11434`}
               />
             </div>
           </div>
@@ -1647,20 +1648,20 @@ cd apps/node-cli && npm run build
 # ${t("nodes.installStep2")}
 node dist/main.js start \\
   --token ${newTokenValue || "YOUR_TOKEN"} \\
-  --platform-url ws://localhost:3000/ws/node \\
+  --platform-url ${platformWsUrl} \\
   --local-ollama http://localhost:11434
 
 # ${t("nodes.installStep3")}
 node dist/main.js start \\
   --token ${newTokenValue || "YOUR_TOKEN"} \\
-  --platform-url ws://localhost:3000/ws/node \\
+  --platform-url ${platformWsUrl} \\
   --provider openai_compatible \\
   --api-key YOUR_API_KEY \\
   --base-url https://api.deepseek.com`}
                 </pre>
                 <div className="absolute top-2 right-2">
                   <CopyButton
-                    text={`cd apps/node-cli && npm run build\n\nnode dist/main.js start \\\n  --token ${newTokenValue || "YOUR_TOKEN"} \\\n  --platform-url ws://localhost:3000/ws/node \\\n  --local-ollama http://localhost:11434`}
+                    text={`cd apps/node-cli && npm run build\n\nnode dist/main.js start \\\n  --token ${newTokenValue || "YOUR_TOKEN"} \\\n  --platform-url ${platformWsUrl} \\\n  --local-ollama http://localhost:11434`}
                   />
                 </div>
               </div>

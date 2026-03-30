@@ -491,7 +491,7 @@ export const platformService = {
       toEmail: result.email,
       challengeId: result.challengeId,
       variables: {
-        actionUrl: `${config.appBaseUrl || "http://127.0.0.1:3000"}/reset-password?token=${encodeURIComponent(result.token)}`,
+        actionUrl: `${config.appBaseUrl}/reset-password?token=${encodeURIComponent(result.token)}`,
         expiresInMinutes: Math.ceil(config.passwordResetTtlSeconds / 60)
       }
     });
@@ -598,7 +598,7 @@ export const platformService = {
         challengeId: result.data.challengeId,
         variables: {
           newEmail: result.data.newEmail,
-          actionUrl: `${config.appBaseUrl || "http://127.0.0.1:3000"}/auth/confirm-email-change?token=${encodeURIComponent(result.data.token ?? "")}`,
+          actionUrl: `${config.appBaseUrl}/auth/confirm-email-change?token=${encodeURIComponent(result.data.token ?? "")}`,
           expiresInMinutes: Math.ceil(config.emailChangeTtlSeconds / 60)
         }
       }),
@@ -715,7 +715,7 @@ export const platformService = {
       variables: {
         inviterName: inviter?.displayName || inviter?.email || "xllmapi",
         invitationNote: params.note ?? null,
-        actionUrl: `${config.appBaseUrl || "http://127.0.0.1:3000"}/auth?email=${encodeURIComponent(params.invitedEmail)}`
+        actionUrl: `${config.appBaseUrl}/auth?email=${encodeURIComponent(params.invitedEmail)}`
       },
       metadata: {
         invitationId: result.data?.id ?? null
@@ -760,7 +760,7 @@ export const platformService = {
       variables: {
         inviterName: inviter?.displayName || inviter?.email || "xllmapi",
         invitationNote: params.note ?? null,
-        actionUrl: `${config.appBaseUrl || "http://127.0.0.1:3000"}/auth?email=${encodeURIComponent(params.invitedEmail)}`
+        actionUrl: `${config.appBaseUrl}/auth?email=${encodeURIComponent(params.invitedEmail)}`
       },
       metadata: {
         invitationId: result.data?.id ?? null
