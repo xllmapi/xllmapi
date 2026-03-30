@@ -14,12 +14,24 @@ describe("estimateTokens", () => {
   });
 
   it('returns 2 for "hello"', () => {
-    assert.equal(estimateTokens("hello"), Math.ceil(5 / 3.5));
+    assert.equal(estimateTokens("hello"), Math.ceil(5 * 0.3));
   });
 
-  it("scales proportionally with longer text", () => {
+  it("scales proportionally with longer ASCII text", () => {
     const text = "a".repeat(100);
-    assert.equal(estimateTokens(text), Math.ceil(100 / 3.5));
+    // 100 ASCII chars at ~0.3 per char ≈ 30 tokens (floating point may round up to 31)
+    const result = estimateTokens(text);
+    assert.ok(result >= 30 && result <= 31, `expected 30-31, got ${result}`);
+  });
+
+  it("estimates CJK characters at higher rate", () => {
+    const text = "你好世界"; // 4 CJK characters
+    assert.equal(estimateTokens(text), Math.ceil(4 * 1.5));
+  });
+
+  it("handles mixed CJK and ASCII", () => {
+    const text = "hello你好"; // 5 ASCII + 2 CJK
+    assert.equal(estimateTokens(text), Math.ceil(5 * 0.3 + 2 * 1.5));
   });
 });
 

@@ -1,6 +1,7 @@
 import type { ChatMessage } from "@xllmapi/shared-types";
 import { parseSseStream } from "./sse-parser.js";
 import { isRetryableStatus } from "../resilience/retry.js";
+import { estimateTokens } from "../context/context-manager.js";
 
 export interface StreamResult {
   content: string;
@@ -94,10 +95,13 @@ export async function streamOpenAI(params: {
 
       // Extract usage (typically in the last chunk when stream_options.include_usage is set)
       if (payload?.usage) {
+        const u = payload.usage;
+        const inputTokens = (u.prompt_tokens ?? u.input_tokens ?? ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))) || 0;
+        const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
         usage = {
-          inputTokens: payload.usage.prompt_tokens ?? 0,
-          outputTokens: payload.usage.completion_tokens ?? 0,
-          totalTokens: payload.usage.total_tokens ?? 0
+          inputTokens,
+          outputTokens,
+          totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
         };
       }
     } catch {
@@ -110,7 +114,7 @@ export async function streamOpenAI(params: {
 
   // If usage wasn't provided via stream, estimate from content
   if (usage.totalTokens === 0 && content.length > 0) {
-    usage.outputTokens = Math.ceil(content.length / 4);
+    usage.outputTokens = estimateTokens(content);
     usage.totalTokens = usage.inputTokens + usage.outputTokens;
   }
 
@@ -168,10 +172,13 @@ export async function callOpenAI(params: {
 
   const content = result.choices?.[0]?.message?.content ?? "";
   const finishReason = result.choices?.[0]?.finish_reason ?? "stop";
+  const u = result.usage as Record<string, number> | undefined;
+  const inputTokens = u ? ((u.prompt_tokens ?? u.input_tokens ?? ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))) || 0) : 0;
+  const outputTokens = u ? (u.completion_tokens ?? u.output_tokens ?? 0) : 0;
   const usage = {
-    inputTokens: result.usage?.prompt_tokens ?? 0,
-    outputTokens: result.usage?.completion_tokens ?? 0,
-    totalTokens: result.usage?.total_tokens ?? 0
+    inputTokens,
+    outputTokens,
+    totalTokens: u?.total_tokens ?? (inputTokens + outputTokens),
   };
 
   return { content, usage, finishReason };

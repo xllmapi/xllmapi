@@ -16,7 +16,20 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
 const DEFAULT_CONTEXT_LIMIT = 64000;
 
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 3.5);
+  let tokens = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!;
+    // CJK Unified Ideographs, CJK extensions, fullwidth forms
+    if ((code >= 0x4E00 && code <= 0x9FFF) ||
+        (code >= 0x3400 && code <= 0x4DBF) ||
+        (code >= 0xF900 && code <= 0xFAFF) ||
+        (code >= 0xFF00 && code <= 0xFFEF)) {
+      tokens += 1.5; // CJK character ≈ 1-2 tokens
+    } else {
+      tokens += 0.3; // ASCII/Latin ≈ 3-4 chars per token
+    }
+  }
+  return Math.ceil(tokens);
 }
 
 export function getContextLimit(model: string): number {
