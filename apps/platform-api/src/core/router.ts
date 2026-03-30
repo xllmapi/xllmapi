@@ -27,6 +27,11 @@ export async function resolveOfferings(
     const pool = await platformService.listConnectionPool(userId);
     if (pool.length > 0) {
       offerings = await platformService.findUserOfferingsForModel(userId, logicalModel);
+      // Fallback: model not in user's connection pool → use platform offerings
+      if (offerings.length === 0) {
+        offerings = await platformService.findOfferingsForModel(logicalModel);
+        offerings = offerings.filter(o => o.executionMode !== "node");
+      }
     } else {
       offerings = await platformService.findOfferingsForModel(logicalModel);
       offerings = offerings.filter(o => o.executionMode !== "node");
@@ -79,8 +84,7 @@ async function filterAvailable(offerings: CandidateOffering[]): Promise<Candidat
     const s = getBreakerState(o.offeringId);
     return s.state === "closed" || s.state === "half-open";
   });
-  // Last resort: 1 offering for probe (prefer first)
-  return probes.length > 0 ? probes : offerings.slice(0, 1);
+  return probes;
 }
 
 // ── Offering Selection (affinity → fastest) ────────────────────────
@@ -157,6 +161,9 @@ export async function routeRequest(params: {
   }
 
   const available = await filterAvailable(candidates);
+  if (available.length === 0) {
+    throw new Error(`no offering available for ${params.logicalModel} (all in cooldown)`);
+  }
 
   const { offering, affinityLevel } = selectOffering({
     available,
