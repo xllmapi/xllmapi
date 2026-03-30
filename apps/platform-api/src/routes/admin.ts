@@ -754,6 +754,27 @@ export async function handleAdminRoutes(
     }
     const presetId = decodeURIComponent(presetMatch[1]);
     const body = await read_json<{ label: string; providerType: string; baseUrl: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown }>(req);
+    // Validate: at least one URL required, and must match API format
+    const hasBaseUrl = !!(body.baseUrl && body.baseUrl.trim());
+    const hasAnthropicUrl = !!(body.anthropicBaseUrl && body.anthropicBaseUrl.trim());
+    if (!hasBaseUrl && !hasAnthropicUrl) {
+      const response = json(400, { error: { code: "invalid_request", message: "at least one URL (baseUrl or anthropicBaseUrl) is required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    if (body.providerType === "anthropic" && !hasAnthropicUrl) {
+      const response = json(400, { error: { code: "invalid_request", message: "anthropicBaseUrl is required for Anthropic format", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    if (body.providerType !== "anthropic" && !hasBaseUrl) {
+      const response = json(400, { error: { code: "invalid_request", message: "baseUrl is required for OpenAI/OpenAI-compatible format", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
     await platformService.upsertProviderPreset({
       id: presetId,
       label: body.label,
@@ -786,8 +807,22 @@ export async function handleAdminRoutes(
       return true;
     }
     const body = await read_json<{ id?: string; label?: string; providerType?: string; baseUrl?: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown }>(req);
-    if (!body.id || !body.label || !body.providerType || !body.baseUrl) {
-      const response = json(400, { error: { code: "invalid_request", message: "id, label, providerType, and baseUrl are required", requestId } });
+    const hasBaseUrl = !!(body.baseUrl && body.baseUrl.trim());
+    const hasAnthropicUrl = !!(body.anthropicBaseUrl && body.anthropicBaseUrl.trim());
+    if (!body.id || !body.label || !body.providerType || (!hasBaseUrl && !hasAnthropicUrl)) {
+      const response = json(400, { error: { code: "invalid_request", message: "id, label, providerType, and at least one URL are required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    if (body.providerType === "anthropic" && !hasAnthropicUrl) {
+      const response = json(400, { error: { code: "invalid_request", message: "anthropicBaseUrl is required for Anthropic format", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    if (body.providerType !== "anthropic" && !hasBaseUrl) {
+      const response = json(400, { error: { code: "invalid_request", message: "baseUrl is required for OpenAI/OpenAI-compatible format", requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -796,7 +831,7 @@ export async function handleAdminRoutes(
       id: body.id,
       label: body.label,
       providerType: body.providerType,
-      baseUrl: body.baseUrl,
+      baseUrl: body.baseUrl ?? "",
       anthropicBaseUrl: body.anthropicBaseUrl,
       models: body.models || [],
       enabled: body.enabled ?? true,

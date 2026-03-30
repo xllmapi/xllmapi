@@ -1845,9 +1845,9 @@ export const postgresPlatformRepository: PlatformRepository = {
       SELECT
         o.id AS "offeringId",
         o.owner_user_id AS "ownerUserId",
-        c.provider_type AS "providerType",
+        CASE WHEN p.id IS NOT NULL THEN p.provider_type ELSE c.provider_type END AS "providerType",
         c.id AS "credentialId",
-        c.base_url AS "baseUrl",
+        CASE WHEN p.id IS NOT NULL THEN NULLIF(p.base_url, '') ELSE c.base_url END AS "baseUrl",
         COALESCE(p.anthropic_base_url, c.anthropic_base_url) AS "anthropicBaseUrl",
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
@@ -1865,7 +1865,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.logical_model AS "logicalModel",
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency",
-        o.context_length AS "contextLength"
+        COALESCE(
+          (SELECT (m->>'contextLength')::integer FROM jsonb_array_elements(p.models) AS m WHERE m->>'realModel' = o.real_model LIMIT 1),
+          o.context_length
+        ) AS "contextLength"
       , o.execution_mode AS "executionMode"
       , o.node_id AS "nodeId"
       , COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders"
@@ -1900,11 +1903,14 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.enabled,
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency",
-        o.context_length AS "contextLength",
-        c.provider_type AS "providerType",
+        COALESCE(
+          (SELECT (m->>'contextLength')::integer FROM jsonb_array_elements(p.models) AS m WHERE m->>'realModel' = o.real_model LIMIT 1),
+          o.context_length
+        ) AS "contextLength",
+        CASE WHEN p.id IS NOT NULL THEN p.provider_type ELSE c.provider_type END AS "providerType",
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
-        c.base_url AS "baseUrl",
+        CASE WHEN p.id IS NOT NULL THEN NULLIF(p.base_url, '') ELSE c.base_url END AS "baseUrl",
         COALESCE(p.anthropic_base_url, c.anthropic_base_url) AS "anthropicBaseUrl",
         COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders",
         COALESCE(p.label, c.provider_label) AS "providerLabel"

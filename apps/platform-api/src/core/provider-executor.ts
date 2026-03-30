@@ -124,8 +124,8 @@ function hasEndpoint(offering: CandidateOffering, format: ApiFormatId): boolean 
   if (format === "anthropic") {
     return !!offering.anthropicBaseUrl || offering.providerType === "anthropic";
   }
-  // OpenAI: any offering with a baseUrl or OpenAI-compatible provider
-  return !!offering.baseUrl || offering.providerType !== "anthropic";
+  // OpenAI: needs an explicit baseUrl
+  return !!offering.baseUrl;
 }
 
 /** Resolve which format endpoint to use and its base URL */
@@ -144,11 +144,18 @@ function resolveEndpoint(offering: CandidateOffering, clientFormat: ApiFormatId)
   }
 
   // Client wants OpenAI format
-  if (offering.providerType !== "anthropic" || offering.baseUrl) {
-    return { targetFormat: "openai", baseUrl: resolveBaseUrl(offering) };
+  if (offering.baseUrl) {
+    return { targetFormat: "openai", baseUrl: offering.baseUrl };
   }
-  // Provider only has Anthropic endpoint — convert
-  return { targetFormat: "anthropic", baseUrl: resolveBaseUrl(offering) };
+  // No OpenAI endpoint — use Anthropic with format conversion
+  if (offering.anthropicBaseUrl) {
+    return { targetFormat: "anthropic", baseUrl: offering.anthropicBaseUrl };
+  }
+  if (offering.providerType === "anthropic") {
+    return { targetFormat: "anthropic", baseUrl: resolveBaseUrl(offering) };
+  }
+  // Final fallback
+  return { targetFormat: "openai", baseUrl: resolveBaseUrl(offering) };
 }
 
 // ── Upstream header resolution ──
