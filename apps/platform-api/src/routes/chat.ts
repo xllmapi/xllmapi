@@ -309,6 +309,16 @@ export async function handleChatRoutes(
         messageCount
       });
     } catch {
+      try {
+        await platformService.recordFailedRequest({
+          requestId,
+          requesterUserId: auth.userId,
+          logicalModel,
+          errorMessage: `no offering available for ${logicalModel}`,
+          clientIp: get_request_ip_(req),
+          clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+        });
+      } catch { /* best-effort */ }
       const response = json(404, { error: { message: `no offering available for ${logicalModel}`, requestId } });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);

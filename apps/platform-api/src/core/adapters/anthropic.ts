@@ -34,7 +34,8 @@ export const anthropicAdapter: ProviderAdapter = {
         const parsed = JSON.parse(jsonStr);
         // message_start event: { type: "message_start", message: { usage: { input_tokens } } }
         if (parsed.type === "message_start" && parsed.message?.usage) {
-          inputTokens = parsed.message.usage.input_tokens ?? 0;
+          const u = parsed.message.usage;
+          inputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
         }
         // message_delta event: { type: "message_delta", usage: { output_tokens } }
         if (parsed.type === "message_delta" && parsed.usage) {
@@ -51,12 +52,14 @@ export const anthropicAdapter: ProviderAdapter = {
 
   extractUsageFromJson(body: unknown): ProxyUsage | undefined {
     const parsed = body as Record<string, unknown>;
-    const usage = parsed?.usage as Record<string, number> | undefined;
-    if (usage?.input_tokens !== undefined) {
+    const u = parsed?.usage as Record<string, number> | undefined;
+    if (u) {
+      const inputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
+      const outputTokens = u.output_tokens ?? u.completion_tokens ?? 0;
       return {
-        inputTokens: usage.input_tokens ?? 0,
-        outputTokens: usage.output_tokens ?? 0,
-        totalTokens: (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
+        inputTokens,
+        outputTokens,
+        totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
       };
     }
     return undefined;

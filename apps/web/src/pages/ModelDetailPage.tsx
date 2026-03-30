@@ -13,6 +13,7 @@ interface NetworkModel {
   providers?: string[];
   minInputPrice?: number | null;
   minOutputPrice?: number | null;
+  contextLength?: number;
   featuredSuppliers?: { handle: string; displayName: string }[];
 }
 
@@ -269,7 +270,7 @@ export function ModelDetailPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-text-tertiary text-xs">{t("common.maxContext")}</span>
-              <span className="font-mono text-text-primary">{formatContextLength(getContextLimit(model.logicalModel))} tokens</span>
+              <span className="font-mono text-text-primary">{formatContextLength(model.contextLength ?? getContextLimit(model.logicalModel))} tokens</span>
             </div>
           </div>
         </div>
