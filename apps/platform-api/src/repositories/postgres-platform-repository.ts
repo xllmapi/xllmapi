@@ -2233,30 +2233,39 @@ export const postgresPlatformRepository: PlatformRepository = {
       params.offeringId
     ]);
 
-    // On any state change: pause consumers + notify
+    // On any state change: pause consumers + notify (only for distributed nodes, not platform nodes)
     if (stateChanged) {
-      const supplierResult = await currentPool.query(
-        `SELECT display_name FROM users WHERE id = $1 LIMIT 1`,
-        [params.ownerUserId]
-      );
-      const supplierName = supplierResult.rows[0]?.display_name ?? params.ownerUserId;
-
       await currentPool.query(`
         UPDATE offering_favorites SET paused = true
         WHERE offering_id = $1 AND paused = false
       `, [params.offeringId]);
 
-      const affected = await currentPool.query(
-        `SELECT user_id FROM offering_favorites WHERE offering_id = $1`,
+      // Only send notifications for distributed (node) offerings — platform node groups
+      // are transparent to consumers, individual node changes should not notify users
+      const execMode = await currentPool.query(
+        `SELECT execution_mode FROM offerings WHERE id = $1`,
         [params.offeringId]
       );
-      for (const row of affected.rows) {
-        const notifId = `notif_${randomUUID()}`;
-        await currentPool.query(`
-          INSERT INTO notifications (id, type, title, content, target_user_id, created_by, created_at)
-          VALUES ($1, 'system', $2, $3, $4, $5, NOW())
-          ON CONFLICT DO NOTHING
-        `, [notifId, `${current.logicalModel} 节点状态变更`, `供应者 ${supplierName} 的模型节点状态已变更。`, row.user_id, params.ownerUserId]);
+      const isNode = execMode.rows[0]?.execution_mode === "node";
+      if (isNode) {
+        const supplierResult = await currentPool.query(
+          `SELECT display_name FROM users WHERE id = $1 LIMIT 1`,
+          [params.ownerUserId]
+        );
+        const supplierName = supplierResult.rows[0]?.display_name ?? params.ownerUserId;
+
+        const affected = await currentPool.query(
+          `SELECT user_id FROM offering_favorites WHERE offering_id = $1 AND user_id != $2`,
+          [params.offeringId, params.ownerUserId]
+        );
+        for (const row of affected.rows) {
+          const notifId = `notif_${randomUUID()}`;
+          await currentPool.query(`
+            INSERT INTO notifications (id, type, title, content, target_user_id, created_by, created_at)
+            VALUES ($1, 'system', $2, $3, $4, $5, NOW())
+            ON CONFLICT DO NOTHING
+          `, [notifId, `${current.logicalModel} 节点状态变更`, `供应者 ${supplierName} 的模型节点状态已变更。`, row.user_id, params.ownerUserId]);
+        }
       }
     }
 
