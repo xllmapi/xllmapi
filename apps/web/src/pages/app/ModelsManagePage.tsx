@@ -202,6 +202,7 @@ interface PoolModelEntry {
   executionMode: string;
   enabled: boolean;
   paused: boolean;
+  activeCount: number;
   totalRequests: number;
   totalTokens: number;
   contextLength?: number;
@@ -465,9 +466,9 @@ function UsingTab() {
     return () => clearInterval(timer);
   }, [loadData]);
 
-  // Split by paused field
-  const activeModels = models.filter((m) => !m.paused && m.enabled);
-  const historyModels = models.filter((m) => m.paused || !m.enabled);
+  // Split by active count: model group is active if at least one offering is enabled and not paused
+  const activeModels = models.filter((m) => (m.activeCount ?? 0) > 0);
+  const historyModels = models.filter((m) => (m.activeCount ?? 0) === 0);
 
   const handleDisconnect = async (logicalModel: string) => {
     setActionLoading(logicalModel);

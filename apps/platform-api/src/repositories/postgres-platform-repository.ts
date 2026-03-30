@@ -3956,8 +3956,9 @@ export const postgresPlatformRepository: PlatformRepository = {
         MIN(o.fixed_price_per_1k_output)::int AS "minOutputPrice",
         MAX(o.execution_mode) AS "executionMode",
         MAX(o.context_length)::int AS "contextLength",
-        bool_and(o.enabled) AS "enabled",
+        bool_or(o.enabled) AS "enabled",
         bool_and(f.paused) AS "paused",
+        COUNT(*) FILTER (WHERE o.enabled = TRUE AND f.paused = FALSE)::int AS "activeCount",
         COUNT(DISTINCT ar.id)::int AS "totalRequests",
         COALESCE(SUM(ar.total_tokens), 0)::bigint AS "totalTokens"
       FROM offering_favorites f
