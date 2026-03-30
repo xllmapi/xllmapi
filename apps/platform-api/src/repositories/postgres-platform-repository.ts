@@ -1864,7 +1864,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.context_length AS "contextLength"
       , o.execution_mode AS "executionMode"
       , o.node_id AS "nodeId"
-      , c.custom_headers AS "customHeaders"
+      , COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders"
       , COALESCE(p.label, c.provider_label) AS "providerLabel"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
@@ -1899,7 +1899,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         c.api_key_env_name AS "apiKeyEnvName",
         c.base_url AS "baseUrl",
         c.anthropic_base_url AS "anthropicBaseUrl",
-        c.custom_headers AS "customHeaders",
+        COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders",
         COALESCE(p.label, c.provider_label) AS "providerLabel"
       FROM offerings o
       JOIN offering_favorites f ON f.offering_id = o.id AND f.user_id = $1
