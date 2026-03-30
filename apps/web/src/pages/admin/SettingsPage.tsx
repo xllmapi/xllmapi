@@ -17,6 +17,7 @@ const CONFIG_GROUPS: Record<string, string[]> = {
     "chat_rate_limit_per_minute",
     "default_invitation_quota",
     "invitation_enabled",
+    "max_api_keys_per_user",
   ],
   pricing: [
     "min_input_price",
