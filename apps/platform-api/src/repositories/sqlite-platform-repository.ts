@@ -399,6 +399,8 @@ export const sqlitePlatformRepository: PlatformRepository = {
   },
 
   recordFailedRequest() {},
+  deleteProviderCredentialCascade() { return { ok: true }; },
+  archiveOffering() { return { ok: true }; },
   getAdminOfferingHealthList() { return []; },
   adminStopOffering() {},
 

@@ -178,6 +178,24 @@ export async function handleProviderRoutes(
     return true;
   }
 
+  // POST /v1/provider-credentials/:id/test — test connectivity
+  const testMatch = url.pathname.match(/^\/v1\/provider-credentials\/([^/]+)\/test$/);
+  if (req.method === "POST" && testMatch) {
+    const auth = await authenticate_request_(req);
+    if (!auth) {
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const credId = decodeURIComponent(testMatch[1]);
+    const result = await platformService.testProviderCredential(auth.userId, credId);
+    const response = json(200, { ok: true, requestId, data: result });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "DELETE" && providerCredentialId) {
     const auth = await authenticate_request_(req);
     if (!auth) {
@@ -188,10 +206,10 @@ export async function handleProviderRoutes(
       return true;
     }
 
-    const result = await platformService.removeProviderCredential({
-      ownerUserId: auth.userId,
-      credentialId: providerCredentialId
-    });
+    const cascade = url.searchParams.get("cascade") === "true";
+    const result = cascade
+      ? await platformService.deleteProviderCredentialCascade({ ownerUserId: auth.userId, credentialId: providerCredentialId })
+      : await platformService.removeProviderCredential({ ownerUserId: auth.userId, credentialId: providerCredentialId });
 
     if (!result.ok) {
       const response = json(result.code === "not_found" ? 404 : 409, {
@@ -337,6 +355,51 @@ export async function handleProviderRoutes(
     const response = json(200, {
       object: "list",
       data: await platformService.listOfferings(auth.userId)
+    });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // POST /v1/offerings/:id/archive — archive an offering
+  const archiveMatch = url.pathname.match(/^\/v1\/offerings\/([^/]+)\/archive$/);
+  if (req.method === "POST" && archiveMatch) {
+    const auth = await authenticate_request_(req);
+    if (!auth) {
+      metricsService.increment("authFailures");
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const body = await read_json<{ reason?: string }>(req);
+    const result = await platformService.archiveOffering({
+      ownerUserId: auth.userId,
+      offeringId: archiveMatch[1],
+      reason: body.reason || "user_stopped",
+    });
+
+    if (!result.ok) {
+      const response = json(result.code === "not_found" ? 404 : 409, {
+        error: {
+          message: result.message,
+          code: result.code,
+          requestId
+        }
+      });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
+    const response = json(200, { requestId, ok: true });
+    await platformService.writeAuditLog({
+      actorUserId: auth.userId,
+      action: "offering.archived",
+      targetType: "offering",
+      targetId: archiveMatch[1],
+      payload: { reason: body.reason || "user_stopped" }
     });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);

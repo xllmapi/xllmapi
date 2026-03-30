@@ -41,6 +41,8 @@ type OfferingListRow = {
   dailyTokenLimit?: number;
   maxConcurrency?: number;
   contextLength?: number;
+  archivedAt?: string | null;
+  archiveReason?: string | null;
 };
 
 type OfferingExecutionRow = CandidateOffering & {
@@ -93,7 +95,9 @@ const getOfferingById = async (ownerUserId: string, offeringId: string): Promise
       review_status AS "reviewStatus",
       created_at AS "createdAt",
       daily_token_limit AS "dailyTokenLimit",
-      max_concurrency AS "maxConcurrency"
+      max_concurrency AS "maxConcurrency",
+      archived_at AS "archivedAt",
+      archive_reason AS "archiveReason"
     FROM offerings
     WHERE owner_user_id = $1 AND id = $2
     LIMIT 1
@@ -1916,18 +1920,26 @@ export const postgresPlatformRepository: PlatformRepository = {
   async listProviderCredentials(userId) {
     await ensureDevSeed();
     const currentPool = getPool();
-    const result = await currentPool.query<ProviderCredentialRow>(`
+    const result = await currentPool.query(`
       SELECT
-        id,
-        owner_user_id AS "ownerUserId",
-        provider_type AS "providerType",
-        base_url AS "baseUrl",
-        CASE WHEN encrypted_secret IS NOT NULL AND encrypted_secret != '' THEN TRUE ELSE FALSE END AS "hasEncryptedSecret",
-        api_key_env_name AS "apiKeyEnvName",
-        status
-      FROM provider_credentials
-      WHERE owner_user_id = $1
-      ORDER BY id ASC
+        c.id,
+        c.owner_user_id AS "ownerUserId",
+        c.provider_type AS "providerType",
+        c.base_url AS "baseUrl",
+        CASE WHEN c.encrypted_secret IS NOT NULL AND c.encrypted_secret != '' THEN TRUE ELSE FALSE END AS "hasEncryptedSecret",
+        c.api_key_env_name AS "apiKeyEnvName",
+        c.api_key_preview AS "apiKeyPreview",
+        c.status,
+        c.provider_label AS "providerLabel",
+        c.created_at AS "createdAt",
+        COALESCE(p.label, c.provider_label, c.provider_type) AS "displayLabel",
+        (SELECT COUNT(*)::int FROM offerings o WHERE o.credential_id = c.id) AS "offeringCount",
+        (SELECT json_agg(json_build_object('id', o.id, 'logicalModel', o.logical_model, 'enabled', o.enabled, 'archivedAt', o.archived_at))
+         FROM offerings o WHERE o.credential_id = c.id) AS "offerings"
+      FROM provider_credentials c
+      LEFT JOIN provider_presets p ON RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%' AND p.provider_type = c.provider_type
+      WHERE c.owner_user_id = $1
+      ORDER BY c.created_at DESC
     `, [userId]);
 
     return result.rows;
@@ -1977,10 +1989,15 @@ export const postgresPlatformRepository: PlatformRepository = {
         message: "this API key is already connected"
       };
     }
+    // Compute key preview: first 5 chars + "…" + last 4 chars
+    const keyPreview = params.apiKey.length > 12
+      ? `${params.apiKey.slice(0, 5)}…${params.apiKey.slice(-4)}`
+      : params.apiKey.slice(0, 4) + "…";
+
     await currentPool.query(`
       INSERT INTO provider_credentials (
-        id, owner_user_id, provider_type, base_url, anthropic_base_url, encrypted_secret, api_key_env_name, status, api_key_fingerprint, custom_headers, provider_label
-      ) VALUES ($1, $2, $3, $4, $5, $6, '', 'active', $7, $8, $9)
+        id, owner_user_id, provider_type, base_url, anthropic_base_url, encrypted_secret, api_key_env_name, status, api_key_fingerprint, custom_headers, provider_label, api_key_preview
+      ) VALUES ($1, $2, $3, $4, $5, $6, '', 'active', $7, $8, $9, $10)
     `, [
       params.id,
       params.ownerUserId,
@@ -1990,7 +2007,8 @@ export const postgresPlatformRepository: PlatformRepository = {
       encryptSecret(params.apiKey),
       fingerprint,
       params.customHeaders ? JSON.stringify(params.customHeaders) : null,
-      params.providerLabel ?? null
+      params.providerLabel ?? null,
+      keyPreview
     ]);
     return {
       ok: true as const,
@@ -2049,6 +2067,25 @@ export const postgresPlatformRepository: PlatformRepository = {
     return { ok: true };
   },
 
+  async deleteProviderCredentialCascade(params: { ownerUserId: string; credentialId: string }) {
+    const currentPool = getPool();
+    const credential = await this.getProviderCredential(params.ownerUserId, params.credentialId);
+    if (!credential) {
+      return { ok: false, code: "not_found", message: "credential not found" };
+    }
+    // Archive all linked offerings
+    await currentPool.query(`
+      UPDATE offerings SET enabled = FALSE, archived_at = NOW(), archive_reason = 'key_deleted'
+      WHERE credential_id = $1 AND owner_user_id = $2
+    `, [params.credentialId, params.ownerUserId]);
+    // Disable credential + clear encrypted secret (user can't recover the key)
+    await currentPool.query(`
+      UPDATE provider_credentials SET status = 'disabled', encrypted_secret = NULL
+      WHERE id = $1 AND owner_user_id = $2
+    `, [params.credentialId, params.ownerUserId]);
+    return { ok: true };
+  },
+
   async listOfferings(userId) {
     await ensureDevSeed();
     const currentPool = getPool();
@@ -2069,7 +2106,9 @@ export const postgresPlatformRepository: PlatformRepository = {
         node_id AS "nodeId",
         daily_token_limit AS "dailyTokenLimit",
         max_concurrency AS "maxConcurrency",
-        context_length AS "contextLength"
+        context_length AS "contextLength",
+        archived_at AS "archivedAt",
+        archive_reason AS "archiveReason"
       FROM offerings
       WHERE owner_user_id = $1
       ORDER BY created_at DESC
@@ -2232,6 +2271,22 @@ export const postgresPlatformRepository: PlatformRepository = {
       return { ok: false, code: "risk_historical_requests", message: "offering has historical requests and cannot be deleted" };
     }
     await currentPool.query("DELETE FROM offerings WHERE owner_user_id = $1 AND id = $2", [params.ownerUserId, params.offeringId]);
+    return { ok: true };
+  },
+
+  async archiveOffering(params: { ownerUserId: string; offeringId: string; reason: string }) {
+    const currentPool = getPool();
+    const current = await getOfferingById(params.ownerUserId, params.offeringId);
+    if (!current) {
+      return { ok: false, code: "not_found", message: "offering not found for current user" };
+    }
+    if (current.archivedAt) {
+      return { ok: false, code: "already_archived", message: "offering is already archived" };
+    }
+    await currentPool.query(
+      `UPDATE offerings SET enabled = FALSE, archived_at = NOW(), archive_reason = $3 WHERE owner_user_id = $1 AND id = $2`,
+      [params.ownerUserId, params.offeringId, params.reason]
+    );
     return { ok: true };
   },
 

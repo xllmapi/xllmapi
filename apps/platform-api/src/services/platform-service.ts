@@ -893,6 +893,36 @@ export const platformService = {
     return platformRepository.removeProviderCredential(params);
   },
 
+  async deleteProviderCredentialCascade(params: { ownerUserId: string; credentialId: string }) {
+    return platformRepository.deleteProviderCredentialCascade(params);
+  },
+
+  async testProviderCredential(userId: string, credentialId: string) {
+    const cred = await platformRepository.getProviderCredential(userId, credentialId);
+    if (!cred) return { ok: false, status: "not_found", message: "credential not found" };
+    if (!cred.hasEncryptedSecret) return { ok: false, status: "no_key", message: "no encrypted key stored" };
+
+    try {
+      const { decryptSecret } = await import("../crypto-utils.js");
+      const apiKey = decryptSecret(cred.encryptedSecret);
+      const result = await this.validateProviderCredential({
+        providerType: cred.providerType,
+        baseUrl: cred.baseUrl ?? "",
+        apiKey,
+      });
+      // Update credential status based on result
+      const newStatus = result.ok ? "active" : "invalid";
+      if (cred.status !== newStatus) {
+        await platformRepository.updateProviderCredentialStatus({
+          ownerUserId: userId, credentialId, status: newStatus as "active" | "disabled"
+        });
+      }
+      return { ok: result.ok, status: newStatus, message: result.ok ? "connected" : result.message };
+    } catch (err) {
+      return { ok: false, status: "error", message: err instanceof Error ? err.message : "test failed" };
+    }
+  },
+
   listOfferings(userId: string) {
     return platformRepository.listOfferings(userId);
   },
@@ -943,6 +973,14 @@ export const platformService = {
     offeringId: string;
   }) {
     return platformRepository.removeOffering(params);
+  },
+
+  archiveOffering(params: {
+    ownerUserId: string;
+    offeringId: string;
+    reason: string;
+  }) {
+    return platformRepository.archiveOffering(params);
   },
 
   reviewOffering(params: {

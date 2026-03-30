@@ -403,6 +403,18 @@ export async function handleAuthRoutes(
     }
     const body = await read_json<{ label?: string }>(req);
     const label = body.label || "API Key";
+
+    // Check API key limit
+    const existingKeys = await platformService.listApiKeys(auth.userId);
+    const maxKeysStr = await platformService.getConfigValue("max_api_keys_per_user");
+    const maxKeys = maxKeysStr ? Number(maxKeysStr) : 5;
+    if (existingKeys.length >= maxKeys) {
+      const response = json(403, { error: { code: "api_key_limit", message: `maximum ${maxKeys} API keys allowed`, requestId, limit: maxKeys, current: existingKeys.length } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+
     const result = await platformService.createApiKey(auth.userId, label);
     const response = json(201, { ok: true, requestId, data: result });
     res.writeHead(response.statusCode, response.headers);
