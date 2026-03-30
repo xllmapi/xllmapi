@@ -117,7 +117,7 @@ function resolveBaseUrl(offering: CandidateOffering): string {
 }
 
 import type { ApiFormatId, ProxyUsage } from "./adapters/index.js";
-import { getAdapter, convertRequestBody, convertJsonResponse, createStreamConverter } from "./adapters/index.js";
+import { getAdapter, getAdapterForProvider, convertRequestBody, convertJsonResponse, createStreamConverter } from "./adapters/index.js";
 
 /** Check if an offering has an endpoint for a given format */
 function hasEndpoint(offering: CandidateOffering, format: ApiFormatId): boolean {
@@ -262,7 +262,7 @@ export async function proxyApiRequest(params: {
 
       // Determine target format and base URL
       const { targetFormat, baseUrl } = resolveEndpoint(offering, params.clientFormat);
-      const adapter = getAdapter(targetFormat);
+      const adapter = getAdapterForProvider(targetFormat, offering.providerLabel);
 
       // Build request
       const url = adapter.buildUrl(baseUrl);
