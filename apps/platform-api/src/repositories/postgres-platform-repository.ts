@@ -1320,9 +1320,16 @@ export const postgresPlatformRepository: PlatformRepository = {
         MIN(o.fixed_price_per_1k_output) AS "minOutputPricePer1k",
         ARRAY_AGG(DISTINCT c.provider_type) AS providers,
         ARRAY_AGG(DISTINCT o.pricing_mode) AS "pricingModes",
-        MAX(o.context_length) AS "maxContextLength"
+        MAX(COALESCE(
+          (SELECT (m->>'contextLength')::integer FROM jsonb_array_elements(p.models) AS m WHERE m->>'realModel' = o.real_model LIMIT 1),
+          o.context_length
+        )) AS "maxContextLength"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN provider_presets p ON (
+        RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%'
+        OR RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%'
+      )
       WHERE o.enabled = TRUE
         AND o.review_status = 'approved'
         AND (c.status = 'active' OR o.credential_id IS NULL)
