@@ -14,6 +14,7 @@ interface NetworkModel {
   providers?: string[];
   minInputPrice?: number | null;
   minOutputPrice?: number | null;
+  contextLength?: number;
   featuredSuppliers?: { handle: string; displayName: string }[];
 }
 
@@ -442,7 +443,7 @@ export function ModelsPage() {
                   <div className="flex items-center gap-4 text-xs text-text-secondary mb-3">
                     <span className="flex items-center gap-1"><Cpu className="w-3 h-3 text-text-tertiary" />{m.ownerCount ?? 0} {t("models.nodes")}</span>
                     <span className="flex items-center gap-1"><Users className="w-3 h-3 text-text-tertiary" />{m.ownerCount ?? 0} {t("models.suppliers")}</span>
-                    <span className="text-text-tertiary">{formatContextLength(getContextLimit(m.logicalModel))} {t("common.contextShort")}</span>
+                    <span className="text-text-tertiary">{formatContextLength(m.contextLength ?? getContextLimit(m.logicalModel))} {t("common.contextShort")}</span>
                   </div>
 
                   {/* Price + stats */}

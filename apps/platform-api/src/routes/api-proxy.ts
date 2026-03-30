@@ -80,6 +80,16 @@ async function validateApiRequest(
 
   const offerings = await resolveOfferings(model, auth.userId);
   if (offerings.length === 0) {
+    try {
+      await platformService.recordFailedRequest({
+        requestId,
+        requesterUserId: auth.userId,
+        logicalModel: model,
+        errorMessage: `no offering available for ${model}`,
+        clientIp: get_request_ip_(req),
+        clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+      });
+    } catch { /* best-effort */ }
     const response = json(404, { error: { message: `no offering available for ${model}`, requestId } });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);

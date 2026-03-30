@@ -36,9 +36,13 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
 };
 
 export function getContextLimit(model: string): number {
-  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
-    if (key === "DEFAULT") continue;
-    if (model.toLowerCase().includes(key.toLowerCase())) return limit;
+  const lm = model.toLowerCase();
+  // Sort by key length descending so longer/more-specific keys match first
+  const entries = Object.entries(MODEL_CONTEXT_LIMITS)
+    .filter(([k]) => k !== "DEFAULT")
+    .sort((a, b) => b[0].length - a[0].length);
+  for (const [key, limit] of entries) {
+    if (lm.includes(key.toLowerCase())) return limit;
   }
   return MODEL_CONTEXT_LIMITS.DEFAULT!;
 }

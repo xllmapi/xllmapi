@@ -32,11 +32,14 @@ export const openaiAdapter: ProviderAdapter = {
       const jsonStr = line.startsWith("data: ") ? line.slice(6) : line.slice(5);
       try {
         const parsed = JSON.parse(jsonStr);
-        if (parsed.usage?.prompt_tokens !== undefined) {
+        if (parsed.usage) {
+          const u = parsed.usage;
+          const inputTokens = (u.prompt_tokens ?? u.input_tokens ?? ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))) || 0;
+          const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
           return {
-            inputTokens: parsed.usage.prompt_tokens ?? 0,
-            outputTokens: parsed.usage.completion_tokens ?? 0,
-            totalTokens: parsed.usage.total_tokens ?? 0,
+            inputTokens,
+            outputTokens,
+            totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
           };
         }
       } catch { /* skip */ }
@@ -46,12 +49,14 @@ export const openaiAdapter: ProviderAdapter = {
 
   extractUsageFromJson(body: unknown): ProxyUsage | undefined {
     const parsed = body as Record<string, unknown>;
-    const usage = parsed?.usage as Record<string, number> | undefined;
-    if (usage?.prompt_tokens !== undefined) {
+    const u = parsed?.usage as Record<string, number> | undefined;
+    if (u) {
+      const inputTokens = (u.prompt_tokens ?? u.input_tokens ?? ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))) || 0;
+      const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
       return {
-        inputTokens: usage.prompt_tokens ?? 0,
-        outputTokens: usage.completion_tokens ?? 0,
-        totalTokens: usage.total_tokens ?? 0,
+        inputTokens,
+        outputTokens,
+        totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
       };
     }
     return undefined;
