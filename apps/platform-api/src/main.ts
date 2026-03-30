@@ -26,6 +26,7 @@ import {
   handlePublicRoutes
 } from "./routes/index.js";
 import { nodeConnectionManager } from "./core/node-connection-manager.js";
+import { registerAllProviderHooks } from "./core/adapters/providers/index.js";
 
 process.on("uncaughtException", (err) => {
   console.error("[fatal] uncaught exception:", err);
@@ -217,6 +218,9 @@ const send_text_ = (res: import("node:http").ServerResponse, statusCode: number,
   });
   res.end(payload);
 };
+
+// Register provider-specific hooks (MiMo, etc.)
+registerAllProviderHooks();
 
 const server = createServer(async (req, res) => {
   const requestId = randomUUID();

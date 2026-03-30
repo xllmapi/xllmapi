@@ -31,3 +31,15 @@ export interface ProviderAdapter {
   /** Extract usage from non-streaming JSON response body */
   extractUsageFromJson(body: unknown): ProxyUsage | undefined;
 }
+
+/** Provider-specific hooks that override base adapter behavior for specific providers */
+export interface ProviderHooks {
+  /** Override usage extraction from SSE stream */
+  extractUsageFromStream?: (tail: string) => ProxyUsage | undefined;
+  /** Override usage extraction from JSON response */
+  extractUsageFromJson?: (body: unknown) => ProxyUsage | undefined;
+  /** Transform request body after base prepareBody */
+  transformBody?: (body: Record<string, unknown>) => Record<string, unknown>;
+  /** Override URL building */
+  buildUrl?: (baseUrl: string) => string;
+}
