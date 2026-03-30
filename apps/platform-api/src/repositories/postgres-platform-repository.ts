@@ -2099,7 +2099,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     `, [params.credentialId, params.ownerUserId]);
     // Disable credential + clear encrypted secret (user can't recover the key)
     await currentPool.query(`
-      UPDATE provider_credentials SET status = 'disabled', encrypted_secret = NULL
+      UPDATE provider_credentials SET status = 'deleted', encrypted_secret = NULL
       WHERE id = $1 AND owner_user_id = $2
     `, [params.credentialId, params.ownerUserId]);
     return { ok: true };
