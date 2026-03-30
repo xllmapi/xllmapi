@@ -142,3 +142,132 @@ test("getOrCreateQueue returns same instance", () => {
   const q2 = getOrCreateQueue("off_test", 5);
   assert.equal(q1, q2);
 });
+
+// ── Context Affinity TTL Tests ─────────────────────────────────────
+
+const CONV_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const USER_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+test("conversation affinity: expires after TTL", () => {
+  _resetForTest();
+  const originalNow = Date.now;
+
+  const baseTime = originalNow.call(Date);
+  Date.now = () => baseTime;
+  setConvAffinity("conv_ttl", "off_A", 5);
+  assert.equal(getConvAffinity("conv_ttl"), "off_A");
+
+  // Advance past 30 minutes
+  Date.now = () => baseTime + CONV_TTL_MS + 1;
+  assert.equal(getConvAffinity("conv_ttl"), null);
+
+  Date.now = originalNow;
+});
+
+test("conversation affinity: not expired within TTL", () => {
+  _resetForTest();
+  const originalNow = Date.now;
+
+  const baseTime = originalNow.call(Date);
+  Date.now = () => baseTime;
+  setConvAffinity("conv_ok", "off_B", 3);
+
+  // Advance to 29 minutes — still within TTL
+  Date.now = () => baseTime + 29 * 60 * 1000;
+  assert.equal(getConvAffinity("conv_ok"), "off_B");
+
+  Date.now = originalNow;
+});
+
+test("user affinity: expires after TTL", () => {
+  _resetForTest();
+  const originalNow = Date.now;
+
+  const baseTime = originalNow.call(Date);
+  Date.now = () => baseTime;
+  pushUserAffinity("user_ttl", "model_A", "off_X", 200);
+  assert.deepEqual(getUserAffinity("user_ttl", "model_A"), ["off_X"]);
+
+  // Advance past 2 hours
+  Date.now = () => baseTime + USER_TTL_MS + 1;
+  assert.deepEqual(getUserAffinity("user_ttl", "model_A"), []);
+
+  Date.now = originalNow;
+});
+
+test("user affinity: not expired within TTL", () => {
+  _resetForTest();
+  const originalNow = Date.now;
+
+  const baseTime = originalNow.call(Date);
+  Date.now = () => baseTime;
+  pushUserAffinity("user_ok", "model_B", "off_Y", 150);
+
+  // Advance to 1h59m — still within TTL
+  Date.now = () => baseTime + USER_TTL_MS - 60 * 1000;
+  assert.deepEqual(getUserAffinity("user_ok", "model_B"), ["off_Y"]);
+
+  Date.now = originalNow;
+});
+
+test("user affinity: latency averaging uses 70/30 weighting", () => {
+  _resetForTest();
+  const originalNow = Date.now;
+
+  const baseTime = originalNow.call(Date);
+  Date.now = () => baseTime;
+
+  // Push two offerings with different latencies
+  pushUserAffinity("user_lat", "model_L", "off_fast", 100);
+  pushUserAffinity("user_lat", "model_L", "off_slow", 500);
+
+  // Ordering should be: off_slow first (most recently pushed via unshift), then off_fast
+  assert.deepEqual(getUserAffinity("user_lat", "model_L"), ["off_slow", "off_fast"]);
+
+  // Now update off_slow with a very low latency: avg = round(500*0.7 + 50*0.3) = round(350+15) = 365
+  pushUserAffinity("user_lat", "model_L", "off_slow", 50);
+
+  // Update off_fast with a high latency: avg = round(100*0.7 + 900*0.3) = round(70+270) = 340
+  pushUserAffinity("user_lat", "model_L", "off_fast", 900);
+
+  // Both should still be present (update doesn't change order in the array, just updates in place)
+  const result = getUserAffinity("user_lat", "model_L");
+  assert.equal(result.length, 2);
+  assert.ok(result.includes("off_slow"));
+  assert.ok(result.includes("off_fast"));
+
+  Date.now = originalNow;
+});
+
+test("user affinity: mixed expired and valid entries", () => {
+  _resetForTest();
+  const originalNow = Date.now;
+
+  const baseTime = originalNow.call(Date);
+
+  // Push off_old at baseTime
+  Date.now = () => baseTime;
+  pushUserAffinity("user_mix", "model_M", "off_old", 200);
+
+  // Push off_mid 1 hour later
+  Date.now = () => baseTime + 60 * 60 * 1000;
+  pushUserAffinity("user_mix", "model_M", "off_mid", 300);
+
+  // Push off_new 1.5 hours later
+  Date.now = () => baseTime + 90 * 60 * 1000;
+  pushUserAffinity("user_mix", "model_M", "off_new", 100);
+
+  // Now advance to baseTime + 2h30m
+  // off_old was pushed at baseTime → age = 2h30m → expired (> 2h)
+  // off_mid was pushed at baseTime+1h → age = 1h30m → valid
+  // off_new was pushed at baseTime+1.5h → age = 1h → valid
+  Date.now = () => baseTime + 150 * 60 * 1000;
+
+  const result = getUserAffinity("user_mix", "model_M");
+  assert.equal(result.length, 2);
+  assert.ok(result.includes("off_mid"));
+  assert.ok(result.includes("off_new"));
+  assert.ok(!result.includes("off_old"));
+
+  Date.now = originalNow;
+});

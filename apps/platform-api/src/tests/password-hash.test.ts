@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 
-import { hashPassword, passwordNeedsRehash, verifyPassword } from "../crypto-utils.js";
+import { decryptSecret, encryptSecret, hashApiKey, hashPassword, passwordNeedsRehash, verifyPassword } from "../crypto-utils.js";
 
 const legacyHash = (rawPassword: string) =>
   createHash("sha256")
@@ -24,4 +24,36 @@ test("legacy sha256 hashes still verify and require rehash", () => {
   assert.equal(verifyPassword("LegacyPass123!", hash), true);
   assert.equal(verifyPassword("WrongLegacyPass123!", hash), false);
   assert.equal(passwordNeedsRehash(hash), true);
+});
+
+test("hashApiKey: same input produces same hash", () => {
+  const hash1 = hashApiKey("xk_test_abc123");
+  const hash2 = hashApiKey("xk_test_abc123");
+  assert.equal(hash1, hash2);
+});
+
+test("hashApiKey: different inputs produce different hashes", () => {
+  const hash1 = hashApiKey("xk_test_abc123");
+  const hash2 = hashApiKey("xk_test_xyz789");
+  assert.notEqual(hash1, hash2);
+});
+
+test("encryptSecret/decryptSecret: roundtrip produces original", () => {
+  const secret = "sk-super-secret-provider-key-12345";
+  const encrypted = encryptSecret(secret);
+  const decrypted = decryptSecret(encrypted);
+  assert.equal(decrypted, secret);
+});
+
+test("encryptSecret: each encryption produces different ciphertext", () => {
+  const secret = "sk-same-secret";
+  const encrypted1 = encryptSecret(secret);
+  const encrypted2 = encryptSecret(secret);
+  assert.notEqual(encrypted1, encrypted2);
+});
+
+test("hashPassword: each hash has unique salt", () => {
+  const hash1 = hashPassword("SamePassword123!");
+  const hash2 = hashPassword("SamePassword123!");
+  assert.notEqual(hash1, hash2);
 });
