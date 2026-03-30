@@ -1872,7 +1872,10 @@ export const postgresPlatformRepository: PlatformRepository = {
       , COALESCE(p.label, c.provider_label) AS "providerLabel"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
-      LEFT JOIN provider_presets p ON RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%' AND p.provider_type = c.provider_type
+      LEFT JOIN provider_presets p ON (
+        RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%'
+        OR RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%'
+      )
       WHERE o.logical_model = $1 AND o.enabled = TRUE AND o.review_status = 'approved' AND (c.status = 'active' OR o.credential_id IS NULL)
       ORDER BY o.id ASC
     `, [logicalModel]);
@@ -1908,7 +1911,10 @@ export const postgresPlatformRepository: PlatformRepository = {
       FROM offerings o
       JOIN offering_favorites f ON f.offering_id = o.id AND f.user_id = $1
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
-      LEFT JOIN provider_presets p ON RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%' AND p.provider_type = c.provider_type
+      LEFT JOIN provider_presets p ON (
+        RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%'
+        OR RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%'
+      )
       WHERE o.logical_model = $2
         AND o.enabled = true
         AND o.review_status = 'approved'
