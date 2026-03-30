@@ -1848,7 +1848,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         c.provider_type AS "providerType",
         c.id AS "credentialId",
         c.base_url AS "baseUrl",
-        c.anthropic_base_url AS "anthropicBaseUrl",
+        COALESCE(p.anthropic_base_url, c.anthropic_base_url) AS "anthropicBaseUrl",
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
         o.real_model AS "realModel",
@@ -1902,7 +1902,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         c.encrypted_secret AS "encryptedSecret",
         c.api_key_env_name AS "apiKeyEnvName",
         c.base_url AS "baseUrl",
-        c.anthropic_base_url AS "anthropicBaseUrl",
+        COALESCE(p.anthropic_base_url, c.anthropic_base_url) AS "anthropicBaseUrl",
         COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders",
         COALESCE(p.label, c.provider_label) AS "providerLabel"
       FROM offerings o

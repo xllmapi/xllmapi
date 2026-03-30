@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { convertJsonResponse, createStreamConverter } from "../core/adapters/response-converter.js";
+import { convertJsonResponse, createStreamConverter, detectStreamFormat } from "../core/adapters/response-converter.js";
 
 // ── Non-streaming JSON conversion ─────────────────────────────────
 
@@ -318,4 +318,145 @@ test("createStreamConverter: Anthropic stop reason maps to OpenAI", () => {
   assert.ok(joined.includes('"finish_reason":"length"'), "max_tokens should map to length");
   assert.ok(joined.includes("Truncated"), "should contain content");
   assert.ok(joined.includes("[DONE]"), "should end with [DONE]");
+});
+
+// ── detectStreamFormat ──────────────────────────────────────────
+
+test("detectStreamFormat: Anthropic markers detected", () => {
+  const anthropicSse = 'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_1"}}\n\n';
+  assert.equal(detectStreamFormat(anthropicSse, "openai"), "anthropic");
+});
+
+test("detectStreamFormat: content_block_delta detected as Anthropic", () => {
+  const text = 'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}\n\n';
+  assert.equal(detectStreamFormat(text, "openai"), "anthropic");
+});
+
+test("detectStreamFormat: OpenAI markers detected", () => {
+  const openaiSse = 'data: {"id":"chatcmpl-1","choices":[{"delta":{"content":"Hi"}}]}\n\n';
+  assert.equal(detectStreamFormat(openaiSse, "anthropic"), "openai");
+});
+
+test("detectStreamFormat: unknown format returns fallback", () => {
+  assert.equal(detectStreamFormat("some random data", "openai"), "openai");
+  assert.equal(detectStreamFormat("some random data", "anthropic"), "anthropic");
+});
+
+// ── Auto-detect stream converter ────────────────────────────────
+
+test("autoDetect: OpenAI response with OpenAI→Anthropic expected converts correctly", () => {
+  const converter = createStreamConverter("openai", "anthropic", { autoDetect: true });
+
+  const chunk = 'data: {"id":"c1","model":"test","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}\n\ndata: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+  const out = converter.transform(chunk);
+  const flush = converter.flush();
+  const joined = [...out, ...flush].join("");
+
+  assert.ok(joined.includes("message_start"), "should detect OpenAI and convert to Anthropic");
+  assert.ok(joined.includes("content_block_delta"), "should have content delta");
+  assert.ok(joined.includes("Hello"), "should contain text");
+  assert.ok(joined.includes("message_stop"), "should have message_stop");
+});
+
+test("autoDetect: Anthropic response on expected-OpenAI endpoint converts correctly", () => {
+  // This is the Kimi scenario: expected OpenAI but got Anthropic SSE
+  const converter = createStreamConverter("openai", "anthropic", { autoDetect: true });
+
+  const chunk = [
+    'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_k1","type":"message","role":"assistant","model":"kimi-for-coding","content":[],"usage":{"input_tokens":10}}}\n\n',
+    'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"1 + 2 = 3"}}\n\n',
+    'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
+    'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n',
+    'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+  ].join("");
+
+  const out = converter.transform(chunk);
+  const flush = converter.flush();
+  const joined = [...out, ...flush].join("");
+
+  // Auto-detect should recognize Anthropic format = same as client format → passthrough
+  assert.ok(joined.includes("1 + 2 = 3"), "should passthrough Anthropic content when client wants Anthropic");
+  assert.ok(joined.includes("message_start"), "should contain message_start");
+});
+
+test("autoDetect: Anthropic response on expected-OpenAI endpoint for OpenAI client converts", () => {
+  // Provider returns Anthropic but client wants OpenAI
+  const converter = createStreamConverter("openai", "openai", { autoDetect: true });
+
+  const chunk = [
+    'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_k2","type":"message","role":"assistant","model":"kimi","content":[],"usage":{"input_tokens":10}}}\n\n',
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}\n\n',
+    'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n',
+    'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+  ].join("");
+
+  const out = converter.transform(chunk);
+  const flush = converter.flush();
+  const joined = [...out, ...flush].join("");
+
+  assert.ok(joined.includes("Hello"), "should convert Anthropic content to OpenAI format");
+  assert.ok(joined.includes("chat.completion.chunk"), "should contain OpenAI chunk format");
+  assert.ok(joined.includes("[DONE]"), "should end with [DONE]");
+});
+
+test("autoDetect: same format passthrough works", () => {
+  const converter = createStreamConverter("openai", "openai", { autoDetect: true });
+
+  const chunk = 'data: {"id":"c1","choices":[{"delta":{"content":"Hi"}}]}\n\n';
+  const out = converter.transform(chunk);
+  const flush = converter.flush();
+  const joined = [...out, ...flush].join("");
+
+  // Should detect OpenAI = same as client → passthrough
+  assert.ok(joined.includes("Hi"), "should passthrough content");
+  assert.ok(joined.includes("choices"), "should preserve OpenAI format");
+});
+
+// ── reasoning_content handling ──────────────────────────────────
+
+test("OpenAI→Anthropic converter handles reasoning_content", () => {
+  const converter = createStreamConverter("openai", "anthropic");
+
+  // First chunk: reasoning content only
+  const chunk1 = 'data: {"id":"c1","model":"kimi","choices":[{"index":0,"delta":{"reasoning_content":"Let me think..."},"finish_reason":null}]}\n\n';
+  const out1 = converter.transform(chunk1);
+  const joined1 = out1.join("");
+  assert.ok(joined1.includes("message_start"), "reasoning_content should trigger init");
+  assert.ok(joined1.includes("Let me think..."), "should contain reasoning text");
+
+  // Second chunk: regular content
+  const chunk2 = 'data: {"id":"c1","choices":[{"index":0,"delta":{"content":"The answer is 3"},"finish_reason":null}]}\n\n';
+  const out2 = converter.transform(chunk2);
+  const joined2 = out2.join("");
+  assert.ok(joined2.includes("The answer is 3"), "should contain regular content");
+
+  // Finish
+  const chunk3 = 'data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+  const out3 = converter.transform(chunk3);
+  const flush = converter.flush();
+  const joinedEnd = [...out3, ...flush].join("");
+  assert.ok(joinedEnd.includes("message_stop"), "should have stop event");
+});
+
+test("OpenAI→Anthropic converter handles reasoning_content only (no regular content)", () => {
+  const converter = createStreamConverter("openai", "anthropic");
+
+  const chunks = [
+    'data: {"id":"c1","model":"deepseek","choices":[{"index":0,"delta":{"reasoning_content":"Thinking step 1"},"finish_reason":null}]}\n\n',
+    'data: {"id":"c1","choices":[{"index":0,"delta":{"reasoning_content":"Thinking step 2"},"finish_reason":null}]}\n\n',
+    'data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+  ];
+
+  const allOutput: string[] = [];
+  for (const chunk of chunks) {
+    allOutput.push(...converter.transform(chunk));
+  }
+  allOutput.push(...converter.flush());
+
+  const joined = allOutput.join("");
+  assert.ok(joined.includes("Thinking step 1"), "should include first reasoning chunk");
+  assert.ok(joined.includes("Thinking step 2"), "should include second reasoning chunk");
+  assert.ok(joined.includes("message_start"), "should have started the stream");
+  assert.ok(joined.includes("message_stop"), "should have stopped the stream");
 });

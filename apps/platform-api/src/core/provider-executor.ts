@@ -196,6 +196,12 @@ export function resolveUpstreamHeaders(
     headers["user-agent"] = agentUA;
   }
 
+  // Auth mode: convert x-api-key to Authorization: Bearer for providers that require it
+  if (customHeaders.authMode === "bearer" && headers["x-api-key"]) {
+    headers["authorization"] = `Bearer ${headers["x-api-key"]}`;
+    delete headers["x-api-key"];
+  }
+
   return headers;
 }
 
@@ -301,7 +307,9 @@ export async function proxyApiRequest(params: {
         }
         params.writeHead(resp.status, respHeaders);
 
-        const converter = needsConversion ? createStreamConverter(targetFormat, params.clientFormat) : null;
+        // Use auto-detect converter: handles providers that return unexpected SSE formats
+        // (e.g. Kimi returning Anthropic SSE on OpenAI endpoint)
+        const converter = createStreamConverter(targetFormat, params.clientFormat, { autoDetect: true });
         const { Readable } = await import("node:stream");
         const nodeStream = Readable.fromWeb(resp.body as import("stream/web").ReadableStream);
         const TAIL_SIZE = 4096;
@@ -310,20 +318,14 @@ export async function proxyApiRequest(params: {
         await new Promise<void>((resolve, reject) => {
           nodeStream.on("data", (chunk: Buffer) => {
             const str = chunk.toString();
-            if (converter) {
-              const lines = converter.transform(str);
-              for (const line of lines) params.res.write(line);
-            } else {
-              params.res.write(chunk);
-            }
+            const lines = converter.transform(str);
+            for (const line of lines) params.res.write(line);
             tailBuf += str;
             if (tailBuf.length > TAIL_SIZE * 2) tailBuf = tailBuf.slice(-TAIL_SIZE);
           });
           nodeStream.on("end", () => {
-            if (converter) {
-              const final = converter.flush();
-              for (const line of final) params.res.write(line);
-            }
+            const final = converter.flush();
+            for (const line of final) params.res.write(line);
             params.res.end();
             resolve();
           });

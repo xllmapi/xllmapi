@@ -117,3 +117,43 @@ test("passthrough=false + no UA rule → keeps adapter default", () => {
   assert.equal(result["user-agent"], "xllmapi/1.0");
   assert.equal(result["x-custom"], "val");
 });
+
+// ── authMode bearer ──
+
+test("authMode bearer converts x-api-key to Authorization: Bearer", () => {
+  const anthropicHeaders = {
+    "content-type": "application/json",
+    "x-api-key": "sk-kimi-test123",
+    "anthropic-version": "2023-06-01",
+    "user-agent": "xllmapi/1.0",
+  };
+  const config = { authMode: "bearer" as const };
+  const result = resolveUpstreamHeaders(anthropicHeaders, config);
+
+  assert.equal(result["authorization"], "Bearer sk-kimi-test123");
+  assert.equal(result["x-api-key"], undefined, "x-api-key should be removed");
+  assert.equal(result["anthropic-version"], "2023-06-01", "other headers preserved");
+});
+
+test("authMode bearer does nothing when no x-api-key present", () => {
+  const result = resolveUpstreamHeaders({ ...BASE_HEADERS }, { authMode: "bearer" as const });
+  assert.equal(result["authorization"], "Bearer sk-test");
+  assert.equal(result["x-api-key"], undefined);
+});
+
+test("authMode bearer works with force headers", () => {
+  const anthropicHeaders = {
+    "content-type": "application/json",
+    "x-api-key": "sk-kimi-abc",
+    "user-agent": "xllmapi/1.0",
+  };
+  const config = {
+    headers: { "user-agent": { value: "claude-code/1.0", mode: "force" as const } },
+    authMode: "bearer" as const,
+  };
+  const result = resolveUpstreamHeaders(anthropicHeaders, config, "opencode/1.3");
+
+  assert.equal(result["authorization"], "Bearer sk-kimi-abc");
+  assert.equal(result["x-api-key"], undefined);
+  assert.equal(result["user-agent"], "claude-code/1.0");
+});

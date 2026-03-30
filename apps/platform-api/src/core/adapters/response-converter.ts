@@ -1,6 +1,10 @@
 /**
  * Response converters: OpenAI ↔ Anthropic response format conversion.
  * Used when clientFormat ≠ targetFormat so the client can parse the response.
+ *
+ * Supports auto-detection of upstream response format for providers that may
+ * return a different format than expected (e.g. Kimi returning Anthropic SSE
+ * on its OpenAI endpoint).
  */
 import type { ApiFormatId } from "./types.js";
 
@@ -100,7 +104,7 @@ export function convertJsonResponse(
 
 /* ── Streaming SSE conversion ── */
 
-interface StreamConverter {
+export interface StreamConverter {
   /** Process an incoming chunk of SSE text. Returns complete SSE lines to emit. */
   transform(chunk: string): string[];
   /** Flush any remaining state at end of stream. Returns final SSE lines to emit. */
@@ -149,16 +153,19 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
     }
 
     const choices = (parsed.choices ?? []) as Array<{
-      delta?: { role?: string; content?: string };
+      delta?: Record<string, unknown>;
       finish_reason?: string | null;
     }>;
     const choice = choices[0];
     if (!choice) return results;
 
-    const delta = choice.delta ?? {};
+    const delta = (choice.delta ?? {}) as Record<string, unknown>;
     const finishReason = choice.finish_reason;
+    const content = delta.content as string | undefined;
+    const role = delta.role as string | undefined;
+    const reasoningContent = delta.reasoning_content as string | undefined;
 
-    if (state === "init" && (delta.content !== undefined || delta.role !== undefined)) {
+    if (state === "init" && (content !== undefined || role !== undefined || reasoningContent !== undefined)) {
       // Emit message_start + content_block_start
       results.push(formatEvent("message_start", {
         type: "message_start",
@@ -181,12 +188,23 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
       state = "streaming";
     }
 
-    if (state === "streaming" && delta.content) {
-      results.push(formatEvent("content_block_delta", {
-        type: "content_block_delta",
-        index: 0,
-        delta: { type: "text_delta", text: delta.content },
-      }));
+    if (state === "streaming") {
+      // Handle reasoning_content (thinking/reasoning models like DeepSeek, Kimi)
+      if (reasoningContent) {
+        results.push(formatEvent("content_block_delta", {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: reasoningContent },
+        }));
+      }
+      // Handle regular content
+      if (content) {
+        results.push(formatEvent("content_block_delta", {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: content },
+        }));
+      }
     }
 
     if (finishReason && state !== "done") {
@@ -200,7 +218,6 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
     state = "done";
     const results: string[] = [];
 
-    // If we never started streaming, emit the start events first
     results.push(formatEvent("content_block_stop", {
       type: "content_block_stop",
       index: 0,
@@ -372,11 +389,105 @@ function createAnthropicToOpenaiStreamConverter(): StreamConverter {
   };
 }
 
+/* ── Auto-detect stream format ── */
+
+/**
+ * Detect whether SSE text is in OpenAI or Anthropic format.
+ * Anthropic: has `event: message_start` or `event: content_block` lines.
+ * OpenAI: has `data:` lines with `"choices":` JSON.
+ */
+export function detectStreamFormat(text: string, fallback: ApiFormatId): ApiFormatId {
+  // Anthropic markers: named SSE events specific to Anthropic protocol
+  if (/event:\s*(message_start|content_block_start|content_block_delta|content_block_stop|message_delta|message_stop)\b/.test(text)) {
+    return "anthropic";
+  }
+  // OpenAI markers: data lines with choices array
+  if (/"choices"\s*:\s*\[/.test(text)) {
+    return "openai";
+  }
+  return fallback;
+}
+
+/**
+ * Auto-detecting stream converter that buffers initial chunks to determine
+ * the actual upstream format, then delegates to the correct converter.
+ *
+ * This handles cases where a provider returns a different SSE format than expected
+ * (e.g. Kimi's OpenAI endpoint returning Anthropic-format SSE events).
+ */
+function createAutoDetectStreamConverter(
+  expectedUpstreamFormat: ApiFormatId,
+  clientFormat: ApiFormatId
+): StreamConverter {
+  let detected = false;
+  let actualConverter: StreamConverter | null = null;
+  let bufferedChunks: string[] = [];
+  let bufferedSize = 0;
+
+  function detectAndInit(accumulated: string): void {
+    const actualFormat = detectStreamFormat(accumulated, expectedUpstreamFormat);
+
+    if (actualFormat === clientFormat) {
+      // Same format as client wants: pass through
+      actualConverter = { transform: (c) => [c], flush: () => [] };
+    } else if (actualFormat === "openai" && clientFormat === "anthropic") {
+      actualConverter = createOpenaiToAnthropicStreamConverter();
+    } else if (actualFormat === "anthropic" && clientFormat === "openai") {
+      actualConverter = createAnthropicToOpenaiStreamConverter();
+    } else {
+      actualConverter = { transform: (c) => [c], flush: () => [] };
+    }
+    detected = true;
+  }
+
+  return {
+    transform(chunk: string): string[] {
+      if (detected && actualConverter) {
+        return actualConverter.transform(chunk);
+      }
+
+      bufferedChunks.push(chunk);
+      bufferedSize += chunk.length;
+
+      // Detect once we have enough data or see a complete SSE event boundary
+      if (bufferedSize >= 256 || chunk.includes("\n\n")) {
+        const accumulated = bufferedChunks.join("");
+        detectAndInit(accumulated);
+        return actualConverter!.transform(accumulated);
+      }
+
+      return [];
+    },
+    flush(): string[] {
+      if (!detected) {
+        const accumulated = bufferedChunks.join("");
+        if (accumulated.trim()) {
+          detectAndInit(accumulated);
+          const results = actualConverter!.transform(accumulated);
+          return [...results, ...actualConverter!.flush()];
+        }
+        return [];
+      }
+      return actualConverter!.flush();
+    },
+  };
+}
+
 /**
  * Create a streaming SSE converter that transforms chunks from one format to another.
  * Returns a stateful converter with transform() and flush() methods.
+ *
+ * When autoDetect is true, the converter buffers initial data to detect the actual
+ * upstream format and dynamically selects the correct conversion path.
  */
-export function createStreamConverter(from: ApiFormatId, to: ApiFormatId): StreamConverter {
+export function createStreamConverter(
+  from: ApiFormatId,
+  to: ApiFormatId,
+  options?: { autoDetect?: boolean }
+): StreamConverter {
+  if (options?.autoDetect) {
+    return createAutoDetectStreamConverter(from, to);
+  }
   if (from === to) {
     // Identity converter — pass through
     return { transform: (chunk) => [chunk], flush: () => [] };

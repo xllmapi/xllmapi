@@ -8,6 +8,8 @@ export interface CustomHeaderRule {
 export interface CustomHeadersConfig {
   headers?: Record<string, CustomHeaderRule>;
   passthrough?: boolean;
+  /** When "bearer", converts Anthropic x-api-key to Authorization: Bearer for providers that require it (e.g. Kimi). */
+  authMode?: "bearer";
 }
 
 export interface CandidateOffering {
