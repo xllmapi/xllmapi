@@ -125,15 +125,15 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
   function processLine(line: string): string[] {
     const results: string[] = [];
 
-    if (line === "data: [DONE]") {
+    if (line === "data: [DONE]" || line === "data:[DONE]") {
       if (state !== "done") {
         results.push(...emitClosingEvents());
       }
       return results;
     }
 
-    if (!line.startsWith("data: ")) return results;
-    const jsonStr = line.slice(6).trim();
+    if (!line.startsWith("data:")) return results;
+    const jsonStr = line.slice(5).trim();
     if (!jsonStr) return results;
 
     let parsed: Record<string, unknown>;
@@ -359,10 +359,10 @@ function createAnthropicToOpenaiStreamConverter(): StreamConverter {
         const trimmed = line.trim();
         if (!trimmed) continue;
 
-        if (trimmed.startsWith("event: ")) {
-          currentEvent = trimmed.slice(7).trim();
-        } else if (trimmed.startsWith("data: ")) {
-          const jsonStr = trimmed.slice(6).trim();
+        if (trimmed.startsWith("event:")) {
+          currentEvent = trimmed.slice(6).trim();
+        } else if (trimmed.startsWith("data:")) {
+          const jsonStr = trimmed.slice(5).trim();
           if (currentEvent && jsonStr) {
             results.push(...processEventData(currentEvent, jsonStr));
           }
@@ -377,10 +377,10 @@ function createAnthropicToOpenaiStreamConverter(): StreamConverter {
         const lines = buffer.split("\n");
         for (const line of lines) {
           const trimmed = line.trim();
-          if (trimmed.startsWith("event: ")) {
-            currentEvent = trimmed.slice(7).trim();
-          } else if (trimmed.startsWith("data: ")) {
-            const jsonStr = trimmed.slice(6).trim();
+          if (trimmed.startsWith("event:")) {
+            currentEvent = trimmed.slice(6).trim();
+          } else if (trimmed.startsWith("data:")) {
+            const jsonStr = trimmed.slice(5).trim();
             if (currentEvent && jsonStr) {
               results.push(...processEventData(currentEvent, jsonStr));
             }
