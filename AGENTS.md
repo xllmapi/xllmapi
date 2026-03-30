@@ -17,6 +17,17 @@
 - 生产构建**必须**通过 `scripts/deploy.sh`（自动设置正确的环境变量）
 - Vite build 模式已内置安全默认值（`XLLMAPI_DOCS_URL` 默认指向 `https://docs.xllmapi.com/docs`），作为最后防线
 
+## 功能开发流程
+
+- step1: 编写相关设计方案
+- step2: 设计方案评估一轮 + 优化
+- step3: 把设计方案放到 docs/todo/YYYY-MM-DD-MM-xxx.md
+- step4: 创建新分支 + 基于方案 拆解出可以实施的计划(功能实现 + 增加对应的测试集)
+- step5: 实现一个就添加相关测试 + 测试通过再进入一下去实现直到全部实现
+- step6: 做整体的e2e测试 + 本地启动服务对用所有新改动做模拟测试直到全部符合预期
+- step7: 增加相关测试到CI里 然后基于创建新PR (如果有冲突就rebase到最新远端的main上) + 每30s检测PR的CI状态 直到全部通过就合入PR
+- step8: 评估是否可以无感发布, 如果可以 + 用户说要发布就直接进行发布, 没有要求发布就总结报告输出等待用户确认
+
 ## 发布流程（零停机滚动发布）
 
 ```bash
@@ -26,7 +37,6 @@ ssh root@43.163.197.216
 # 2. 执行标准发布
 cd /opt/xllmapi/app
 DATABASE_URL='postgresql://xllmapi:xllmapi_prod_2026@127.0.0.1:5432/xllmapi' \
-XLLMAPI_SKIP_BACKUP=1 \
 bash scripts/deploy.sh
 ```
 
