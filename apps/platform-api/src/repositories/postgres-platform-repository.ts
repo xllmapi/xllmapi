@@ -1327,8 +1327,8 @@ export const postgresPlatformRepository: PlatformRepository = {
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN provider_presets p ON (
-        RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%'
-        OR RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%'
+        (p.base_url IS NOT NULL AND p.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%')
+        OR (p.anthropic_base_url IS NOT NULL AND p.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%')
       )
       WHERE o.enabled = TRUE
         AND o.review_status = 'approved'
@@ -1883,8 +1883,8 @@ export const postgresPlatformRepository: PlatformRepository = {
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN provider_presets p ON (
-        RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%'
-        OR RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%'
+        (p.base_url IS NOT NULL AND p.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%')
+        OR (p.anthropic_base_url IS NOT NULL AND p.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%')
       )
       WHERE o.logical_model = $1 AND o.enabled = TRUE AND o.review_status = 'approved' AND (c.status = 'active' OR o.credential_id IS NULL)
       ORDER BY o.id ASC
@@ -1925,8 +1925,8 @@ export const postgresPlatformRepository: PlatformRepository = {
       JOIN offering_favorites f ON f.offering_id = o.id AND f.user_id = $1
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN provider_presets p ON (
-        RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%'
-        OR RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%'
+        (p.base_url IS NOT NULL AND p.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%')
+        OR (p.anthropic_base_url IS NOT NULL AND p.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%')
       )
       WHERE o.logical_model = $2
         AND o.enabled = true
