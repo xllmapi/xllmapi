@@ -19,6 +19,8 @@ interface NetworkModel {
   thirdParty?: boolean;
   thirdPartyLabel?: string;
   trustLevel?: string;
+  presetId?: string | null;
+  presetLabel?: string | null;
 }
 
 interface ModelStats {
@@ -26,6 +28,7 @@ interface ModelStats {
   totalRequests: number;
   totalTokens: number;
   last7dTrend: number[];
+  presetId?: string;
 }
 
 interface TrendDay {
@@ -293,7 +296,7 @@ export function ModelsPage() {
       .finally(() => setDistributedLoading(false));
   }, []);
 
-  const statsMap = new Map(stats.map((s) => [s.logicalModel, s]));
+  const statsMap = new Map(stats.map((s) => [s.presetId ? `${s.logicalModel}::${s.presetId}` : s.logicalModel, s]));
   const totalNodes = models.reduce((sum, m) => sum + (m.ownerCount ?? 0), 0);
   const totalSuppliers = new Set(models.flatMap((m) => (m.featuredSuppliers ?? []).map((s) => s.handle))).size;
   const totalTokens = stats.reduce((sum, s) => sum + s.totalTokens, 0);
@@ -304,14 +307,15 @@ export function ModelsPage() {
     if (q) {
       const nameMatch = m.logicalModel.toLowerCase().includes(q);
       const supplierMatch = (m.featuredSuppliers ?? []).some((s) => s.displayName.toLowerCase().includes(q) || s.handle.toLowerCase().includes(q));
-      if (!nameMatch && !supplierMatch) return false;
+      const labelMatch = (m.presetLabel ?? "").toLowerCase().includes(q);
+      if (!nameMatch && !supplierMatch && !labelMatch) return false;
     }
     if (filterOnline && m.status !== "available") return false;
     if (filterVerified && !(m.providers && m.providers.length > 0)) return false;
     return true;
   });
   const sortFn = (a: NetworkModel, b: NetworkModel) => {
-    const sa = statsMap.get(a.logicalModel), sb = statsMap.get(b.logicalModel);
+    const sa = statsMap.get(a.presetId ? `${a.logicalModel}::${a.presetId}` : a.logicalModel), sb = statsMap.get(b.presetId ? `${b.logicalModel}::${b.presetId}` : b.logicalModel);
     if (sortBy === "popular") return (b.ownerCount ?? 0) - (a.ownerCount ?? 0);
     if (sortBy === "requests") return (sb?.totalRequests ?? 0) - (sa?.totalRequests ?? 0);
     if (sortBy === "tokens") return (sb?.totalTokens ?? 0) - (sa?.totalTokens ?? 0);
@@ -424,10 +428,10 @@ export function ModelsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sorted.map((m) => {
-              const s = statsMap.get(m.logicalModel);
+              const s = statsMap.get(m.presetId ? `${m.logicalModel}::${m.presetId}` : m.logicalModel);
               return (
-                <div key={m.logicalModel}
-                  onClick={() => navigate(`/mnetwork/${encodeURIComponent(m.logicalModel)}`)}
+                <div key={m.presetId ? `${m.logicalModel}::${m.presetId}` : m.logicalModel}
+                  onClick={() => navigate(`/mnetwork/${encodeURIComponent(m.logicalModel)}${m.presetId ? `?provider=${encodeURIComponent(m.presetId)}` : ''}`)}
                   className={`rounded-[var(--radius-card)] border p-5 transition-colors cursor-pointer ${
                     m.thirdParty
                       ? m.trustLevel === "low"
@@ -442,6 +446,9 @@ export function ModelsPage() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 truncate mr-2">
                       <span className="text-sm font-mono font-medium text-text-primary truncate">{m.logicalModel}</span>
+                      {m.presetLabel && (
+                        <span className="text-[10px] text-text-tertiary shrink-0">{m.presetLabel}</span>
+                      )}
                       {m.thirdParty && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${
                           m.trustLevel === "low" ? "bg-red-500/10 border-red-500/20 text-red-400"

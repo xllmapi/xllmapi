@@ -22,6 +22,8 @@ export interface PublicMarketModel {
   thirdPartyLabel?: string;
   trustLevel?: string;
   thirdPartyNotice?: string;
+  presetId?: string | null;
+  presetLabel?: string | null;
 }
 
 export interface PublicSupplierProfile {

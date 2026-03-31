@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { formatTokens, getContextLimit, formatContextLength } from "@/lib/utils";
 import { Footer } from "@/components/layout/Footer";
@@ -19,6 +19,8 @@ interface NetworkModel {
   thirdPartyLabel?: string;
   trustLevel?: string;
   thirdPartyNotice?: string;
+  presetId?: string | null;
+  presetLabel?: string | null;
 }
 
 interface ModelStats {
@@ -29,6 +31,7 @@ interface ModelStats {
   totalOutputTokens: number;
   uniqueUsers: number;
   last7dTrend: number[];
+  presetId?: string;
 }
 
 /** SVG bar chart for 7-day trend */
@@ -96,6 +99,8 @@ export function ModelDetailPage() {
   const { logicalModel } = useParams<{ logicalModel: string }>();
   const navigate = useNavigate();
   const { t } = useLocale();
+  const [searchParams] = useSearchParams();
+  const providerId = searchParams.get("provider");
   const [model, setModel] = useState<NetworkModel | null>(null);
   const [stats, setStats] = useState<ModelStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,12 +120,19 @@ export function ModelDetailPage() {
       apiJson<{ data: NetworkModel[] }>("/v1/network/models"),
       apiJson<{ data: ModelStats[] }>("/v1/network/models/stats").catch(() => ({ data: [] })),
     ]).then(([modelsRes, statsRes]) => {
-      const m = (modelsRes.data ?? []).find((x) => x.logicalModel === logicalModel) ?? null;
-      const s = (statsRes.data ?? []).find((x) => x.logicalModel === logicalModel) ?? null;
+      const candidates = (modelsRes.data ?? []).filter((x) => x.logicalModel === logicalModel);
+      const m = providerId
+        ? candidates.find((x) => x.presetId === providerId) ?? candidates[0] ?? null
+        : candidates[0] ?? null;
+      const matchedPresetId = m?.presetId;
+      const statsCandidates = (statsRes.data ?? []).filter((x) => x.logicalModel === logicalModel);
+      const s = matchedPresetId
+        ? statsCandidates.find((x) => x.presetId === matchedPresetId) ?? statsCandidates[0] ?? null
+        : statsCandidates[0] ?? null;
       setModel(m);
       setStats(s);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [logicalModel]);
+  }, [logicalModel, providerId]);
 
   // Fetch suppliers for this model
   useEffect(() => {
@@ -243,6 +255,9 @@ export function ModelDetailPage() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-bold font-mono tracking-tight">{model.logicalModel}</h1>
+                {model.presetLabel && (
+                  <span className="text-sm font-normal text-text-tertiary ml-2">{model.presetLabel}</span>
+                )}
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${model.status === "available" ? "border-emerald-400/30 text-emerald-400" : "border-amber-400/30 text-amber-400"}`}>
                   {model.status === "available" ? "\uD83D\uDFE2" : "\uD83D\uDFE1"} {model.status ?? "available"}
                 </span>
