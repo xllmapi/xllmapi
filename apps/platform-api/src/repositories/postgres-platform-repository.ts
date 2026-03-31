@@ -2377,6 +2377,24 @@ export const postgresPlatformRepository: PlatformRepository = {
       await client.query("BEGIN");
       await client.query("INSERT INTO wallets (user_id, available_token_credit) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING", [params.requesterUserId, DEFAULT_INITIAL_TOKEN_CREDIT]);
       await client.query("INSERT INTO wallets (user_id, available_token_credit) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING", [params.supplierUserId, DEFAULT_INITIAL_TOKEN_CREDIT]);
+
+      // Lock the consumer wallet row to prevent concurrent overdraft
+      const walletRow = await client.query<{ available_token_credit: string }>(
+        "SELECT available_token_credit FROM wallets WHERE user_id = $1 FOR UPDATE",
+        [params.requesterUserId]
+      );
+      const availableBalance = Number(walletRow.rows[0]?.available_token_credit ?? 0);
+      const actualDeduction = Math.min(consumerCost, Math.max(0, availableBalance));
+      const underfunded = actualDeduction < consumerCost;
+
+      if (underfunded) {
+        console.warn(`[settlement] underfunded: user=${params.requesterUserId} request=${params.requestId} cost=${consumerCost} available=${availableBalance} actualDeduction=${actualDeduction}`);
+      }
+
+      // Recalculate supplier reward based on actual deduction
+      const actualSupplierReward = underfunded ? Math.floor(actualDeduction * supplierRewardRate) : supplierReward;
+      const actualPlatformMargin = actualDeduction - actualSupplierReward;
+
       await client.query(`
         INSERT INTO api_requests (
           id, requester_user_id, logical_model, chosen_offering_id, provider, real_model,
@@ -2405,16 +2423,16 @@ export const postgresPlatformRepository: PlatformRepository = {
         params.upstreamFormat ?? null,
         params.formatConverted ?? null
       ]);
-      await client.query("UPDATE wallets SET available_token_credit = available_token_credit - $1 WHERE user_id = $2", [consumerCost, params.requesterUserId]);
-      await client.query("UPDATE wallets SET available_token_credit = available_token_credit + $1 WHERE user_id = $2", [supplierReward, params.supplierUserId]);
+      await client.query("UPDATE wallets SET available_token_credit = available_token_credit - $1 WHERE user_id = $2", [actualDeduction, params.requesterUserId]);
+      await client.query("UPDATE wallets SET available_token_credit = available_token_credit + $1 WHERE user_id = $2", [actualSupplierReward, params.supplierUserId]);
       await client.query(`
         INSERT INTO ledger_entries (request_id, user_id, direction, amount, entry_type)
         VALUES ($1, $2, 'debit', $3, 'consumer_cost')
-      `, [params.requestId, params.requesterUserId, consumerCost]);
+      `, [params.requestId, params.requesterUserId, actualDeduction]);
       await client.query(`
         INSERT INTO ledger_entries (request_id, user_id, direction, amount, entry_type)
         VALUES ($1, $2, 'credit', $3, 'supplier_reward')
-      `, [params.requestId, params.supplierUserId, supplierReward]);
+      `, [params.requestId, params.supplierUserId, actualSupplierReward]);
       await client.query(`
         INSERT INTO settlement_records (
           request_id, consumer_user_id, supplier_user_id, consumer_cost, supplier_reward, platform_margin, supplier_reward_rate
@@ -2423,9 +2441,9 @@ export const postgresPlatformRepository: PlatformRepository = {
         params.requestId,
         params.requesterUserId,
         params.supplierUserId,
-        consumerCost,
-        supplierReward,
-        platformMargin,
+        actualDeduction,
+        actualSupplierReward,
+        actualPlatformMargin,
         supplierRewardRate
       ]);
       await client.query("COMMIT");
