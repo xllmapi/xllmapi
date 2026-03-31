@@ -30,7 +30,7 @@ interface ModelStats {
 
 interface TrendDay {
   date: string;
-  models: Record<string, { requests: number; tokens: number; users: number; avgPrice: number }>;
+  models: Record<string, { requests: number; tokens: number; xtokens: number; users: number; avgPrice: number }>;
 }
 
 interface DistributedOffering {
@@ -55,22 +55,16 @@ interface DistributedOffering {
   last7dTrendRaw?: string;
 }
 
-type TrendMetric = "requests" | "tokens" | "price";
+type TrendMetric = "requests" | "tokens" | "xtokens" | "price";
 
-const MODEL_COLORS: Record<string, string> = {
-  "deepseek-chat": "#8be3da",
-  "deepseek-reasoner": "#5cc8be",
-  "MiniMax-M2.7": "#a78bfa",
-  "MiniMax-M2.5": "#c4b5fd",
-  "MiniMax-Text-01": "#8b5cf6",
-  "gpt-4o-mini": "#34d399",
-  "gpt-4o": "#10b981",
-  "claude-sonnet-4-20250514": "#fb923c",
-};
-const FALLBACK_COLORS = ["#94a3b8", "#64748b", "#475569", "#cbd5e1"];
-
-function getModelColor(name: string, idx: number): string {
-  return MODEL_COLORS[name] ?? FALLBACK_COLORS[idx % FALLBACK_COLORS.length]!;
+/** Generate a stable, high-contrast color from model name using golden angle spacing */
+function getModelColor(name: string): string {
+  let hash = 5381;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) + hash + name.charCodeAt(i)) >>> 0;
+  }
+  const hue = (hash * 137.508) % 360;
+  return `hsl(${Math.round(hue)}, 70%, 60%)`;
 }
 
 /** SVG Area Chart for trends */
@@ -110,7 +104,7 @@ function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; m
     const values = filledData.map((d) => {
       const m = d.models[model];
       if (!m) return 0;
-      return metric === "requests" ? m.requests : metric === "tokens" ? m.tokens : m.avgPrice;
+      return metric === "requests" ? m.requests : metric === "tokens" ? m.tokens : metric === "xtokens" ? m.xtokens : m.avgPrice;
     });
     return { model, values, total: values.reduce((a, b) => a + b, 0) };
   });
@@ -148,7 +142,7 @@ function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; m
     const prevBottom = s === 0
       ? filledData.map((_, i) => `${x(i)},${y(0)}`).reverse().join(" ")
       : filledData.map((_, i) => `${x(i)},${y(stacked[s - 1]![i]!)}`).reverse().join(" ");
-    return { model, color: getModelColor(model, s), d: `M${top} L${prevBottom} Z` };
+    return { model, color: getModelColor(model), d: `M${top} L${prevBottom} Z` };
   });
 
   // X-axis labels (show ~8 labels)
@@ -195,7 +189,7 @@ function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; m
           }
           if (current.length > 0) segments.push(current);
           return segments.map((seg, si) => (
-            <polyline key={`${model}-${si}`} points={seg.join(" ")} fill="none" stroke={getModelColor(model, s)} strokeWidth={isOverlay ? 2.5 : 2} opacity={isOverlay ? 1 : 0.8} />
+            <polyline key={`${model}-${si}`} points={seg.join(" ")} fill="none" stroke={getModelColor(model)} strokeWidth={isOverlay ? 2.5 : 2} opacity={isOverlay ? 1 : 0.8} />
           ));
         })}
         {/* X labels */}
@@ -205,9 +199,9 @@ function TrendChart({ data, metric, allModels, days = 7 }: { data: TrendDay[]; m
       </svg>
       {/* Legend */}
       <div className="flex flex-wrap gap-4 mt-3 px-1">
-        {sortedModels.map((model, i) => (
+        {sortedModels.map((model) => (
           <span key={model} className="flex items-center gap-2 text-xs text-text-secondary">
-            <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: getModelColor(model, i) }} />
+            <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: getModelColor(model) }} />
             {model}
           </span>
         ))}
@@ -265,7 +259,7 @@ export function ModelsPage() {
   const [stats, setStats] = useState<ModelStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [trendData, setTrendData] = useState<TrendDay[]>([]);
-  const [trendMetric, setTrendMetric] = useState<TrendMetric>("requests");
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>("xtokens");
   const [trendDays, setTrendDays] = useState(7);
   const [sortBy, setSortBy] = useState<SortKey>("popular");
   const [search, setSearch] = useState("");
@@ -371,7 +365,7 @@ export function ModelsPage() {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1.5">
-                {(["requests", "tokens", "price"] as TrendMetric[]).map((m) => (
+                {(["xtokens", "tokens", "requests", "price"] as TrendMetric[]).map((m) => (
                   <button key={m} onClick={() => setTrendMetric(m)}
                     className={`px-3 py-1 text-xs rounded-full transition-colors cursor-pointer border ${
                       trendMetric === m ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"
