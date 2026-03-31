@@ -1308,6 +1308,9 @@ export const postgresPlatformRepository: PlatformRepository = {
       providers: string[] | null;
       pricingModes: string[] | null;
       maxContextLength: number | null;
+      thirdParty: boolean;
+      thirdPartyLabel: string | null;
+      trustLevel: string;
     }>(`
       SELECT
         o.logical_model AS name,
@@ -1392,7 +1395,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         capabilities: ["chat"],
         compatibilities: ["openai", "anthropic"],
         contextLength: row.maxContextLength ? Number(row.maxContextLength) : undefined,
-        featuredSuppliers
+        featuredSuppliers,
+        thirdParty: row.thirdParty ?? false,
+        thirdPartyLabel: row.thirdPartyLabel ?? undefined,
+        trustLevel: row.trustLevel ?? "high",
       });
     }
 
