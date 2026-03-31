@@ -753,7 +753,7 @@ export async function handleAdminRoutes(
       return true;
     }
     const presetId = decodeURIComponent(presetMatch[1]);
-    const body = await read_json<{ label: string; providerType: string; baseUrl: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown }>(req);
+    const body = await read_json<{ label: string; providerType: string; baseUrl: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown; thirdParty?: boolean; thirdPartyLabel?: string; trustLevel?: string }>(req);
     // Validate: at least one URL required, and must match API format
     const hasBaseUrl = !!(body.baseUrl && body.baseUrl.trim());
     const hasAnthropicUrl = !!(body.anthropicBaseUrl && body.anthropicBaseUrl.trim());
@@ -786,6 +786,9 @@ export async function handleAdminRoutes(
       sortOrder: body.sortOrder,
       updatedBy: auth.userId,
       customHeaders: body.customHeaders ?? null,
+      thirdParty: body.thirdParty ?? false,
+      thirdPartyLabel: body.thirdPartyLabel ?? null,
+      trustLevel: body.trustLevel ?? "high",
     });
     await platformRepository.writeAuditLog({
       actorUserId: auth.userId, action: "update", targetType: "provider_preset", targetId: presetId,
@@ -806,7 +809,7 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const body = await read_json<{ id?: string; label?: string; providerType?: string; baseUrl?: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown }>(req);
+    const body = await read_json<{ id?: string; label?: string; providerType?: string; baseUrl?: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown; thirdParty?: boolean; thirdPartyLabel?: string; trustLevel?: string }>(req);
     const hasBaseUrl = !!(body.baseUrl && body.baseUrl.trim());
     const hasAnthropicUrl = !!(body.anthropicBaseUrl && body.anthropicBaseUrl.trim());
     if (!body.id || !body.label || !body.providerType || (!hasBaseUrl && !hasAnthropicUrl)) {
@@ -838,6 +841,9 @@ export async function handleAdminRoutes(
       sortOrder: body.sortOrder ?? 0,
       updatedBy: auth.userId,
       customHeaders: body.customHeaders ?? null,
+      thirdParty: body.thirdParty ?? false,
+      thirdPartyLabel: body.thirdPartyLabel ?? null,
+      trustLevel: body.trustLevel ?? "high",
     });
     await platformRepository.writeAuditLog({
       actorUserId: auth.userId, action: "create", targetType: "provider_preset", targetId: body.id,
