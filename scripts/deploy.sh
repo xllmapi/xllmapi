@@ -45,16 +45,8 @@ mkdir -p "${RELEASES_DIR}/${RELEASE_ID}"
 rm -rf "${RELEASES_DIR:?}/${RELEASE_ID}/assets"
 cp -R apps/web/dist/assets "${RELEASES_DIR}/${RELEASE_ID}/assets"
 
-# Clean up old releases (keep last N)
-if [[ -d "${RELEASES_DIR}" ]]; then
-  mapfile -t old_releases < <(find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d | sort | head -n "-${XLLMAPI_ASSET_RETENTION_COUNT:-3}" 2>/dev/null || true)
-  for release_path in "${old_releases[@]}"; do
-    [[ -n "${release_path}" ]] || continue
-    if [[ "$(basename "${release_path}")" != "${RELEASE_ID}" ]]; then
-      rm -rf "${release_path}"
-    fi
-  done
-fi
+# NOTE: old release cleanup moved to after pm2 reload to avoid serving 404
+# during the rolling restart window (stale workers may still reference old assets)
 
 # Database backup (skip with XLLMAPI_SKIP_BACKUP=1)
 if [[ -n "${DATABASE_URL:-}" && "${XLLMAPI_SKIP_BACKUP:-0}" != "1" ]]; then
@@ -88,6 +80,17 @@ echo "[deploy] readiness check passed"
 if [[ -f scripts/release-smoke.sh ]]; then
   echo "[deploy] running smoke test"
   XLLMAPI_EXPECT_RELEASE_ID="${RELEASE_ID}" bash scripts/release-smoke.sh
+fi
+
+# Clean up old releases (keep last N) — runs after reload so stale workers can't 404
+if [[ -d "${RELEASES_DIR}" ]]; then
+  mapfile -t old_releases < <(find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d | sort | head -n "-${XLLMAPI_ASSET_RETENTION_COUNT:-5}" 2>/dev/null || true)
+  for release_path in "${old_releases[@]}"; do
+    [[ -n "${release_path}" ]] || continue
+    if [[ "$(basename "${release_path}")" != "${RELEASE_ID}" ]]; then
+      rm -rf "${release_path}"
+    fi
+  done
 fi
 
 echo "[deploy] release ${RELEASE_ID} done"

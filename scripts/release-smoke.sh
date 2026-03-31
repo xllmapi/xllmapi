@@ -89,4 +89,18 @@ assert_body_contains_ "/" '<div id="root">'
 assert_http_status_ "/assets/__xllmapi_missing__.js" "404"
 assert_body_contains_ "/metrics" 'xllmapi_total_requests'
 
+# Verify release assets are reachable (prevents CDN cache poisoning from deploy window 404s)
+if [[ -n "${EXPECT_RELEASE_ID}" ]]; then
+  INDEX_HTML="$(curl -sf "${BASE_URL}/")"
+  FIRST_JS="$(echo "${INDEX_HTML}" | grep -oP '/_releases/[^"]+\.js' | head -1 || true)"
+  if [[ -n "${FIRST_JS}" ]]; then
+    JS_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "${BASE_URL}${FIRST_JS}")"
+    if [[ "${JS_STATUS}" != "200" ]]; then
+      echo "[smoke] CRITICAL: release asset returned ${JS_STATUS}: ${FIRST_JS}" >&2
+      exit 1
+    fi
+    echo "[smoke] release asset reachable: ${FIRST_JS}"
+  fi
+fi
+
 echo "[smoke] release smoke passed for ${BASE_URL}"

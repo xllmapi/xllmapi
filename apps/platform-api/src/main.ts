@@ -301,6 +301,7 @@ const server = createServer(async (req, res) => {
     const staticFile = req.method === "GET" ? read_static_file_(url.pathname) : null;
     if (staticFile) {
       if (staticFile.statusCode === 404) {
+        res.setHeader("cache-control", "no-store");
         send_json_(res, 404, {
           error: {
             message: "Not found",
