@@ -1309,6 +1309,8 @@ export const postgresPlatformRepository: PlatformRepository = {
     const currentPool = getPool();
     const result = await currentPool.query<{
       name: string;
+      presetId: string;
+      presetLabel: string;
       offeringCount: string;
       enabledOfferingCount: string;
       credentialCount: string;
@@ -1326,6 +1328,8 @@ export const postgresPlatformRepository: PlatformRepository = {
     }>(`
       SELECT
         o.logical_model AS name,
+        COALESCE(p.id, '__unknown__') AS "presetId",
+        COALESCE(p.label, 'Unknown') AS "presetLabel",
         COUNT(*)::text AS "offeringCount",
         SUM(CASE WHEN o.enabled THEN 1 ELSE 0 END)::text AS "enabledOfferingCount",
         COUNT(DISTINCT o.credential_id)::text AS "credentialCount",
@@ -1339,44 +1343,56 @@ export const postgresPlatformRepository: PlatformRepository = {
           (SELECT (m->>'contextLength')::integer FROM jsonb_array_elements(p.models) AS m WHERE m->>'realModel' = o.real_model LIMIT 1),
           o.context_length
         )) AS "maxContextLength",
-        bool_or(COALESCE(p.third_party, false)) AS "thirdParty",
-        MAX(p.third_party_label) AS "thirdPartyLabel",
-        MAX(COALESCE(p.trust_level, 'high')) AS "trustLevel",
-        MAX(p.third_party_notice) AS "thirdPartyNotice"
+        COALESCE(p.third_party, false) AS "thirdParty",
+        p.third_party_label AS "thirdPartyLabel",
+        COALESCE(p.trust_level, 'high') AS "trustLevel",
+        p.third_party_notice AS "thirdPartyNotice"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
-      LEFT JOIN provider_presets p ON (
-        (p.base_url IS NOT NULL AND p.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%')
-        OR (p.anthropic_base_url IS NOT NULL AND p.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%')
-      )
+      LEFT JOIN LATERAL (
+        SELECT pp.id, pp.label, pp.third_party, pp.third_party_label, pp.trust_level, pp.third_party_notice, pp.models
+        FROM provider_presets pp
+        WHERE (pp.base_url IS NOT NULL AND pp.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(pp.base_url, '/') || '%')
+           OR (pp.anthropic_base_url IS NOT NULL AND pp.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(pp.anthropic_base_url, '/') || '%')
+        ORDER BY pp.sort_order
+        LIMIT 1
+      ) p ON TRUE
       WHERE o.enabled = TRUE
         AND o.review_status = 'approved'
         AND (c.status = 'active' OR o.credential_id IS NULL)
         AND o.owner_user_id NOT LIKE '%_demo'
         AND o.execution_mode = 'platform'
-      GROUP BY o.logical_model
-      ORDER BY o.logical_model ASC
+      GROUP BY o.logical_model, p.id, p.label, p.third_party, p.third_party_label, p.trust_level, p.third_party_notice
+      ORDER BY o.logical_model ASC, COALESCE(p.third_party, false) ASC, p.label ASC
     `);
 
-    // 7-day average settlement price per model
-    // 7-day average offering price (fixed pricing, not weighted by usage)
+    // 7-day average settlement price per model + preset
     const avgPriceResult = await currentPool.query<{
       logicalModel: string;
+      presetId: string;
       avgInput: string;
       avgOutput: string;
     }>(`
       SELECT
         ar.logical_model AS "logicalModel",
+        COALESCE(pp.id, '__unknown__') AS "presetId",
         ROUND(AVG(o.fixed_price_per_1k_input))::text AS "avgInput",
         ROUND(AVG(o.fixed_price_per_1k_output))::text AS "avgOutput"
       FROM api_requests ar
       JOIN offerings o ON o.id = ar.chosen_offering_id
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN LATERAL (
+        SELECT ppp.id FROM provider_presets ppp
+        WHERE (ppp.base_url IS NOT NULL AND ppp.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(ppp.base_url, '/') || '%')
+           OR (ppp.anthropic_base_url IS NOT NULL AND ppp.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(ppp.anthropic_base_url, '/') || '%')
+        ORDER BY ppp.sort_order LIMIT 1
+      ) pp ON TRUE
       WHERE ar.created_at > NOW() - INTERVAL '7 days'
-      GROUP BY ar.logical_model
+      GROUP BY ar.logical_model, COALESCE(pp.id, '__unknown__')
     `);
     const avgPriceMap = new Map<string, { avgInput: number; avgOutput: number }>();
     for (const r of avgPriceResult.rows) {
-      avgPriceMap.set(r.logicalModel, { avgInput: Number(r.avgInput), avgOutput: Number(r.avgOutput) });
+      avgPriceMap.set(`${r.logicalModel}::${r.presetId}`, { avgInput: Number(r.avgInput), avgOutput: Number(r.avgOutput) });
     }
 
     const models: PublicMarketModel[] = [];
@@ -1392,10 +1408,12 @@ export const postgresPlatformRepository: PlatformRepository = {
         }
       }
 
-      const avg7d = avgPriceMap.get(row.name);
+      const avg7d = avgPriceMap.get(`${row.name}::${row.presetId}`);
 
       models.push({
         logicalModel: row.name,
+        presetId: row.presetId === '__unknown__' ? null : row.presetId,
+        presetLabel: row.presetId === '__unknown__' ? null : row.presetLabel,
         providers: row.providers ?? [],
         providerCount: (row.providers ?? []).length,
         ownerCount: Number(row.ownerCount),
@@ -2785,55 +2803,75 @@ export const postgresPlatformRepository: PlatformRepository = {
     // Per-model stats from api_requests (last 30 days)
     const statsResult = await pool.query(`
       SELECT
-        logical_model AS "logicalModel",
+        ar.logical_model AS "logicalModel",
+        COALESCE(pp.id, '__unknown__') AS "presetId",
         COUNT(*) AS "totalRequests",
-        SUM(total_tokens) AS "totalTokens",
-        SUM(input_tokens) AS "totalInputTokens",
-        SUM(output_tokens) AS "totalOutputTokens",
-        COUNT(DISTINCT requester_user_id) AS "uniqueUsers"
-      FROM api_requests
-      WHERE created_at > NOW() - INTERVAL '30 days'
-        AND logical_model NOT LIKE 'community-%'
-        AND logical_model NOT LIKE 'e2e-%'
-      GROUP BY logical_model
+        SUM(ar.total_tokens) AS "totalTokens",
+        SUM(ar.input_tokens) AS "totalInputTokens",
+        SUM(ar.output_tokens) AS "totalOutputTokens",
+        COUNT(DISTINCT ar.requester_user_id) AS "uniqueUsers"
+      FROM api_requests ar
+      JOIN offerings o ON o.id = ar.chosen_offering_id
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN LATERAL (
+        SELECT ppp.id FROM provider_presets ppp
+        WHERE (ppp.base_url IS NOT NULL AND ppp.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(ppp.base_url, '/') || '%')
+           OR (ppp.anthropic_base_url IS NOT NULL AND ppp.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(ppp.anthropic_base_url, '/') || '%')
+        ORDER BY ppp.sort_order LIMIT 1
+      ) pp ON TRUE
+      WHERE ar.created_at > NOW() - INTERVAL '30 days'
+        AND ar.logical_model NOT LIKE 'community-%'
+        AND ar.logical_model NOT LIKE 'e2e-%'
+      GROUP BY ar.logical_model, COALESCE(pp.id, '__unknown__')
       ORDER BY COUNT(*) DESC
     `);
 
     // 7-day daily trend per model
     const trendResult = await pool.query(`
       SELECT
-        logical_model AS "logicalModel",
-        DATE(created_at) AS day,
+        ar.logical_model AS "logicalModel",
+        COALESCE(pp.id, '__unknown__') AS "presetId",
+        DATE(ar.created_at) AS day,
         COUNT(*) AS reqs
-      FROM api_requests
-      WHERE created_at > NOW() - INTERVAL '7 days'
-        AND logical_model NOT LIKE 'community-%'
-        AND logical_model NOT LIKE 'e2e-%'
-      GROUP BY logical_model, DATE(created_at)
-      ORDER BY logical_model, day
+      FROM api_requests ar
+      JOIN offerings o ON o.id = ar.chosen_offering_id
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN LATERAL (
+        SELECT ppp.id FROM provider_presets ppp
+        WHERE (ppp.base_url IS NOT NULL AND ppp.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(ppp.base_url, '/') || '%')
+           OR (ppp.anthropic_base_url IS NOT NULL AND ppp.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(ppp.anthropic_base_url, '/') || '%')
+        ORDER BY ppp.sort_order LIMIT 1
+      ) pp ON TRUE
+      WHERE ar.created_at > NOW() - INTERVAL '7 days'
+        AND ar.logical_model NOT LIKE 'community-%'
+        AND ar.logical_model NOT LIKE 'e2e-%'
+      GROUP BY ar.logical_model, COALESCE(pp.id, '__unknown__'), DATE(ar.created_at)
+      ORDER BY ar.logical_model, day
     `);
 
-    // Build trend map: model → [day0, day1, ..., day6]
+    // Build trend map: model::preset → [day0, day1, ..., day6]
     const trendMap: Record<string, number[]> = {};
     const today = new Date();
     for (const row of trendResult.rows) {
-      if (!trendMap[row.logicalModel]) {
-        trendMap[row.logicalModel] = new Array(7).fill(0);
+      const key = `${row.logicalModel}::${row.presetId}`;
+      if (!trendMap[key]) {
+        trendMap[key] = new Array(7).fill(0);
       }
       const dayDate = new Date(row.day);
       const daysAgo = Math.floor((today.getTime() - dayDate.getTime()) / 86400000);
       const idx = 6 - Math.min(daysAgo, 6);
-      trendMap[row.logicalModel]![idx] = Number(row.reqs);
+      trendMap[key]![idx] = Number(row.reqs);
     }
 
     return statsResult.rows.map((row) => ({
       logicalModel: row.logicalModel,
+      presetId: row.presetId === '__unknown__' ? undefined : row.presetId,
       totalRequests: Number(row.totalRequests),
       totalTokens: Number(row.totalTokens),
       totalInputTokens: Number(row.totalInputTokens),
       totalOutputTokens: Number(row.totalOutputTokens),
       uniqueUsers: Number(row.uniqueUsers),
-      last7dTrend: trendMap[row.logicalModel] ?? new Array(7).fill(0)
+      last7dTrend: trendMap[`${row.logicalModel}::${row.presetId}`] ?? new Array(7).fill(0)
     }));
   },
 
