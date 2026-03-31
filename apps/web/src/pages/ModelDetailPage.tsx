@@ -15,6 +15,9 @@ interface NetworkModel {
   minOutputPrice?: number | null;
   contextLength?: number;
   featuredSuppliers?: { handle: string; displayName: string }[];
+  thirdParty?: boolean;
+  thirdPartyLabel?: string;
+  trustLevel?: string;
 }
 
 interface ModelStats {
@@ -215,8 +218,26 @@ export function ModelDetailPage() {
           </button>
         </div>
 
+        {/* Third-party banner */}
+        {model.thirdParty && (
+          <div className={`mb-4 rounded-[var(--radius-input)] px-4 py-2.5 text-sm border ${
+            model.trustLevel === "low" ? "bg-red-500/10 border-red-500/30 text-red-400"
+              : model.trustLevel === "medium" ? "bg-orange-500/10 border-orange-500/30 text-orange-400"
+              : "bg-teal-500/10 border-teal-500/30 text-teal-400"
+          }`}>
+            {model.thirdPartyLabel ? `${t("models.thirdPartyBanner")} (${model.thirdPartyLabel})` : t("models.thirdPartyBanner")}
+          </div>
+        )}
+
         {/* Header card with join button inside */}
-        <div className={`mb-8 rounded-[var(--radius-card)] p-5 border ${isPlatformModel ? "border-blue-500/20 bg-blue-500/5" : "border-purple-500/20 bg-purple-500/5"}`}>
+        <div className={`mb-8 rounded-[var(--radius-card)] p-5 border ${
+          model.thirdParty
+            ? model.trustLevel === "low" ? "border-red-500/20 bg-red-500/5"
+              : model.trustLevel === "medium" ? "border-orange-500/20 bg-orange-500/5"
+              : "border-teal-500/20 bg-teal-500/5"
+            : isPlatformModel ? "border-blue-500/20 bg-blue-500/5"
+            : "border-purple-500/20 bg-purple-500/5"
+        }`}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-3 mb-2">

@@ -16,6 +16,9 @@ interface NetworkModel {
   minOutputPrice?: number | null;
   contextLength?: number;
   featuredSuppliers?: { handle: string; displayName: string }[];
+  thirdParty?: boolean;
+  thirdPartyLabel?: string;
+  trustLevel?: string;
 }
 
 interface ModelStats {
@@ -313,14 +316,17 @@ export function ModelsPage() {
     if (filterVerified && !(m.providers && m.providers.length > 0)) return false;
     return true;
   });
-  const sorted = [...filtered].sort((a, b) => {
+  const sortFn = (a: NetworkModel, b: NetworkModel) => {
     const sa = statsMap.get(a.logicalModel), sb = statsMap.get(b.logicalModel);
     if (sortBy === "popular") return (b.ownerCount ?? 0) - (a.ownerCount ?? 0);
     if (sortBy === "requests") return (sb?.totalRequests ?? 0) - (sa?.totalRequests ?? 0);
     if (sortBy === "tokens") return (sb?.totalTokens ?? 0) - (sa?.totalTokens ?? 0);
     if (sortBy === "newest") return (b.logicalModel > a.logicalModel ? 1 : -1);
     return (a.minInputPrice ?? 9999) - (b.minInputPrice ?? 9999);
-  });
+  };
+  const officialModels = [...filtered].filter((m) => !m.thirdParty).sort(sortFn);
+  const thirdPartyModels = [...filtered].filter((m) => m.thirdParty).sort(sortFn);
+  const sorted = [...officialModels, ...thirdPartyModels];
 
   return (
     <div className="min-h-screen flex flex-col pt-14">
@@ -428,11 +434,30 @@ export function ModelsPage() {
               return (
                 <div key={m.logicalModel}
                   onClick={() => navigate(`/mnetwork/${encodeURIComponent(m.logicalModel)}`)}
-                  className="rounded-[var(--radius-card)] border border-blue-500/20 bg-blue-500/5 p-5 transition-colors hover:border-blue-500/40 cursor-pointer">
+                  className={`rounded-[var(--radius-card)] border p-5 transition-colors cursor-pointer ${
+                    m.thirdParty
+                      ? m.trustLevel === "low"
+                        ? "border-red-500/20 bg-red-500/5 hover:border-red-500/40"
+                        : m.trustLevel === "medium"
+                          ? "border-orange-500/20 bg-orange-500/5 hover:border-orange-500/40"
+                          : "border-teal-500/20 bg-teal-500/5 hover:border-teal-500/40"
+                      : "border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40"
+                  }`}>
 
-                  {/* Name + status */}
+                  {/* Name + status + third-party badge */}
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-mono font-medium text-text-primary truncate mr-2">{m.logicalModel}</span>
+                    <div className="flex items-center gap-2 truncate mr-2">
+                      <span className="text-sm font-mono font-medium text-text-primary truncate">{m.logicalModel}</span>
+                      {m.thirdParty && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${
+                          m.trustLevel === "low" ? "bg-red-500/10 border-red-500/20 text-red-400"
+                            : m.trustLevel === "medium" ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
+                            : "bg-teal-500/10 border-teal-500/20 text-teal-400"
+                        }`}>
+                          {m.thirdPartyLabel || t("models.thirdParty")}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <StatusDot status={m.status ?? "available"} />
                       <span className="text-[10px] text-text-tertiary capitalize">{m.status ?? "available"}</span>

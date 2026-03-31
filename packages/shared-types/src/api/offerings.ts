@@ -37,4 +37,7 @@ export interface CandidateOffering {
   maxConcurrency?: number;
   customHeaders?: CustomHeadersConfig;
   providerLabel?: string;
+  thirdParty?: boolean;
+  thirdPartyLabel?: string;
+  trustLevel?: 'high' | 'medium' | 'low';
 }

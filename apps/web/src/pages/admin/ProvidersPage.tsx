@@ -31,6 +31,9 @@ interface ProviderPreset {
   enabled: boolean;
   sortOrder: number;
   customHeaders: unknown | null;
+  thirdParty: boolean;
+  thirdPartyLabel: string | null;
+  trustLevel: string;
 }
 
 type Tab = "presets" | "status";
@@ -47,6 +50,9 @@ const EMPTY_PRESET: ProviderPreset = {
   enabled: true,
   sortOrder: 0,
   customHeaders: null,
+  thirdParty: false,
+  thirdPartyLabel: null,
+  trustLevel: "high",
 };
 
 /* ---------- Presets Tab ---------- */
@@ -233,6 +239,59 @@ function PresetsTab() {
               }`}
             />
           </button>
+        </div>
+
+        {/* third-party label config */}
+        <div className="border-t border-line pt-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <label className="text-text-secondary text-xs">{t("admin.providers.thirdParty")}</label>
+            <button
+              type="button"
+              onClick={() => setEditing({ ...editing, thirdParty: !editing.thirdParty })}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
+                editing.thirdParty ? "bg-orange-500" : "bg-line"
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                  editing.thirdParty ? "translate-x-[18px]" : "translate-x-[3px]"
+                }`}
+              />
+            </button>
+          </div>
+          {editing.thirdParty && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormInput
+                label={t("admin.providers.thirdPartyLabel")}
+                placeholder={t("admin.providers.thirdPartyLabelHint")}
+                value={editing.thirdPartyLabel ?? ""}
+                onChange={(e) => setEditing({ ...editing, thirdPartyLabel: e.target.value || null })}
+              />
+              <div>
+                <label className="text-text-secondary text-xs block mb-1.5">{t("admin.providers.trustLevel")}</label>
+                <div className="flex items-center gap-3">
+                  {(["high", "medium", "low"] as const).map((level) => {
+                    const colors = { high: "text-teal-400 border-teal-400/40", medium: "text-orange-400 border-orange-400/40", low: "text-red-400 border-red-400/40" };
+                    const labels = { high: t("admin.providers.trustHigh"), medium: t("admin.providers.trustMedium"), low: t("admin.providers.trustLow") };
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => setEditing({ ...editing, trustLevel: level })}
+                        className={`rounded-full px-3 py-1.5 text-xs font-medium border cursor-pointer transition-colors ${
+                          editing.trustLevel === level
+                            ? `${colors[level]} bg-${level === "high" ? "teal" : level === "medium" ? "orange" : "red"}-500/10`
+                            : "border-line text-text-tertiary"
+                        }`}
+                      >
+                        {labels[level]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* models JSON */}

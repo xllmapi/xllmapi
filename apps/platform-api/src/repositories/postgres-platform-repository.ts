@@ -1323,7 +1323,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         MAX(COALESCE(
           (SELECT (m->>'contextLength')::integer FROM jsonb_array_elements(p.models) AS m WHERE m->>'realModel' = o.real_model LIMIT 1),
           o.context_length
-        )) AS "maxContextLength"
+        )) AS "maxContextLength",
+        bool_or(COALESCE(p.third_party, false)) AS "thirdParty",
+        MAX(p.third_party_label) AS "thirdPartyLabel",
+        MAX(COALESCE(p.trust_level, 'high')) AS "trustLevel"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN provider_presets p ON (
@@ -1880,6 +1883,9 @@ export const postgresPlatformRepository: PlatformRepository = {
       , o.node_id AS "nodeId"
       , COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders"
       , COALESCE(p.label, c.provider_label) AS "providerLabel"
+      , COALESCE(p.third_party, false) AS "thirdParty"
+      , p.third_party_label AS "thirdPartyLabel"
+      , COALESCE(p.trust_level, 'high') AS "trustLevel"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN provider_presets p ON (
@@ -1920,7 +1926,10 @@ export const postgresPlatformRepository: PlatformRepository = {
         CASE WHEN p.id IS NOT NULL THEN NULLIF(p.base_url, '') ELSE c.base_url END AS "baseUrl",
         COALESCE(p.anthropic_base_url, c.anthropic_base_url) AS "anthropicBaseUrl",
         COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders",
-        COALESCE(p.label, c.provider_label) AS "providerLabel"
+        COALESCE(p.label, c.provider_label) AS "providerLabel",
+        COALESCE(p.third_party, false) AS "thirdParty",
+        p.third_party_label AS "thirdPartyLabel",
+        COALESCE(p.trust_level, 'high') AS "trustLevel"
       FROM offerings o
       JOIN offering_favorites f ON f.offering_id = o.id AND f.user_id = $1
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
@@ -4191,13 +4200,17 @@ export const postgresPlatformRepository: PlatformRepository = {
     anthropicBaseUrl: string | null; models: unknown[]; enabled: boolean;
     sortOrder: number; updatedAt: string; updatedBy: string | null;
     customHeaders: unknown | null;
+    thirdParty: boolean; thirdPartyLabel: string | null; trustLevel: string;
   }>> {
     const pool = getPool();
     const result = await pool.query(`
       SELECT id, label, provider_type AS "providerType", base_url AS "baseUrl",
         anthropic_base_url AS "anthropicBaseUrl", models, enabled,
         sort_order AS "sortOrder", updated_at AS "updatedAt", updated_by AS "updatedBy",
-        custom_headers AS "customHeaders"
+        custom_headers AS "customHeaders",
+        COALESCE(third_party, false) AS "thirdParty",
+        third_party_label AS "thirdPartyLabel",
+        COALESCE(trust_level, 'high') AS "trustLevel"
       FROM provider_presets
       ORDER BY sort_order ASC, id ASC
     `);
@@ -4208,11 +4221,12 @@ export const postgresPlatformRepository: PlatformRepository = {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
     sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
+    thirdParty?: boolean; thirdPartyLabel?: string | null; trustLevel?: string;
   }): Promise<void> {
     const pool = getPool();
     await pool.query(`
-      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by, custom_headers)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10)
+      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by, custom_headers, third_party, third_party_label, trust_level)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11, $12, $13)
       ON CONFLICT (id) DO UPDATE SET
         label = EXCLUDED.label,
         provider_type = EXCLUDED.provider_type,
@@ -4223,11 +4237,15 @@ export const postgresPlatformRepository: PlatformRepository = {
         sort_order = EXCLUDED.sort_order,
         updated_at = NOW(),
         updated_by = EXCLUDED.updated_by,
-        custom_headers = EXCLUDED.custom_headers
+        custom_headers = EXCLUDED.custom_headers,
+        third_party = EXCLUDED.third_party,
+        third_party_label = EXCLUDED.third_party_label,
+        trust_level = EXCLUDED.trust_level
     `, [params.id, params.label, params.providerType, params.baseUrl,
         params.anthropicBaseUrl ?? null, JSON.stringify(params.models),
         params.enabled ?? true, params.sortOrder ?? 0, params.updatedBy ?? null,
-        params.customHeaders ? JSON.stringify(params.customHeaders) : null]);
+        params.customHeaders ? JSON.stringify(params.customHeaders) : null,
+        params.thirdParty ?? false, params.thirdPartyLabel ?? null, params.trustLevel ?? 'high']);
   },
 
   async deleteProviderPreset(id: string): Promise<boolean> {
