@@ -1142,8 +1142,8 @@ export const platformService = {
     return platformRepository.findUserByHandle(handle);
   },
 
-  listAdminNotifications() {
-    return platformRepository.listAdminNotifications();
+  listAdminNotifications(params?: { page?: number; limit?: number }) {
+    return platformRepository.listAdminNotifications(params);
   },
 
   listUserNotifications(userId: string) {

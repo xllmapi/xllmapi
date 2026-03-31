@@ -100,6 +100,7 @@ export type PlatformRepository = {
   }): MaybePromise<{ ok: boolean; code?: string; message?: string; data?: MeProfile | null }>;
   getMe(userId: string): MaybePromise<MeProfile | null>;
   findUserByHandle(handle: string): MaybePromise<{ id: string; displayName: string; handle: string; role: string } | null>;
+  getUserEmailByUserId(userId: string): MaybePromise<{ email: string } | null>;
   listInvitations(userId: string): MaybePromise<any[]>;
   getInvitationStats(userId: string): MaybePromise<InvitationStats>;
   createInvitation(params: {
@@ -257,6 +258,8 @@ export type PlatformRepository = {
     clientFormat?: string;
     upstreamFormat?: string;
     formatConverted?: boolean;
+    latencyTotalMs?: number;
+    latencyTtfbMs?: number;
   }): MaybePromise<void>;
   recordSettlementFailure(params: {
     requestId: string;
@@ -333,7 +336,7 @@ export type PlatformRepository = {
   getConfigValue(key: string): MaybePromise<string | null>;
   updateAdminConfig(key: string, value: string, updatedBy: string): MaybePromise<any>;
   getAdminAuditLogs(limit: number): MaybePromise<any[]>;
-  getAuditLogsByTargetType(targetType: string, limit: number): MaybePromise<any[]>;
+  getAuditLogsByTargetType(targetType: string, limit: number, page?: number): MaybePromise<{ data: any[]; total: number }>;
   getAdminRequests(params: {
     model?: string;
     provider?: string;
@@ -345,6 +348,11 @@ export type PlatformRepository = {
   getAdminRequestDetail(requestId: string): MaybePromise<any>;
   getAdminOfferingHealthList(): MaybePromise<any[]>;
   adminStopOffering(offeringId: string): MaybePromise<void>;
+  adminBanOffering(offeringId: string): MaybePromise<void>;
+  adminUnbanOffering(offeringId: string): MaybePromise<void>;
+  adminStartOffering(offeringId: string): MaybePromise<void>;
+  adminDeleteOffering(offeringId: string): MaybePromise<void>;
+  getOfferingStats(offeringId: string): MaybePromise<any>;
   recordFailedRequest(params: {
     requestId: string;
     requesterUserId: string;
@@ -363,7 +371,7 @@ export type PlatformRepository = {
     limit: number;
   }): MaybePromise<{ data: any[]; summary: { totalConsumerCost: number; totalSupplierReward: number; totalPlatformMargin: number; count: number } }>;
   createNotification(params: { id: string; title: string; body: string; type: string; targetUserId?: string | null; createdBy: string }): MaybePromise<any>;
-  listAdminNotifications(): MaybePromise<any[]>;
+  listAdminNotifications(params?: { page?: number; limit?: number }): MaybePromise<{ data: any[]; total: number }>;
   listUserNotifications(userId: string): MaybePromise<any[]>;
   markNotificationRead(notificationId: string, userId: string): MaybePromise<any>;
   getUnreadCount(userId: string): MaybePromise<number>;
@@ -449,6 +457,7 @@ export type PlatformRepository = {
     customHeaders: unknown | null;
     thirdParty: boolean; thirdPartyLabel: string | null; trustLevel: string; thirdPartyNotice: string | null;
   }>>;
+  getProviderPresetRaw(id: string): MaybePromise<Record<string, unknown> | null>;
   upsertProviderPreset(params: {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;

@@ -24,18 +24,23 @@ export function AdminNotificationsPage() {
   const [type, setType] = useState("announcement");
   const [targetUserId, setTargetUserId] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendEmail, setSendEmail] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 20;
 
   const loadData = useCallback(async () => {
     try {
-      const res = await apiJson<{ data: Notification[] }>("/v1/admin/notifications");
+      const res = await apiJson<{ data: Notification[]; total: number }>(`/v1/admin/notifications?page=${page}&limit=${PAGE_SIZE}`);
       setNotifications(res.data ?? []);
+      setTotal(res.total ?? 0);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     void loadData();
@@ -54,12 +59,15 @@ export function AdminNotificationsPage() {
           content: content.trim(),
           type,
           ...(targetUserId.trim() ? { targetHandle: targetUserId.trim() } : {}),
+          ...(type === "personal" && sendEmail ? { sendEmail: true } : {}),
         }),
       });
       setMessage({ type: "success", text: t("admin.notifications.sent") });
       setTitle("");
       setContent("");
       setTargetUserId("");
+      setSendEmail(false);
+      setPage(1);
       await loadData();
     } catch {
       setMessage({ type: "error", text: t("common.error") });
@@ -157,12 +165,23 @@ export function AdminNotificationsPage() {
             </select>
           </div>
           {type === "personal" && (
-            <FormInput
-              label={t("admin.notifications.targetUser")}
-              placeholder="xu-xxxxxxxx"
-              value={targetUserId}
-              onChange={(e) => setTargetUserId(e.target.value)}
-            />
+            <>
+              <FormInput
+                label={t("admin.notifications.targetUser")}
+                placeholder="xu-xxxxxxxx"
+                value={targetUserId}
+                onChange={(e) => setTargetUserId(e.target.value)}
+              />
+              <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sendEmail}
+                  onChange={(e) => setSendEmail(e.target.checked)}
+                  className="rounded border-line"
+                />
+                {t("admin.notifications.sendEmail")}
+              </label>
+            </>
           )}
           <FormButton type="submit" disabled={sending || !title.trim() || !content.trim()} className="self-start">
             {sending ? t("common.loading") : t("admin.notifications.send")}
@@ -175,12 +194,28 @@ export function AdminNotificationsPage() {
       {loading ? (
         <p className="text-text-secondary py-8">{t("common.loading")}</p>
       ) : (
-        <DataTable
-          columns={columns}
-          data={notifications}
-          rowKey={(n) => n.id}
-          emptyText={t("common.empty")}
-        />
+        <>
+          <DataTable
+            columns={columns}
+            data={notifications}
+            rowKey={(n) => n.id}
+            emptyText={t("common.empty")}
+          />
+          {(() => {
+            const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+            return totalPages > 1 ? (
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <FormButton variant="ghost" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="!px-3 !py-1.5 !text-xs">
+                  &larr;
+                </FormButton>
+                <span className="text-sm text-text-secondary">{page} / {totalPages}</span>
+                <FormButton variant="ghost" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="!px-3 !py-1.5 !text-xs">
+                  &rarr;
+                </FormButton>
+              </div>
+            ) : null;
+          })()}
+        </>
       )}
     </div>
   );

@@ -139,6 +139,10 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return null;
   },
 
+  getUserEmailByUserId() {
+    return null;
+  },
+
   listInvitations(userId) {
     return list_invitations(userId);
   },
@@ -387,7 +391,7 @@ export const sqlitePlatformRepository: PlatformRepository = {
   },
 
   getAuditLogsByTargetType() {
-    return [];
+    return { data: [], total: 0 };
   },
 
   getAdminRequests() {
@@ -403,6 +407,11 @@ export const sqlitePlatformRepository: PlatformRepository = {
   archiveOffering() { return { ok: true }; },
   getAdminOfferingHealthList() { return []; },
   adminStopOffering() {},
+  adminBanOffering() {},
+  adminUnbanOffering() {},
+  adminStartOffering() {},
+  adminDeleteOffering() {},
+  getOfferingStats() { return { total: { totalRequests: 0, totalInputTokens: 0, totalOutputTokens: 0, successRate: 0 }, today: { todayRequests: 0, todayInputTokens: 0, todayOutputTokens: 0, todaySuccessRate: 0 }, recentRequests: [], avgLatency: { total: 0, ttfb: 0, queue: 0, upstream: 0 } }; },
 
   getAdminSettlements() {
     return { data: [], summary: { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 } };
@@ -419,8 +428,8 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return { id: "" };
   },
 
-  listAdminNotifications() {
-    return [];
+  listAdminNotifications(_params?: { page?: number; limit?: number }) {
+    return { data: [], total: 0 };
   },
 
   listUserNotifications() {
@@ -509,6 +518,7 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   // --- Provider Presets (stubs) ---
   listProviderPresets() { return []; },
+  getProviderPresetRaw() { return null; },
   upsertProviderPreset() {},
   deleteProviderPreset() { return false; },
 

@@ -387,14 +387,14 @@ export function ApiKeysPage() {
 
       <ConfirmDialog
         open={deleteConfirmId !== null}
-        onCancel={() => setDeleteConfirmId(null)}
+        onClose={() => setDeleteConfirmId(null)}
         onConfirm={() => {
           if (deleteConfirmId) void executeDeleteCredential(deleteConfirmId);
           setDeleteConfirmId(null);
         }}
         title={t("apiKeys.deleteKeyTitle")}
         description={t("apiKeys.deleteKeyWarning")}
-        countdown={5}
+        cooldownSeconds={5}
       />
     </div>
   );

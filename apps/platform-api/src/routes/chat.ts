@@ -379,6 +379,8 @@ export async function handleChatRoutes(
           clientFormat: "openai",
           upstreamFormat: "openai",
           formatConverted: false,
+          latencyTotalMs: result.timing.totalMs,
+          latencyTtfbMs: undefined,
         });
       } catch (err) {
         metricsService.increment("settlementFailures");

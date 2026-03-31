@@ -1117,6 +1117,12 @@ export const postgresPlatformRepository: PlatformRepository = {
     return result.rows[0] ?? null;
   },
 
+  async getUserEmailByUserId(userId: string) {
+    const pool = getPool();
+    const result = await pool.query<{ email: string }>("SELECT email FROM user_identities WHERE user_id = $1 LIMIT 1", [userId]);
+    return result.rows[0] ?? null;
+  },
+
   async listInvitations(userId) {
     await ensureDevSeed();
     const currentPool = getPool();
@@ -1270,7 +1276,12 @@ export const postgresPlatformRepository: PlatformRepository = {
         COALESCE(w.available_token_credit, 0) AS "balance",
         u.created_at AS "createdAt",
         u.last_login_at AS "lastLoginAt",
-        (SELECT se.ip_address FROM security_events se WHERE se.user_id = u.id ORDER BY se.created_at DESC LIMIT 1) AS "lastLoginIp"
+        (SELECT se.ip_address FROM security_events se WHERE se.user_id = u.id ORDER BY se.created_at DESC LIMIT 1) AS "lastLoginIp",
+        (SELECT COUNT(*) FROM offerings WHERE owner_user_id = u.id AND review_status = 'approved')::int AS "offeringCount",
+        (SELECT COUNT(*) FROM api_requests WHERE requester_user_id = u.id)::int AS "totalRequests",
+        (SELECT COALESCE(SUM(total_tokens), 0) FROM api_requests WHERE requester_user_id = u.id) AS "totalTokens",
+        (SELECT COUNT(*) FROM api_requests WHERE requester_user_id = u.id AND created_at >= CURRENT_DATE)::int AS "todayRequests",
+        (SELECT COALESCE(SUM(total_tokens), 0) FROM api_requests WHERE requester_user_id = u.id AND created_at >= CURRENT_DATE) AS "todayTokens"
       FROM users u
       LEFT JOIN user_identities i ON i.user_id = u.id
       LEFT JOIN wallets w ON w.user_id = u.id
@@ -2418,8 +2429,9 @@ export const postgresPlatformRepository: PlatformRepository = {
           id, requester_user_id, logical_model, chosen_offering_id, provider, real_model,
           input_tokens, output_tokens, total_tokens, status, idempotency_key, response_body,
           client_ip, client_user_agent, upstream_user_agent, api_key_id, provider_label,
-          client_format, upstream_format, format_converted
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11::jsonb, $12, $13, $14, $15, $16, $17, $18, $19)
+          client_format, upstream_format, format_converted,
+          latency_total_ms, latency_ttfb_ms
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11::jsonb, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       `, [
         params.requestId,
         params.requesterUserId,
@@ -2439,7 +2451,9 @@ export const postgresPlatformRepository: PlatformRepository = {
         params.providerLabel ?? null,
         params.clientFormat ?? null,
         params.upstreamFormat ?? null,
-        params.formatConverted ?? null
+        params.formatConverted ?? null,
+        params.latencyTotalMs ?? null,
+        params.latencyTtfbMs ?? null
       ]);
       await client.query("UPDATE wallets SET available_token_credit = available_token_credit - $1 WHERE user_id = $2", [actualDeduction, params.requesterUserId]);
       await client.query("UPDATE wallets SET available_token_credit = available_token_credit + $1 WHERE user_id = $2", [actualSupplierReward, params.supplierUserId]);
@@ -2948,8 +2962,13 @@ export const postgresPlatformRepository: PlatformRepository = {
     return result.rows;
   },
 
-  async getAuditLogsByTargetType(targetType: string, limit: number) {
+  async getAuditLogsByTargetType(targetType: string, limit: number, page?: number) {
     const currentPool = getPool();
+    const offset = ((page ?? 1) - 1) * limit;
+    const countResult = await currentPool.query(
+      "SELECT COUNT(*) FROM audit_logs WHERE target_type = $1", [targetType]
+    );
+    const total = Number(countResult.rows[0].count);
     const result = await currentPool.query(`
       SELECT
         al.id,
@@ -2965,9 +2984,9 @@ export const postgresPlatformRepository: PlatformRepository = {
       LEFT JOIN user_identities i ON i.user_id = al.actor_user_id
       WHERE al.target_type = $1
       ORDER BY al.created_at DESC
-      LIMIT $2
-    `, [targetType, limit]);
-    return result.rows;
+      LIMIT $2 OFFSET $3
+    `, [targetType, limit, offset]);
+    return { data: result.rows, total };
   },
 
   async getAdminRequests(params: { model?: string; provider?: string; user?: string; days?: number; page: number; limit: number }) {
@@ -3131,6 +3150,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.logical_model AS "logicalModel",
         o.real_model AS "realModel",
         o.enabled,
+        o.disabled_by AS "disabledBy",
         o.execution_mode AS "executionMode",
         o.owner_user_id AS "ownerUserId",
         u.display_name AS "ownerName",
@@ -3138,7 +3158,16 @@ export const postgresPlatformRepository: PlatformRepository = {
         c.provider_type AS "providerType",
         COALESCE(p.label, c.provider_label, c.provider_type) AS "providerLabel",
         o.daily_token_limit AS "dailyTokenLimit",
-        o.max_concurrency AS "maxConcurrency"
+        o.max_concurrency AS "maxConcurrency",
+        CASE
+          WHEN c.id IS NULL THEN 'orphaned'
+          WHEN o.disabled_by = 'admin_ban' THEN 'banned'
+          WHEN o.disabled_by = 'admin_stop' THEN 'admin_stopped'
+          WHEN o.disabled_by = 'auto' THEN 'auto_stopped'
+          WHEN o.disabled_by = 'owner' THEN 'stopped'
+          WHEN o.enabled = false THEN 'stopped'
+          ELSE 'active'
+        END AS "nodeStatus"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN provider_presets p ON RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%' AND p.provider_type = c.provider_type
@@ -3152,7 +3181,73 @@ export const postgresPlatformRepository: PlatformRepository = {
 
   async adminStopOffering(offeringId: string) {
     const currentPool = getPool();
-    await currentPool.query("UPDATE offerings SET enabled = FALSE WHERE id = $1", [offeringId]);
+    await currentPool.query("UPDATE offerings SET enabled = FALSE, disabled_by = 'admin_stop' WHERE id = $1", [offeringId]);
+  },
+
+  async adminBanOffering(offeringId: string) {
+    const currentPool = getPool();
+    await currentPool.query("UPDATE offerings SET enabled = FALSE, disabled_by = 'admin_ban' WHERE id = $1", [offeringId]);
+  },
+
+  async adminUnbanOffering(offeringId: string) {
+    const currentPool = getPool();
+    await currentPool.query("UPDATE offerings SET enabled = TRUE, disabled_by = NULL WHERE id = $1", [offeringId]);
+  },
+
+  async adminStartOffering(offeringId: string) {
+    const currentPool = getPool();
+    await currentPool.query("UPDATE offerings SET enabled = TRUE, disabled_by = NULL WHERE id = $1 AND disabled_by = 'admin_stop'", [offeringId]);
+  },
+
+  async adminDeleteOffering(offeringId: string) {
+    const currentPool = getPool();
+    await currentPool.query("DELETE FROM offerings WHERE id = $1", [offeringId]);
+  },
+
+  async getOfferingStats(offeringId: string) {
+    const currentPool = getPool();
+    const [totalResult, todayResult, recentResult, latencyResult] = await Promise.all([
+      currentPool.query(`
+        SELECT
+          COUNT(*) as "totalRequests",
+          COALESCE(SUM(input_tokens), 0) as "totalInputTokens",
+          COALESCE(SUM(output_tokens), 0) as "totalOutputTokens",
+          COALESCE(AVG(CASE WHEN status = 'ok' OR status = 'completed' THEN 1.0 ELSE 0.0 END), 0) as "successRate"
+        FROM api_requests WHERE chosen_offering_id = $1
+      `, [offeringId]),
+      currentPool.query(`
+        SELECT
+          COUNT(*) as "todayRequests",
+          COALESCE(SUM(input_tokens), 0) as "todayInputTokens",
+          COALESCE(SUM(output_tokens), 0) as "todayOutputTokens",
+          COALESCE(AVG(CASE WHEN status = 'ok' OR status = 'completed' THEN 1.0 ELSE 0.0 END), 0) as "todaySuccessRate"
+        FROM api_requests WHERE chosen_offering_id = $1 AND created_at >= CURRENT_DATE
+      `, [offeringId]),
+      currentPool.query(`
+        SELECT id, status, latency_total_ms as "totalMs", latency_ttfb_ms as "ttfbMs",
+          total_tokens as tokens, created_at as "createdAt"
+        FROM api_requests WHERE chosen_offering_id = $1
+        ORDER BY created_at DESC LIMIT 10
+      `, [offeringId]),
+      currentPool.query(`
+        SELECT
+          COALESCE(AVG(latency_total_ms), 0) as total,
+          COALESCE(AVG(latency_ttfb_ms), 0) as ttfb,
+          COALESCE(AVG(latency_queue_ms), 0) as queue,
+          COALESCE(AVG(latency_upstream_ms), 0) as upstream
+        FROM (
+          SELECT latency_total_ms, latency_ttfb_ms, latency_queue_ms, latency_upstream_ms
+          FROM api_requests WHERE chosen_offering_id = $1 AND latency_total_ms IS NOT NULL
+          ORDER BY created_at DESC LIMIT 10
+        ) sub
+      `, [offeringId]),
+    ]);
+    return {
+      total: totalResult.rows[0],
+      today: todayResult.rows[0],
+      recentRequests: recentResult.rows,
+      avgLatency: latencyResult.rows[0],
+    };
   },
 
   async getAdminSettlements(params: { days?: number; page: number; limit: number }) {
@@ -3319,9 +3414,16 @@ export const postgresPlatformRepository: PlatformRepository = {
     return { id: params.id };
   },
 
-  async listAdminNotifications() {
+  async listAdminNotifications(params?: { page?: number; limit?: number }) {
     await ensureDevSeed();
     const currentPool = getPool();
+    const page = params?.page ?? 1;
+    const limit = Math.min(params?.limit ?? 20, 100);
+    const offset = (page - 1) * limit;
+
+    const countResult = await currentPool.query("SELECT COUNT(*) FROM notifications");
+    const total = Number(countResult.rows[0].count);
+
     const result = await currentPool.query(`
       SELECT
         n.*,
@@ -3330,8 +3432,9 @@ export const postgresPlatformRepository: PlatformRepository = {
       LEFT JOIN notification_reads nr ON nr.notification_id = n.id
       GROUP BY n.id
       ORDER BY n.created_at DESC
-    `);
-    return result.rows;
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    return { data: result.rows, total };
   },
 
   async listUserNotifications(userId: string) {
@@ -4236,6 +4339,12 @@ export const postgresPlatformRepository: PlatformRepository = {
       ORDER BY sort_order ASC, id ASC
     `);
     return result.rows;
+  },
+
+  async getProviderPresetRaw(id: string): Promise<Record<string, unknown> | null> {
+    const pool = getPool();
+    const result = await pool.query("SELECT * FROM provider_presets WHERE id = $1", [id]);
+    return result.rows.length > 0 ? result.rows[0] : null;
   },
 
   async upsertProviderPreset(params: {

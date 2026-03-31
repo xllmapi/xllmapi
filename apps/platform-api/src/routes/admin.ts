@@ -368,6 +368,110 @@ export async function handleAdminRoutes(
     return true;
   }
 
+  // POST /v1/admin/offering-health/:id/ban — admin ban offering
+  const healthBanMatch = url.pathname.match(/^\/v1\/admin\/offering-health\/([^/]+)\/ban$/);
+  if (req.method === "POST" && healthBanMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const offeringId = decodeURIComponent(healthBanMatch[1]);
+    await platformRepository.adminBanOffering(offeringId);
+    const { resetBreaker } = await import("@xllmapi/core");
+    resetBreaker(offeringId);
+    await platformRepository.writeAuditLog({
+      actorUserId: auth.userId, action: "admin_ban", targetType: "offering", targetId: offeringId, payload: {},
+    });
+    const response = json(200, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // POST /v1/admin/offering-health/:id/unban — admin unban offering
+  const healthUnbanMatch = url.pathname.match(/^\/v1\/admin\/offering-health\/([^/]+)\/unban$/);
+  if (req.method === "POST" && healthUnbanMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const offeringId = decodeURIComponent(healthUnbanMatch[1]);
+    await platformRepository.adminUnbanOffering(offeringId);
+    await platformRepository.writeAuditLog({
+      actorUserId: auth.userId, action: "admin_unban", targetType: "offering", targetId: offeringId, payload: {},
+    });
+    const response = json(200, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // POST /v1/admin/offering-health/:id/start — admin start offering (only if admin_stop)
+  const healthStartMatch = url.pathname.match(/^\/v1\/admin\/offering-health\/([^/]+)\/start$/);
+  if (req.method === "POST" && healthStartMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const offeringId = decodeURIComponent(healthStartMatch[1]);
+    await platformRepository.adminStartOffering(offeringId);
+    await platformRepository.writeAuditLog({
+      actorUserId: auth.userId, action: "admin_start", targetType: "offering", targetId: offeringId, payload: {},
+    });
+    const response = json(200, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // DELETE /v1/admin/offering-health/:id — admin delete orphaned offering
+  const healthDeleteMatch = url.pathname.match(/^\/v1\/admin\/offering-health\/([^/]+)$/);
+  if (req.method === "DELETE" && healthDeleteMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const offeringId = decodeURIComponent(healthDeleteMatch[1]);
+    await platformRepository.adminDeleteOffering(offeringId);
+    await platformRepository.writeAuditLog({
+      actorUserId: auth.userId, action: "admin_delete_offering", targetType: "offering", targetId: offeringId, payload: {},
+    });
+    const response = json(200, { ok: true, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
+  // GET /v1/admin/offering-health/:id/stats — offering request stats
+  const healthStatsMatch = url.pathname.match(/^\/v1\/admin\/offering-health\/([^/]+)\/stats$/);
+  if (req.method === "GET" && healthStatsMatch) {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const offeringId = decodeURIComponent(healthStatsMatch[1]);
+    const stats = await platformRepository.getOfferingStats(offeringId);
+    const response = json(200, { ok: true, data: stats, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/v1/admin/settlements") {
     const auth = await authenticate_session_only_(req);
     if (!auth || auth.role !== "admin") {
@@ -587,7 +691,7 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const body = await read_json<{ title: string; body?: string; content?: string; type?: string; targetUserId?: string; targetHandle?: string }>(req);
+    const body = await read_json<{ title: string; body?: string; content?: string; type?: string; targetUserId?: string; targetHandle?: string; sendEmail?: boolean }>(req);
     const notifContent = body.body ?? body.content ?? "";
     if (!body.title || !notifContent) {
       const response = json(400, { error: { message: "title and content are required", requestId } });
@@ -615,6 +719,39 @@ export async function handleAdminRoutes(
       targetUserId,
       createdBy: auth.userId
     });
+    // Send email if requested for personal notifications
+    if (body.sendEmail && body.type === "personal" && targetUserId) {
+      try {
+        const { emailSender, renderTransactionalEmail } = await import("../email.js");
+        // Get user email
+        const userIdentity = await platformRepository.getUserEmailByUserId(targetUserId);
+        if (userIdentity?.email) {
+          const rendered = renderTransactionalEmail("admin_notification", { code: notifContent });
+          await emailSender.send({
+            templateKey: "admin_notification",
+            toEmail: userIdentity.email,
+            subject: `[xllmapi] ${body.title}`,
+            html: rendered.html,
+            text: rendered.text,
+          });
+          // Record email delivery
+          await platformRepository.recordEmailDeliveryAttempt({
+            id: `mail_${randomUUID()}`,
+            provider: "email",
+            templateKey: "admin_notification",
+            toEmail: userIdentity.email,
+            subject: `[xllmapi] ${body.title}`,
+            challengeId: null,
+            status: "sent",
+            providerMessageId: null,
+            payload: { notificationId: result.id },
+          });
+        }
+      } catch (emailError) {
+        console.error("[admin] failed to send notification email:", emailError);
+        // Don't fail the notification creation, just log the email error
+      }
+    }
     const response = json(201, { requestId, data: result });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
@@ -629,7 +766,10 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const response = json(200, { requestId, data: await platformService.listAdminNotifications() });
+    const page = Number(url.searchParams.get("page") ?? 1);
+    const limit = Number(url.searchParams.get("limit") ?? 20);
+    const result = await platformService.listAdminNotifications({ page, limit });
+    const response = json(200, { requestId, data: result.data, total: result.total });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
@@ -733,9 +873,10 @@ export async function handleAdminRoutes(
       return true;
     }
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
     const currentPool = (await import("../repositories/index.js")).platformRepository;
-    const result = await currentPool.getAuditLogsByTargetType("provider_preset", limit);
-    const response = json(200, { ok: true, data: result, requestId });
+    const result = await currentPool.getAuditLogsByTargetType("provider_preset", limit, page);
+    const response = json(200, { ok: true, data: result.data, total: result.total, requestId });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
@@ -775,6 +916,12 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
+    // Get old values for audit diff before update
+    let oldPreset: Record<string, unknown> | null = null;
+    try {
+      oldPreset = await platformRepository.getProviderPresetRaw(presetId);
+    } catch { /* best-effort, don't block update */ }
+
     await platformService.upsertProviderPreset({
       id: presetId,
       label: body.label,
@@ -791,9 +938,26 @@ export async function handleAdminRoutes(
       trustLevel: body.trustLevel ?? "high",
       thirdPartyNotice: body.thirdPartyNotice ?? null,
     });
+
+    // Compute diff for audit log
+    const changes: Record<string, { old: unknown; new: unknown }> = {};
+    if (oldPreset) {
+      const trackFields = ["label", "provider_type", "base_url", "anthropic_base_url", "enabled", "sort_order", "models", "custom_headers", "third_party", "third_party_label", "trust_level", "third_party_notice"];
+      for (const field of trackFields) {
+        const camelField = field.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+        const oldVal = oldPreset[field];
+        const newVal = (body as any)[camelField] ?? null;
+        const oldStr = typeof oldVal === 'object' ? JSON.stringify(oldVal) : String(oldVal ?? '');
+        const newStr = typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal ?? '');
+        if (oldStr !== newStr) {
+          changes[camelField] = { old: oldVal, new: newVal };
+        }
+      }
+    }
+
     await platformRepository.writeAuditLog({
       actorUserId: auth.userId, action: "update", targetType: "provider_preset", targetId: presetId,
-      payload: { label: body.label, providerType: body.providerType, baseUrl: body.baseUrl },
+      payload: { label: body.label, providerType: body.providerType, baseUrl: body.baseUrl, changes },
     });
     const response = json(200, { ok: true, requestId });
     res.writeHead(response.statusCode, response.headers);
