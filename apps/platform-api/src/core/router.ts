@@ -30,15 +30,15 @@ export async function resolveOfferings(
       // Fallback: model not in user's connection pool → use platform offerings
       if (offerings.length === 0) {
         offerings = await platformService.findOfferingsForModel(logicalModel);
-        offerings = offerings.filter(o => o.executionMode !== "node");
+        offerings = offerings.filter(o => o.executionMode !== "node" && !o.thirdParty);
       }
     } else {
       offerings = await platformService.findOfferingsForModel(logicalModel);
-      offerings = offerings.filter(o => o.executionMode !== "node");
+      offerings = offerings.filter(o => o.executionMode !== "node" && !o.thirdParty);
     }
   } else {
     offerings = await platformService.findOfferingsForModel(logicalModel);
-    offerings = offerings.filter(o => o.executionMode !== "node");
+    offerings = offerings.filter(o => o.executionMode !== "node" && !o.thirdParty);
   }
 
   // Price filter
