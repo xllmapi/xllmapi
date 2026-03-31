@@ -753,7 +753,7 @@ export async function handleAdminRoutes(
       return true;
     }
     const presetId = decodeURIComponent(presetMatch[1]);
-    const body = await read_json<{ label: string; providerType: string; baseUrl: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown; thirdParty?: boolean; thirdPartyLabel?: string; trustLevel?: string }>(req);
+    const body = await read_json<{ label: string; providerType: string; baseUrl: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown; thirdParty?: boolean; thirdPartyLabel?: string; trustLevel?: string; thirdPartyNotice?: string }>(req);
     // Validate: at least one URL required, and must match API format
     const hasBaseUrl = !!(body.baseUrl && body.baseUrl.trim());
     const hasAnthropicUrl = !!(body.anthropicBaseUrl && body.anthropicBaseUrl.trim());
@@ -789,6 +789,7 @@ export async function handleAdminRoutes(
       thirdParty: body.thirdParty ?? false,
       thirdPartyLabel: body.thirdPartyLabel ?? null,
       trustLevel: body.trustLevel ?? "high",
+      thirdPartyNotice: body.thirdPartyNotice ?? null,
     });
     await platformRepository.writeAuditLog({
       actorUserId: auth.userId, action: "update", targetType: "provider_preset", targetId: presetId,
@@ -809,7 +810,7 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const body = await read_json<{ id?: string; label?: string; providerType?: string; baseUrl?: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown; thirdParty?: boolean; thirdPartyLabel?: string; trustLevel?: string }>(req);
+    const body = await read_json<{ id?: string; label?: string; providerType?: string; baseUrl?: string; anthropicBaseUrl?: string; models?: unknown[]; enabled?: boolean; sortOrder?: number; customHeaders?: unknown; thirdParty?: boolean; thirdPartyLabel?: string; trustLevel?: string; thirdPartyNotice?: string }>(req);
     const hasBaseUrl = !!(body.baseUrl && body.baseUrl.trim());
     const hasAnthropicUrl = !!(body.anthropicBaseUrl && body.anthropicBaseUrl.trim());
     if (!body.id || !body.label || !body.providerType || (!hasBaseUrl && !hasAnthropicUrl)) {
@@ -844,6 +845,7 @@ export async function handleAdminRoutes(
       thirdParty: body.thirdParty ?? false,
       thirdPartyLabel: body.thirdPartyLabel ?? null,
       trustLevel: body.trustLevel ?? "high",
+      thirdPartyNotice: body.thirdPartyNotice ?? null,
     });
     await platformRepository.writeAuditLog({
       actorUserId: auth.userId, action: "create", targetType: "provider_preset", targetId: body.id,

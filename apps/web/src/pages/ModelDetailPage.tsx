@@ -18,6 +18,7 @@ interface NetworkModel {
   thirdParty?: boolean;
   thirdPartyLabel?: string;
   trustLevel?: string;
+  thirdPartyNotice?: string;
 }
 
 interface ModelStats {
@@ -225,7 +226,7 @@ export function ModelDetailPage() {
               : model.trustLevel === "medium" ? "bg-orange-500/10 border-orange-500/30 text-orange-400"
               : "bg-teal-500/10 border-teal-500/30 text-teal-400"
           }`}>
-            {model.thirdPartyLabel ? `${t("models.thirdPartyBanner")} (${model.thirdPartyLabel})` : t("models.thirdPartyBanner")}
+            {model.thirdPartyNotice || (model.thirdPartyLabel ? `${t("models.thirdPartyBanner")} (${model.thirdPartyLabel})` : t("models.thirdPartyBanner"))}
           </div>
         )}
 
