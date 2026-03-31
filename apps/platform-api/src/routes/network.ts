@@ -15,7 +15,9 @@ export async function handleNetworkRoutes(
 ): Promise<boolean> {
 
   if (req.method === "GET" && (url.pathname === "/v1/models" || url.pathname === "/models")) {
-    const models = await platformService.listMarketModels();
+    const allModels = await platformService.listMarketModels();
+    // SDK model list: only show models that are actually routable without connection pool
+    const models = allModels.filter((m: any) => !m.thirdParty);
     const isAnthropic = req.headers["anthropic-version"] != null;
     const now = Math.floor(Date.now() / 1000);
 
