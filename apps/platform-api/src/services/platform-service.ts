@@ -323,7 +323,7 @@ export const platformService = {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
     sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
-    thirdParty?: boolean; thirdPartyLabel?: string | null; trustLevel?: string;
+    thirdParty?: boolean; thirdPartyLabel?: string | null; trustLevel?: string; thirdPartyNotice?: string | null;
   }) {
     return platformRepository.upsertProviderPreset(params);
   },

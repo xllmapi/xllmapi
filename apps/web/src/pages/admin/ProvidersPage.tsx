@@ -34,6 +34,7 @@ interface ProviderPreset {
   thirdParty: boolean;
   thirdPartyLabel: string | null;
   trustLevel: string;
+  thirdPartyNotice: string | null;
 }
 
 type Tab = "presets" | "status";
@@ -53,6 +54,7 @@ const EMPTY_PRESET: ProviderPreset = {
   thirdParty: false,
   thirdPartyLabel: null,
   trustLevel: "high",
+  thirdPartyNotice: null,
 };
 
 /* ---------- Presets Tab ---------- */
@@ -289,6 +291,16 @@ function PresetsTab() {
                     );
                   })}
                 </div>
+              </div>
+              <div className="md:col-span-2 mt-2">
+                <label className="text-text-secondary text-xs block mb-1.5">{t("admin.providers.thirdPartyNotice")}</label>
+                <textarea
+                  value={editing.thirdPartyNotice ?? ""}
+                  onChange={(e) => setEditing({ ...editing, thirdPartyNotice: e.target.value || null })}
+                  placeholder={t("admin.providers.thirdPartyNoticeHint")}
+                  rows={2}
+                  className="w-full rounded-[var(--radius-input)] border border-line bg-[rgba(16,21,34,0.6)] px-4 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent transition-colors"
+                />
               </div>
             </div>
           )}

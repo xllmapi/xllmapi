@@ -1311,6 +1311,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       thirdParty: boolean;
       thirdPartyLabel: string | null;
       trustLevel: string;
+      thirdPartyNotice: string | null;
     }>(`
       SELECT
         o.logical_model AS name,
@@ -1329,7 +1330,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         )) AS "maxContextLength",
         bool_or(COALESCE(p.third_party, false)) AS "thirdParty",
         MAX(p.third_party_label) AS "thirdPartyLabel",
-        MAX(COALESCE(p.trust_level, 'high')) AS "trustLevel"
+        MAX(COALESCE(p.trust_level, 'high')) AS "trustLevel",
+        MAX(p.third_party_notice) AS "thirdPartyNotice"
       FROM offerings o
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN provider_presets p ON (
@@ -1399,6 +1401,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         thirdParty: row.thirdParty ?? false,
         thirdPartyLabel: row.thirdPartyLabel ?? undefined,
         trustLevel: row.trustLevel ?? "high",
+        thirdPartyNotice: row.thirdPartyNotice ?? undefined,
       });
     }
 
@@ -4209,7 +4212,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     anthropicBaseUrl: string | null; models: unknown[]; enabled: boolean;
     sortOrder: number; updatedAt: string; updatedBy: string | null;
     customHeaders: unknown | null;
-    thirdParty: boolean; thirdPartyLabel: string | null; trustLevel: string;
+    thirdParty: boolean; thirdPartyLabel: string | null; trustLevel: string; thirdPartyNotice: string | null;
   }>> {
     const pool = getPool();
     const result = await pool.query(`
@@ -4219,7 +4222,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         custom_headers AS "customHeaders",
         COALESCE(third_party, false) AS "thirdParty",
         third_party_label AS "thirdPartyLabel",
-        COALESCE(trust_level, 'high') AS "trustLevel"
+        COALESCE(trust_level, 'high') AS "trustLevel",
+        third_party_notice AS "thirdPartyNotice"
       FROM provider_presets
       ORDER BY sort_order ASC, id ASC
     `);
@@ -4230,12 +4234,12 @@ export const postgresPlatformRepository: PlatformRepository = {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
     sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
-    thirdParty?: boolean; thirdPartyLabel?: string | null; trustLevel?: string;
+    thirdParty?: boolean; thirdPartyLabel?: string | null; trustLevel?: string; thirdPartyNotice?: string | null;
   }): Promise<void> {
     const pool = getPool();
     await pool.query(`
-      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by, custom_headers, third_party, third_party_label, trust_level)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11, $12, $13)
+      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by, custom_headers, third_party, third_party_label, trust_level, third_party_notice)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11, $12, $13, $14)
       ON CONFLICT (id) DO UPDATE SET
         label = EXCLUDED.label,
         provider_type = EXCLUDED.provider_type,
@@ -4249,12 +4253,14 @@ export const postgresPlatformRepository: PlatformRepository = {
         custom_headers = EXCLUDED.custom_headers,
         third_party = EXCLUDED.third_party,
         third_party_label = EXCLUDED.third_party_label,
-        trust_level = EXCLUDED.trust_level
+        trust_level = EXCLUDED.trust_level,
+        third_party_notice = EXCLUDED.third_party_notice
     `, [params.id, params.label, params.providerType, params.baseUrl,
         params.anthropicBaseUrl ?? null, JSON.stringify(params.models),
         params.enabled ?? true, params.sortOrder ?? 0, params.updatedBy ?? null,
         params.customHeaders ? JSON.stringify(params.customHeaders) : null,
-        params.thirdParty ?? false, params.thirdPartyLabel ?? null, params.trustLevel ?? 'high']);
+        params.thirdParty ?? false, params.thirdPartyLabel ?? null, params.trustLevel ?? 'high',
+        params.thirdPartyNotice ?? null]);
   },
 
   async deleteProviderPreset(id: string): Promise<boolean> {
