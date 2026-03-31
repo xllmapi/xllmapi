@@ -8,6 +8,8 @@
 
 [官网](https://xllmapi.com) · [文档](https://docs.xllmapi.com) · [API](https://api.xllmapi.com) · [论坛](https://forum.d2learn.org/category/25/xllmapi) · [注册邀请](https://forum.d2learn.org/topic/180)
 
+`tips: 测试token用完可以加内测群进行申请增加`
+
 </div>
 
 ## 最近动态
