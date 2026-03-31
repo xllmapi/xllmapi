@@ -4008,9 +4008,17 @@ export const postgresPlatformRepository: PlatformRepository = {
         bool_and(f.paused) AS "paused",
         COUNT(*) FILTER (WHERE o.enabled = TRUE AND f.paused = FALSE)::int AS "activeCount",
         COUNT(DISTINCT ar.id)::int AS "totalRequests",
-        COALESCE(SUM(ar.total_tokens), 0)::bigint AS "totalTokens"
+        COALESCE(SUM(ar.total_tokens), 0)::bigint AS "totalTokens",
+        bool_or(COALESCE(p.third_party, false)) AS "thirdParty",
+        MAX(p.third_party_label) AS "thirdPartyLabel",
+        MAX(COALESCE(p.trust_level, 'high')) AS "trustLevel"
       FROM offering_favorites f
       JOIN offerings o ON o.id = f.offering_id
+      LEFT JOIN provider_credentials c ON c.id = o.credential_id
+      LEFT JOIN provider_presets p ON (
+        (p.base_url IS NOT NULL AND p.base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.base_url, '/') || '%')
+        OR (p.anthropic_base_url IS NOT NULL AND p.anthropic_base_url != '' AND RTRIM(c.base_url, '/') LIKE RTRIM(p.anthropic_base_url, '/') || '%')
+      )
       LEFT JOIN api_requests ar ON ar.chosen_offering_id = f.offering_id AND ar.requester_user_id = $1
       WHERE f.user_id = $1
         AND o.owner_user_id NOT LIKE '%_demo'

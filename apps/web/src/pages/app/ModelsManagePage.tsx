@@ -21,6 +21,9 @@ interface ProviderPreset {
   anthropicBaseUrl?: string;
   logicalModel: string;
   realModel: string;
+  thirdParty?: boolean;
+  thirdPartyLabel?: string;
+  trustLevel?: string;
 }
 
 interface DiscoveredModel {
@@ -206,6 +209,9 @@ interface PoolModelEntry {
   totalRequests: number;
   totalTokens: number;
   contextLength?: number;
+  thirdParty?: boolean;
+  thirdPartyLabel?: string;
+  trustLevel?: string;
 }
 
 interface ModelConfig {
@@ -330,7 +336,12 @@ function GroupedPoolCard({
   return (
     <div
       className={`rounded-[var(--radius-card)] border bg-panel transition-colors cursor-pointer ${
-        isPlatform ? "border-blue-500/20 bg-blue-500/5" : "border-purple-500/20 bg-purple-500/5"
+        entry.thirdParty
+          ? entry.trustLevel === "low" ? "border-red-500/20 bg-red-500/5"
+            : entry.trustLevel === "medium" ? "border-orange-500/20 bg-orange-500/5"
+            : "border-teal-500/20 bg-teal-500/5"
+          : isPlatform ? "border-blue-500/20 bg-blue-500/5"
+          : "border-purple-500/20 bg-purple-500/5"
       } ${isHistory ? "opacity-60" : ""}`}
       onClick={onToggleExpand}
     >
@@ -350,6 +361,17 @@ function GroupedPoolCard({
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium shrink-0">{"\u2601\uFE0F"}</span>
         ) : (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium shrink-0">{"\uD83D\uDDA5\uFE0F"}</span>
+        )}
+
+        {/* Third-party badge */}
+        {entry.thirdParty && (
+          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${
+            entry.trustLevel === "low" ? "bg-red-500/10 border-red-500/20 text-red-400"
+              : entry.trustLevel === "medium" ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
+              : "bg-teal-500/10 border-teal-500/20 text-teal-400"
+          }`}>
+            {entry.thirdPartyLabel || t("models.thirdParty")}
+          </span>
         )}
 
         {/* Node count */}
@@ -1438,9 +1460,24 @@ node dist/main.js start \\
                               setDiscoveryFailed(false);
                               setApiKey("");
                             }}
-                            className="flex flex-col items-start gap-1 px-4 py-3 rounded-[var(--radius-card)] border border-line hover:border-accent/50 hover:bg-accent/5 cursor-pointer bg-transparent text-left transition-colors"
+                            className={`flex flex-col items-start gap-1 px-4 py-3 rounded-[var(--radius-card)] border cursor-pointer bg-transparent text-left transition-colors ${
+                              sample?.thirdParty
+                                ? sample.trustLevel === "low" ? "border-red-500/30 hover:border-red-500/50 hover:bg-red-500/5"
+                                  : sample.trustLevel === "medium" ? "border-orange-500/30 hover:border-orange-500/50 hover:bg-orange-500/5"
+                                  : "border-teal-500/30 hover:border-teal-500/50 hover:bg-teal-500/5"
+                                : "border-line hover:border-accent/50 hover:bg-accent/5"
+                            }`}
                           >
-                            <span className="text-sm font-medium text-text-primary">{sample?.label ?? providerId}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-text-primary">{sample?.label ?? providerId}</span>
+                              {sample?.thirdParty && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                                  sample.trustLevel === "low" ? "bg-red-500/10 border-red-500/20 text-red-400"
+                                    : sample.trustLevel === "medium" ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
+                                    : "bg-teal-500/10 border-teal-500/20 text-teal-400"
+                                }`}>{sample.thirdPartyLabel || t("models.thirdParty")}</span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-text-tertiary">{formatLabel}</span>
                           </button>
                         );

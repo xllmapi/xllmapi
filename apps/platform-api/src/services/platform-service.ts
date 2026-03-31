@@ -18,6 +18,9 @@ type ProviderPreset = {
   logicalModel: string;
   realModel: string;
   customHeaders?: unknown | null;
+  thirdParty?: boolean;
+  thirdPartyLabel?: string;
+  trustLevel?: string;
 };
 
 const PROVIDER_PRESETS: ProviderPreset[] = [
@@ -299,6 +302,9 @@ export const platformService = {
               logicalModel: m.logicalModel,
               realModel: m.realModel,
               customHeaders: p.customHeaders ?? null,
+              thirdParty: p.thirdParty ?? false,
+              thirdPartyLabel: p.thirdPartyLabel ?? undefined,
+              trustLevel: p.trustLevel ?? "high",
             });
           }
         }

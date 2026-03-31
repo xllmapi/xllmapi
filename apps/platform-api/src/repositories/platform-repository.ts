@@ -447,6 +447,7 @@ export type PlatformRepository = {
     anthropicBaseUrl: string | null; models: unknown[]; enabled: boolean;
     sortOrder: number; updatedAt: string; updatedBy: string | null;
     customHeaders: unknown | null;
+    thirdParty: boolean; thirdPartyLabel: string | null; trustLevel: string; thirdPartyNotice: string | null;
   }>>;
   upsertProviderPreset(params: {
     id: string; label: string; providerType: string; baseUrl: string;
