@@ -18,6 +18,9 @@ export interface PublicMarketModel {
     handle: string;
     displayName: string;
   }>;
+  thirdParty?: boolean;
+  thirdPartyLabel?: string;
+  trustLevel?: string;
 }
 
 export interface PublicSupplierProfile {
