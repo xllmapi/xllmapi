@@ -2686,11 +2686,13 @@ export const postgresPlatformRepository: PlatformRepository = {
         ar.logical_model AS "logicalModel",
         COUNT(*)::int AS requests,
         COALESCE(SUM(ar.total_tokens), 0)::bigint AS tokens,
+        COALESCE(SUM(sr.consumer_cost), 0)::bigint AS xtokens,
         COUNT(DISTINCT ar.requester_user_id)::int AS users,
         COALESCE(AVG(o.fixed_price_per_1k_input), 0)::int AS "avgPriceIn",
         COALESCE(AVG(o.fixed_price_per_1k_output), 0)::int AS "avgPriceOut"
       FROM api_requests ar
       LEFT JOIN offerings o ON o.id = ar.chosen_offering_id
+      LEFT JOIN settlement_records sr ON sr.request_id = ar.id
       WHERE ar.created_at > NOW() - INTERVAL '${Math.min(Math.max(days, 1), 90)} days'
         AND ar.logical_model NOT LIKE 'community-%'
         AND ar.logical_model NOT LIKE 'e2e-%'
@@ -2699,13 +2701,14 @@ export const postgresPlatformRepository: PlatformRepository = {
     `);
 
     // Group by date
-    const dateMap = new Map<string, Record<string, { requests: number; tokens: number; users: number; avgPrice: number }>>();
+    const dateMap = new Map<string, Record<string, { requests: number; tokens: number; xtokens: number; users: number; avgPrice: number }>>();
     for (const row of result.rows) {
       const d = String(row.day);
       if (!dateMap.has(d)) dateMap.set(d, {});
       dateMap.get(d)![row.logicalModel] = {
         requests: Number(row.requests),
         tokens: Number(row.tokens),
+        xtokens: Number(row.xtokens),
         users: Number(row.users),
         avgPrice: Number(row.avgPriceIn),
       };
