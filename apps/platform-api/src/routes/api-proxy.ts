@@ -146,6 +146,8 @@ async function handleProxyRequest(
         clientFormat: clientFormat,
         upstreamFormat: result.targetFormat,
         formatConverted: clientFormat !== result.targetFormat,
+        latencyTotalMs: result.timing?.totalMs,
+        latencyTtfbMs: result.timing?.ttfbMs,
       });
     } catch (settlementErr) {
       metricsService.increment("settlementFailures");

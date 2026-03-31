@@ -7,7 +7,8 @@ export type TransactionalEmailTemplateKey =
   | "email_change_confirm"
   | "email_change_requested_notice"
   | "password_changed_notice"
-  | "email_changed_notice";
+  | "email_changed_notice"
+  | "admin_notification";
 
 export type SendTransactionalEmailParams = {
   templateKey: TransactionalEmailTemplateKey;
@@ -147,6 +148,10 @@ const subjectMap: Record<TransactionalEmailTemplateKey, { zh: string; en: string
   email_changed_notice: {
     zh: "你的 xllmapi 邮箱已变更",
     en: "Your xllmapi email was changed"
+  },
+  admin_notification: {
+    zh: "[xllmapi] 平台通知",
+    en: "[xllmapi] Platform Notification"
   }
 };
 
@@ -244,6 +249,17 @@ const renderBody = (templateKey: TransactionalEmailTemplateKey, locale: "zh" | "
       return {
         text: `Your ${productName} account email was changed from ${oldEmail} to ${newEmail}. If this was not you, report it on our forum immediately: ${brand.forum}`,
         html: `<p>Your ${escapeHtml(productName)} account email was changed from <strong>${escapeHtml(oldEmail)}</strong> to <strong>${escapeHtml(newEmail)}</strong>.</p><p>If this was not you, report it on our <a href="${brand.forum}" style="color:#2563EB;text-decoration:underline;">forum</a> immediately.</p>`
+      };
+    case "admin_notification":
+      if (locale === "zh") {
+        return {
+          text: `你好，\n\n${params.code ?? ""}\n\n—— xllmapi 平台通知`,
+          html: `<p>你好，</p><p>${escapeHtml(params.code ?? "")}</p><p style="color:#999;margin-top:16px;">—— xllmapi 平台通知</p>`
+        };
+      }
+      return {
+        text: `Hello,\n\n${params.code ?? ""}\n\n— xllmapi Platform Notification`,
+        html: `<p>Hello,</p><p>${escapeHtml(params.code ?? "")}</p><p style="color:#999;margin-top:16px;">— xllmapi Platform Notification</p>`
       };
   }
 };

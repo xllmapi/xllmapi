@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { apiJson } from "@/lib/api";
 import { formatNumber, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
@@ -494,10 +494,21 @@ interface AuditEntry {
   id: number;
   action: string;
   targetId: string;
-  payload: { label?: string; providerType?: string; baseUrl?: string };
+  payload: {
+    label?: string;
+    providerType?: string;
+    baseUrl?: string;
+    changes?: Record<string, { old: unknown; new: unknown }>;
+  };
   createdAt: string;
   actorName: string | null;
   actorEmail: string | null;
+}
+
+function formatValue(val: unknown): string {
+  if (val === null || val === undefined) return "-";
+  if (typeof val === "object") return JSON.stringify(val).slice(0, 100);
+  return String(val);
 }
 
 const ACTION_LABELS: Record<string, { zh: string; color: string }> = {
@@ -506,54 +517,118 @@ const ACTION_LABELS: Record<string, { zh: string; color: string }> = {
   delete: { zh: "删除", color: "text-red-400" },
 };
 
+const PAGE_SIZE = 15;
+
 function PresetAuditLog() {
+  const { t } = useLocale();
   const [logs, setLogs] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
-    apiJson<{ data: AuditEntry[] }>("/v1/admin/provider-presets/audit-log?limit=20")
-      .then((r) => setLogs(r.data ?? []))
+    setLoading(true);
+    apiJson<{ data: AuditEntry[]; total: number }>(`/v1/admin/provider-presets/audit-log?limit=${PAGE_SIZE}&page=${page}`)
+      .then((r) => { setLogs(r.data ?? []); setTotal(r.total ?? 0); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [page]);
 
-  if (loading || logs.length === 0) return null;
+  if (loading && logs.length === 0) return null;
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="mt-8">
-      <h2 className="text-sm font-semibold mb-3 text-text-secondary">变更记录</h2>
-      <div className="rounded-[var(--radius-card)] border border-line bg-panel overflow-hidden">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-line bg-[rgba(16,21,34,0.5)]">
-              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">时间</th>
-              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">操作</th>
-              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">供应商</th>
-              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">详情</th>
-              <th className="px-4 py-2.5 text-left font-medium text-text-secondary">操作人</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map((log) => {
-              const a = ACTION_LABELS[log.action] ?? { zh: log.action, color: "text-text-secondary" };
-              return (
-                <tr key={log.id} className="border-b border-line/50 last:border-b-0">
-                  <td className="px-4 py-2.5 text-text-tertiary whitespace-nowrap">
-                    {new Date(log.createdAt).toLocaleString()}
-                  </td>
-                  <td className={`px-4 py-2.5 font-medium ${a.color}`}>{a.zh}</td>
-                  <td className="px-4 py-2.5 font-mono text-text-primary">{log.targetId}</td>
-                  <td className="px-4 py-2.5 text-text-secondary">
-                    {log.payload?.label && <span>{log.payload.label}</span>}
-                    {log.payload?.baseUrl && <span className="ml-2 text-text-tertiary">{log.payload.baseUrl}</span>}
-                  </td>
-                  <td className="px-4 py-2.5 text-text-secondary">{log.actorName || log.actorEmail || "-"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <h2 className="text-sm font-semibold mb-3 text-text-secondary">{t("admin.providers.auditLogTitle")}</h2>
+      {logs.length === 0 && !loading ? (
+        <p className="text-text-tertiary text-sm">{t("admin.providers.auditNoChanges")}</p>
+      ) : (
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-line bg-[rgba(16,21,34,0.5)]">
+                <th className="px-4 py-2.5 text-left font-medium text-text-secondary w-8"></th>
+                <th className="px-4 py-2.5 text-left font-medium text-text-secondary">{t("admin.providers.auditTime")}</th>
+                <th className="px-4 py-2.5 text-left font-medium text-text-secondary">{t("admin.providers.auditAction")}</th>
+                <th className="px-4 py-2.5 text-left font-medium text-text-secondary">{t("admin.providers.auditProvider")}</th>
+                <th className="px-4 py-2.5 text-left font-medium text-text-secondary">{t("admin.providers.auditDetail")}</th>
+                <th className="px-4 py-2.5 text-left font-medium text-text-secondary">{t("admin.providers.auditOperator")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => {
+                const a = ACTION_LABELS[log.action] ?? { zh: log.action, color: "text-text-secondary" };
+                const hasChanges = log.payload?.changes && Object.keys(log.payload.changes).length > 0;
+                return (
+                  <Fragment key={log.id}>
+                    <tr
+                      className={`border-b border-line/50 last:border-b-0 ${hasChanges ? "cursor-pointer hover:bg-[rgba(16,21,34,0.3)]" : ""}`}
+                      onClick={() => hasChanges && setExpandedId(expandedId === log.id ? null : log.id)}
+                    >
+                      <td className="px-4 py-2.5 text-text-tertiary">
+                        {hasChanges ? (expandedId === log.id ? "\u25BC" : "\u25B6") : ""}
+                      </td>
+                      <td className="px-4 py-2.5 text-text-tertiary whitespace-nowrap">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </td>
+                      <td className={`px-4 py-2.5 font-medium ${a.color}`}>{a.zh}</td>
+                      <td className="px-4 py-2.5 font-mono text-text-primary">{log.targetId}</td>
+                      <td className="px-4 py-2.5 text-text-secondary">
+                        {log.payload?.label && <span>{log.payload.label}</span>}
+                        {log.payload?.baseUrl && <span className="ml-2 text-text-tertiary">{log.payload.baseUrl}</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-text-secondary">{log.actorName || log.actorEmail || "-"}</td>
+                    </tr>
+                    {expandedId === log.id && log.payload?.changes && (
+                      <tr key={`${log.id}-detail`}>
+                        <td colSpan={6} className="px-4 py-3 bg-[rgba(16,21,34,0.4)]">
+                          <div className="text-xs space-y-1">
+                            <div className="text-text-secondary font-medium mb-2">{t("admin.providers.auditChanges")}</div>
+                            {Object.entries(log.payload.changes).map(([field, change]) => (
+                              <div key={field} className="flex items-start gap-2">
+                                <span className="text-text-tertiary w-28 shrink-0">{field}</span>
+                                <span className="text-red-400 line-through">{formatValue(change.old)}</span>
+                                <span className="text-text-tertiary">&rarr;</span>
+                                <span className="text-emerald-400">{formatValue(change.new)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <FormButton
+            variant="ghost"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="!px-3 !py-1.5 !text-xs"
+          >
+            &larr;
+          </FormButton>
+          <span className="text-sm text-text-secondary">
+            {page} / {totalPages}
+          </span>
+          <FormButton
+            variant="ghost"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+            className="!px-3 !py-1.5 !text-xs"
+          >
+            &rarr;
+          </FormButton>
+        </div>
+      )}
     </div>
   );
 }

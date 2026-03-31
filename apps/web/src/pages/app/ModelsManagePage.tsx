@@ -2169,14 +2169,14 @@ node dist/main.js start \\
 
       <ConfirmDialog
         open={archiveConfirmId !== null}
-        onCancel={() => setArchiveConfirmId(null)}
+        onClose={() => setArchiveConfirmId(null)}
         onConfirm={() => {
           if (archiveConfirmId) void executeArchiveOffering(archiveConfirmId);
           setArchiveConfirmId(null);
         }}
         title={t("modelsMgmt.stopNodeTitle")}
         description={t("modelsMgmt.stopNodeWarning")}
-        countdown={5}
+        cooldownSeconds={5}
         variant="warning"
       />
     </div>

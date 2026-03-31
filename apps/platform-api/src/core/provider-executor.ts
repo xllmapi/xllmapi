@@ -230,7 +230,7 @@ export async function proxyApiRequest(params: {
   signal?: AbortSignal;
   writeHead: (status: number, headers: Record<string, string>) => void;
   res: import("node:http").ServerResponse;
-}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage; upstreamUserAgent?: string; failedAttempts?: FailedAttempt[]; targetFormat?: string }> {
+}): Promise<{ chosenOffering: CandidateOffering; usage: ProxyUsage; upstreamUserAgent?: string; failedAttempts?: FailedAttempt[]; targetFormat?: string; timing?: { totalMs: number; ttfbMs: number } }> {
   const available = params.offerings.filter((o) => isAvailable(o.offeringId));
   const candidates = available.length > 0 ? available : params.offerings;
   const isStreaming = params.body.stream === true;
@@ -257,6 +257,8 @@ export async function proxyApiRequest(params: {
     if (!acquireSlot(offering.offeringId, offering.maxConcurrency ?? 0)) { skippedConcurrency++; continue; }
 
     const release = await limiter.acquire();
+    const startTime = Date.now();
+    let ttfbMs = 0;
     try {
       const apiKey = resolveApiKey(offering);
 
@@ -285,6 +287,8 @@ export async function proxyApiRequest(params: {
         body: JSON.stringify(providerBody),
         signal: params.signal,
       });
+
+      ttfbMs = Date.now() - startTime;
 
       if (!resp.ok) {
         const errText = await resp.text().catch(() => "");
@@ -392,7 +396,8 @@ export async function proxyApiRequest(params: {
         console.warn(`[proxy] WARNING: zero usage for offering=${offering.offeringId} provider=${offering.providerType} model=${offering.realModel} streaming=${isStreaming} — upstream may not report token usage`);
       }
 
-      return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"], failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined, targetFormat };
+      const totalMs = Date.now() - startTime;
+      return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"], failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined, targetFormat, timing: { totalMs, ttfbMs } };
     } catch (err) {
       recordFailure(offering.offeringId, "transient", err instanceof Error ? err.message : "");
       lastError = err;
