@@ -1,29 +1,29 @@
 import { useEffect, useState } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useLocale } from "@/hooks/useLocale";
 
 type BannerType = "info" | "warning" | "error";
 
 export function AdminBannerPage() {
   const { t } = useLocale();
+  const { data: raw, loading, refetch } = useCachedFetch<{ data: { key: string; value: string }[] }>("/v1/admin/config");
   const [enabled, setEnabled] = useState(false);
   const [content, setContent] = useState("");
   const [type, setType] = useState<BannerType>("info");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [synced, setSynced] = useState(false);
 
   useEffect(() => {
-    apiJson<{ data: { key: string; value: string }[] }>("/v1/admin/config")
-      .then((res) => {
-        const lookup = new Map(res.data.map((r) => [r.key, r.value]));
-        setEnabled(lookup.get("site_banner_enabled") === "true");
-        setContent(lookup.get("site_banner_content") ?? "");
-        setType((lookup.get("site_banner_type") as BannerType) ?? "info");
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    if (raw?.data && !synced) {
+      const lookup = new Map(raw.data.map((r) => [r.key, r.value]));
+      setEnabled(lookup.get("site_banner_enabled") === "true");
+      setContent(lookup.get("site_banner_content") ?? "");
+      setType((lookup.get("site_banner_type") as BannerType) ?? "info");
+      setSynced(true);
+    }
+  }, [raw, synced]);
 
   const save = async () => {
     setSaving(true);
@@ -44,6 +44,7 @@ export function AdminBannerPage() {
         }),
       ]);
       setSaved(true);
+      void refetch();
       setTimeout(() => setSaved(false), 2000);
     } catch {
       /* ignore */

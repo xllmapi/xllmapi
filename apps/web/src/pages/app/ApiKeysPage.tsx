@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { apiJson } from "@/lib/api";
 import { useLocale } from "@/hooks/useLocale";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
 import { Badge } from "@/components/ui/Badge";
@@ -38,10 +39,12 @@ const MAX_API_KEYS = 5;
 
 export function ApiKeysPage() {
   const { t } = useLocale();
-  const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
-  const [credentials, setCredentials] = useState<ProviderCredential[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [credLoading, setCredLoading] = useState(true);
+  const { data: keysData, loading, refetch: refetchKeys } = useCachedFetch<{ data: ApiKeyRecord[] }>("/v1/me/api-keys");
+  const { data: credData, loading: credLoading, refetch: refetchCredentials } = useCachedFetch<{ data: ProviderCredential[] }>("/v1/provider-credentials");
+
+  const keys = keysData?.data ?? [];
+  const credentials = credData?.data ?? [];
+
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -55,33 +58,6 @@ export function ApiKeysPage() {
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; message: string }>>({});
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const fetchKeys = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: ApiKeyRecord[] }>("/v1/me/api-keys");
-      setKeys(res.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchCredentials = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: ProviderCredential[] }>("/v1/provider-credentials");
-      setCredentials(res.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setCredLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchKeys();
-    fetchCredentials();
-  }, [fetchKeys, fetchCredentials]);
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -93,7 +69,7 @@ export function ApiKeysPage() {
       });
       setNewKey(res.data.rawKey);
       setLabel("");
-      fetchKeys();
+      void refetchKeys();
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
@@ -105,7 +81,7 @@ export function ApiKeysPage() {
     if (!confirm(t("apiKeys.revokeConfirm"))) return;
     try {
       await apiJson(`/v1/me/api-keys/${keyId}`, { method: "DELETE" });
-      fetchKeys();
+      void refetchKeys();
     } catch {
       // ignore
     }
@@ -135,7 +111,7 @@ export function ApiKeysPage() {
       } else {
         setTestResult((prev) => ({ ...prev, [credId]: { ok: false, message: res.data?.message ?? t("apiKeys.testFail") } }));
       }
-      fetchCredentials();
+      void refetchCredentials();
     } catch (err: unknown) {
       setTestResult((prev) => ({ ...prev, [credId]: { ok: false, message: t("apiKeys.testFail") + ": " + extractError(err) } }));
     } finally {
@@ -146,7 +122,7 @@ export function ApiKeysPage() {
   const executeDeleteCredential = async (credId: string) => {
     try {
       await apiJson(`/v1/provider-credentials/${credId}?cascade=true`, { method: "DELETE" });
-      fetchCredentials();
+      void refetchCredentials();
     } catch (err: unknown) {
       setError(extractError(err));
     }

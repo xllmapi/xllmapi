@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { apiJson } from "@/lib/api";
 import { formatTokens, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { StatCard } from "@/components/ui/StatCard";
 import { ContributionGraph } from "@/components/ui/ContributionGraph";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -53,20 +54,26 @@ export function OverviewPage() {
   const { t } = useLocale();
   const currentYear = new Date().getFullYear();
 
-  // Core data
-  const [me, setMe] = useState<{ displayName: string } | null>(null);
-  const [wallet, setWallet] = useState(0);
-  const [supplyUsage, setSupplyUsage] = useState<UsageSummary | null>(null);
-  const [consumptionUsage, setConsumptionUsage] = useState<UsageSummary | null>(null);
-  const [consumptionItems, setConsumptionItems] = useState<ConsumptionItem[]>([]);
-  const [supplyModelItems, setSupplyModelItems] = useState<ConsumptionItem[]>([]);
-  const [offeringCount, setOfferingCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // Core data via useCachedFetch
+  const { data: meData, loading: meLoading } = useCachedFetch<{ data: { displayName: string } }>("/v1/me");
+  const { data: walletData, loading: walletLoading } = useCachedFetch<{ data: { balance: number } }>("/v1/wallet");
+  const { data: supplyData, loading: supplyLoading } = useCachedFetch<{ data: { summary: UsageSummary; items: ConsumptionItem[] } }>("/v1/usage/supply");
+  const { data: consumptionData, loading: consumptionLoading } = useCachedFetch<{ data: { summary: UsageSummary; items: ConsumptionItem[] } }>("/v1/usage/consumption");
+  const { data: offeringsData, loading: offeringsLoading } = useCachedFetch<{ data: unknown[] }>("/v1/offerings");
+
+  const me = meData?.data ?? null;
+  const wallet = walletData?.data?.balance ?? 0;
+  const supplyUsage = supplyData?.data?.summary ?? null;
+  const supplyModelItems = (supplyData?.data?.items as ConsumptionItem[]) ?? [];
+  const consumptionUsage = consumptionData?.data?.summary ?? null;
+  const consumptionItems = consumptionData?.data?.items ?? [];
+  const activeModels = consumptionItems.map((i: ConsumptionItem) => i.logicalModel);
+  const offeringCount = offeringsData?.data?.length ?? 0;
+  const loading = meLoading || walletLoading || supplyLoading || consumptionLoading || offeringsLoading;
 
   // Heatmap
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [heatmapData, setHeatmapData] = useState<Record<string, number>>({});
-  const [activeModels, setActiveModels] = useState<string[]>([]);
 
   // Filter
   const [viewMode, setViewMode] = useState<ViewMode>("requests");
@@ -85,49 +92,23 @@ export function OverviewPage() {
     (_, i) => 2024 + i
   );
 
-  // Load initial data
-  useEffect(() => {
-    Promise.all([
-      apiJson<{ data: { displayName: string } }>("/v1/me"),
-      apiJson<{ data: { balance: number } }>("/v1/wallet"),
-      apiJson<{ data: { summary: UsageSummary; items: ConsumptionItem[] } }>("/v1/usage/supply"),
-      apiJson<{ data: { summary: UsageSummary; items: ConsumptionItem[] } }>("/v1/usage/consumption"),
-      apiJson<{ data: unknown[] }>("/v1/offerings"),
-    ])
-      .then(([meRes, walletRes, supplyRes, consumptionRes, offeringsRes]) => {
-        setMe(meRes.data);
-        setWallet(walletRes.data?.balance ?? 0);
-        setSupplyUsage(supplyRes.data?.summary ?? null);
-        setSupplyModelItems((supplyRes.data?.items as ConsumptionItem[]) ?? []);
-        setConsumptionUsage(consumptionRes.data?.summary ?? null);
-        const items = consumptionRes.data?.items ?? [];
-        setConsumptionItems(items);
-        setActiveModels(items.map((i: ConsumptionItem) => i.logicalModel));
-        setOfferingCount(offeringsRes.data?.length ?? 0);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
   // Load heatmap data when year changes — net value (consume - supply)
+  const { data: heatmapConsumeData } = useCachedFetch<{ data: DailyData[] }>(`/v1/usage/consumption/daily?year=${selectedYear}`);
+  const { data: heatmapSupplyData } = useCachedFetch<{ data: DailyData[] }>(`/v1/usage/supply/daily?year=${selectedYear}`);
+
   useEffect(() => {
-    Promise.all([
-      apiJson<{ data: DailyData[] }>(`/v1/usage/consumption/daily?year=${selectedYear}`),
-      apiJson<{ data: DailyData[] }>(`/v1/usage/supply/daily?year=${selectedYear}`).catch(() => ({ data: [] })),
-    ]).then(([consumeRes, supplyRes]) => {
-      const map: Record<string, number> = {};
-      // Positive = consumption
-      for (const d of consumeRes.data ?? []) {
-        map[d.date] = Number(d.totalTokens);
-      }
-      // Negative = supply income
-      for (const d of supplyRes.data ?? []) {
-        const existing = map[d.date] ?? 0;
-        map[d.date] = existing - Number(d.totalTokens);
-      }
-      setHeatmapData(map);
-    }).catch(() => {});
-  }, [selectedYear]);
+    const map: Record<string, number> = {};
+    // Positive = consumption
+    for (const d of heatmapConsumeData?.data ?? []) {
+      map[d.date] = Number(d.totalTokens);
+    }
+    // Negative = supply income
+    for (const d of heatmapSupplyData?.data ?? []) {
+      const existing = map[d.date] ?? 0;
+      map[d.date] = existing - Number(d.totalTokens);
+    }
+    setHeatmapData(map);
+  }, [heatmapConsumeData, heatmapSupplyData]);
 
   // Load ledger records for "by date" view
   const loadRecords = useCallback(async (page: number, date?: string | null, model?: string | null) => {

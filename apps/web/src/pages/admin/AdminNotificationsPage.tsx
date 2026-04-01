@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
@@ -17,8 +18,6 @@ interface Notification {
 
 export function AdminNotificationsPage() {
   const { t } = useLocale();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [type, setType] = useState("announcement");
@@ -27,24 +26,11 @@ export function AdminNotificationsPage() {
   const [sendEmail, setSendEmail] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
   const PAGE_SIZE = 20;
 
-  const loadData = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: Notification[]; total: number }>(`/v1/admin/notifications?page=${page}&limit=${PAGE_SIZE}`);
-      setNotifications(res.data ?? []);
-      setTotal(res.total ?? 0);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [page]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const { data: raw, loading, refetch } = useCachedFetch<{ data: Notification[]; total: number }>(`/v1/admin/notifications?page=${page}&limit=${PAGE_SIZE}`);
+  const notifications = raw?.data ?? [];
+  const total = raw?.total ?? 0;
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +54,7 @@ export function AdminNotificationsPage() {
       setTargetUserId("");
       setSendEmail(false);
       setPage(1);
-      await loadData();
+      await refetch();
     } catch {
       setMessage({ type: "error", text: t("common.error") });
     } finally {

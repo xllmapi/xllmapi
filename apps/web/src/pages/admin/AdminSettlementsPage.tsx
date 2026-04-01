@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { apiJson } from "@/lib/api";
+import { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatNumber } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { StatCard } from "@/components/ui/StatCard";
@@ -31,34 +31,19 @@ type TimeRange = 7 | 30 | 0;
 
 export function AdminSettlementsPage() {
   const { t } = useLocale();
-  const [data, setData] = useState<SettlementRow[]>([]);
-  const [summary, setSummary] = useState<Summary>({ totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 });
-  const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<TimeRange>(7);
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
-  const [total, setTotal] = useState(0);
 
-  const fetchData = useCallback(() => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    if (days > 0) params.set("days", String(days));
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+  if (days > 0) params.set("days", String(days));
 
-    apiJson<{ data: SettlementRow[]; summary: Summary }>(`/v1/admin/settlements?${params}`)
-      .then((r) => {
-        setData(r.data ?? []);
-        setSummary(r.summary ?? { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 });
-        setTotal(r.summary?.count ?? 0);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [page, limit, days]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: raw, loading } = useCachedFetch<{ data: SettlementRow[]; summary: Summary }>(`/v1/admin/settlements?${params}`);
+  const data = raw?.data ?? [];
+  const summary = raw?.summary ?? { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 };
+  const total = raw?.summary?.count ?? 0;
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

@@ -1,5 +1,6 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatNumber, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -61,29 +62,14 @@ const EMPTY_PRESET: ProviderPreset = {
 
 function PresetsTab() {
   const { t } = useLocale();
-  const [presets, setPresets] = useState<ProviderPreset[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawPresets, loading, refetch: refetchPresets } = useCachedFetch<{ data: ProviderPreset[] }>("/v1/admin/provider-presets");
+  const presets = rawPresets?.data ?? [];
   const [editing, setEditing] = useState<ProviderPreset | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [modelsText, setModelsText] = useState("");
   const [customHeadersText, setCustomHeadersText] = useState("");
-
-  const loadPresets = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: ProviderPreset[] }>("/v1/admin/provider-presets");
-      setPresets(res.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadPresets();
-  }, [loadPresets]);
 
   const openCreate = () => {
     setEditing({ ...EMPTY_PRESET });
@@ -143,7 +129,7 @@ function PresetsTab() {
       }
       setMessage({ type: "success", text: t("admin.settings.saved") });
       closeForm();
-      await loadPresets();
+      await refetchPresets();
     } catch {
       setMessage({ type: "error", text: t("common.error") });
     } finally {
@@ -155,7 +141,7 @@ function PresetsTab() {
     if (!confirm(t("admin.providers.confirmDelete"))) return;
     try {
       await apiJson(`/v1/admin/provider-presets/${id}`, { method: "DELETE" });
-      await loadPresets();
+      await refetchPresets();
     } catch {
       setMessage({ type: "error", text: t("common.error") });
     }
@@ -432,15 +418,8 @@ function PresetsTab() {
 
 function StatusTab() {
   const { t } = useLocale();
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    apiJson<{ data: ProviderInfo[] }>("/v1/admin/providers")
-      .then((r) => setProviders(r.data ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: rawProviders, loading } = useCachedFetch<{ data: ProviderInfo[] }>("/v1/admin/providers");
+  const providers = rawProviders?.data ?? [];
 
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
@@ -521,19 +500,12 @@ const PAGE_SIZE = 15;
 
 function PresetAuditLog() {
   const { t } = useLocale();
-  const [logs, setLogs] = useState<AuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    apiJson<{ data: AuditEntry[]; total: number }>(`/v1/admin/provider-presets/audit-log?limit=${PAGE_SIZE}&page=${page}`)
-      .then((r) => { setLogs(r.data ?? []); setTotal(r.total ?? 0); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [page]);
+  const { data: rawLogs, loading } = useCachedFetch<{ data: AuditEntry[]; total: number }>(`/v1/admin/provider-presets/audit-log?limit=${PAGE_SIZE}&page=${page}`);
+  const logs = rawLogs?.data ?? [];
+  const total = rawLogs?.total ?? 0;
 
   if (loading && logs.length === 0) return null;
 

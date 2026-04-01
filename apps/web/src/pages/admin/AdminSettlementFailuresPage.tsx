@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useLocale } from "@/hooks/useLocale";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { FormButton } from "@/components/ui/FormButton";
@@ -24,34 +25,20 @@ interface SettlementFailureRow {
 
 export function AdminSettlementFailuresPage() {
   const { t } = useLocale();
-  const [rows, setRows] = useState<SettlementFailureRow[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
   const [status, setStatus] = useState<FailureStatus>("open");
-  const [loading, setLoading] = useState(true);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  const fetchData = useCallback(() => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-      status
-    });
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    status
+  });
 
-    apiJson<{ data: SettlementFailureRow[]; total: number }>(`/v1/admin/settlement-failures?${params}`)
-      .then((response) => {
-        setRows(response.data ?? []);
-        setTotal(response.total ?? 0);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [limit, page, status]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: raw, loading, refetch } = useCachedFetch<{ data: SettlementFailureRow[]; total: number }>(`/v1/admin/settlement-failures?${params}`);
+  const rows = raw?.data ?? [];
+  const total = raw?.total ?? 0;
 
   const handleRetry = async (failureId: string) => {
     setRetryingId(failureId);
@@ -59,7 +46,7 @@ export function AdminSettlementFailuresPage() {
       await apiJson(`/v1/admin/settlement-failures/${encodeURIComponent(failureId)}/retry`, {
         method: "POST"
       });
-      fetchData();
+      void refetch();
     } finally {
       setRetryingId(null);
     }

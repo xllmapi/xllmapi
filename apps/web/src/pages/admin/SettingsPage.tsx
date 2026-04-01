@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
@@ -42,33 +43,25 @@ const CONFIG_GROUPS: Record<string, string[]> = {
 
 export function SettingsPage() {
   const { t } = useLocale();
-  const [configs, setConfigs] = useState<ConfigItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: raw, loading, refetch } = useCachedFetch<{ data: ConfigItem[] }>("/v1/admin/config");
+  const configs = raw?.data ?? [];
   const [values, setValues] = useState<Record<string, string>>({});
   const [original, setOriginal] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [synced, setSynced] = useState(false);
 
-  const loadData = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: ConfigItem[] }>("/v1/admin/config");
-      setConfigs(res.data ?? []);
+  useEffect(() => {
+    if (configs.length > 0 && !synced) {
       const map: Record<string, string> = {};
-      for (const c of res.data ?? []) {
+      for (const c of configs) {
         map[c.key] = c.value;
       }
       setValues(map);
       setOriginal(map);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
+      setSynced(true);
     }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  }, [configs, synced]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -82,7 +75,8 @@ export function SettingsPage() {
         });
       }
       setMessage({ type: "success", text: t("admin.settings.saved") });
-      await loadData();
+      setSynced(false);
+      await refetch();
     } catch {
       setMessage({ type: "error", text: t("common.error") });
     } finally {

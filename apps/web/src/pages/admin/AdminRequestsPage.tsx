@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { apiJson } from "@/lib/api";
+import { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatNumber, formatTokens, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -84,16 +84,8 @@ function DetailRow({ label, value, mono }: { label: string; value: React.ReactNo
 
 function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose: () => void }) {
   const { t } = useLocale();
-  const [detail, setDetail] = useState<RequestDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    apiJson<{ data: RequestDetail }>(`/v1/admin/requests/${encodeURIComponent(requestId)}`)
-      .then((r) => setDetail(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [requestId]);
+  const { data: raw, loading } = useCachedFetch<{ data: RequestDetail }>(`/v1/admin/requests/${encodeURIComponent(requestId)}`);
+  const detail = raw?.data ?? null;
 
   if (loading) return <div className="p-4 text-text-secondary text-xs">{t("common.loading")}</div>;
   if (!detail) return <div className="p-4 text-text-secondary text-xs">Not found</div>;
@@ -195,9 +187,6 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
 
 export function AdminRequestsPage() {
   const { t } = useLocale();
-  const [data, setData] = useState<RequestRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<TimeRange>(7);
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
@@ -206,28 +195,17 @@ export function AdminRequestsPage() {
   const [userFilter, setUserFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const fetchData = useCallback(() => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    if (days > 0) params.set("days", String(days));
-    if (modelFilter) params.set("model", modelFilter);
-    if (providerFilter) params.set("provider", providerFilter);
-    if (userFilter) params.set("user", userFilter);
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+  if (days > 0) params.set("days", String(days));
+  if (modelFilter) params.set("model", modelFilter);
+  if (providerFilter) params.set("provider", providerFilter);
+  if (userFilter) params.set("user", userFilter);
 
-    apiJson<{ data: RequestRow[]; total: number }>(`/v1/admin/requests?${params}`)
-      .then((r) => {
-        setData(r.data ?? []);
-        setTotal(r.total ?? 0);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [page, limit, days, modelFilter, providerFilter, userFilter]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: raw, loading } = useCachedFetch<{ data: RequestRow[]; total: number }>(`/v1/admin/requests?${params}`);
+  const data = raw?.data ?? [];
+  const total = raw?.total ?? 0;
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

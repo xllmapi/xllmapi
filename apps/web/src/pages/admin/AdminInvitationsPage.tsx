@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
@@ -35,66 +36,35 @@ interface ConfigItem {
 export function AdminInvitationsPage() {
   const { t } = useLocale();
   const [tab, setTab] = useState<"admin" | "all">("admin");
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [allInvitations, setAllInvitations] = useState<AllInvitation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [allLoading, setAllLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [invitationEnabled, setInvitationEnabled] = useState(true);
   const [quota, setQuota] = useState<string>("10");
   const [toggling, setToggling] = useState(false);
+  const [quotaSynced, setQuotaSynced] = useState(false);
 
-  const loadConfig = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: ConfigItem[] }>("/v1/admin/config");
-      const items = res.data ?? [];
-      const enabledItem = items.find((c) => c.key === "invitation_enabled");
-      const quotaItem = items.find((c) => c.key === "default_invitation_quota");
-      if (enabledItem) setInvitationEnabled(enabledItem.value !== "false");
-      if (quotaItem) setQuota(quotaItem.value);
-    } catch {
-      // ignore
-    }
-  }, []);
+  const { data: rawConfig, refetch: refetchConfig } = useCachedFetch<{ data: ConfigItem[] }>("/v1/admin/config");
+  const configItems = rawConfig?.data ?? [];
+  const enabledItem = configItems.find((c) => c.key === "invitation_enabled");
+  const invitationEnabled = enabledItem ? enabledItem.value !== "false" : true;
+  const quotaItem = configItems.find((c) => c.key === "default_invitation_quota");
 
-  const loadData = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: Invitation[] }>("/v1/admin/invitations");
-      setInvitations(res.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Sync quota to local editing state once
+  if (quotaItem && !quotaSynced) {
+    setQuota(quotaItem.value);
+    setQuotaSynced(true);
+  }
 
-  const loadAllInvitations = useCallback(async () => {
-    setAllLoading(true);
-    try {
-      const res = await apiJson<{ data: AllInvitation[] }>("/v1/admin/invitations/all");
-      setAllInvitations(res.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setAllLoading(false);
-    }
-  }, []);
+  const { data: rawInvitations, loading, refetch: refetchInvitations } = useCachedFetch<{ data: Invitation[] }>("/v1/admin/invitations");
+  const invitations = rawInvitations?.data ?? [];
 
-  useEffect(() => {
-    void loadData();
-    void loadConfig();
-  }, [loadData, loadConfig]);
-
-  useEffect(() => {
-    if (tab === "all" && allInvitations.length === 0) {
-      void loadAllInvitations();
-    }
-  }, [tab, allInvitations.length, loadAllInvitations]);
+  const { data: rawAllInvitations, loading: allLoading } = useCachedFetch<{ data: AllInvitation[] }>(
+    tab === "all" ? "/v1/admin/invitations/all" : null,
+  );
+  const allInvitations = rawAllInvitations?.data ?? [];
 
   const handleToggleEnabled = async () => {
     setToggling(true);
@@ -104,7 +74,7 @@ export function AdminInvitationsPage() {
         method: "PUT",
         body: JSON.stringify({ key: "invitation_enabled", value: newValue }),
       });
-      setInvitationEnabled(!invitationEnabled);
+      await refetchConfig();
     } catch {
       // ignore
     } finally {
@@ -126,7 +96,7 @@ export function AdminInvitationsPage() {
       setSuccess(`${t("invitations.sentTo")} ${email}`);
       setEmail("");
       setNote("");
-      await loadData();
+      await refetchInvitations();
     } catch (err: unknown) {
       const msg =
         err && typeof err === "object" && "error" in err
@@ -142,7 +112,7 @@ export function AdminInvitationsPage() {
     setRevoking(id);
     try {
       await apiJson(`/v1/invitations/${id}/revoke`, { method: "POST" });
-      await loadData();
+      await refetchInvitations();
     } catch {
       // ignore
     } finally {
@@ -297,6 +267,7 @@ export function AdminInvitationsPage() {
                     method: "PUT",
                     body: JSON.stringify({ key: "default_invitation_quota", value: quota }),
                   });
+                  void refetchConfig();
                   setSuccess(t("profile.saved"));
                   setTimeout(() => setSuccess(""), 2000);
                 } catch { /* ignore */ }

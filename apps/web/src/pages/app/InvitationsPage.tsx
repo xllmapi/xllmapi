@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -28,33 +29,22 @@ interface Invitation {
 
 export function InvitationsPage() {
   const { t } = useLocale();
-  const [stats, setStats] = useState<InvitationStats | null>(null);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: statsData, loading: statsLoading, refetch: refetchStats } = useCachedFetch<{ data: InvitationStats }>("/v1/me/invitation-stats");
+  const { data: invData, loading: invLoading, refetch: refetchInvitations } = useCachedFetch<{ data: Invitation[] }>("/v1/invitations");
+
+  const stats = statsData?.data ?? null;
+  const invitations = invData?.data ?? [];
+  const loading = statsLoading || invLoading;
+
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const loadData = useCallback(async () => {
-    try {
-      const [statsRes, invRes] = await Promise.all([
-        apiJson<{ data: InvitationStats }>("/v1/me/invitation-stats"),
-        apiJson<{ data: Invitation[] }>("/v1/invitations"),
-      ]);
-      setStats(statsRes.data);
-      setInvitations(invRes.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const refetchAll = async () => {
+    await Promise.all([refetchStats(), refetchInvitations()]);
+  };
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +60,7 @@ export function InvitationsPage() {
       setSuccess(`${t("invitations.sentTo")} ${email}`);
       setEmail("");
       setNote("");
-      await loadData();
+      await refetchAll();
     } catch (err: unknown) {
       const msg =
         err && typeof err === "object" && "error" in err
@@ -92,7 +82,7 @@ export function InvitationsPage() {
   const handleRevoke = async (invId: string) => {
     try {
       await apiJson(`/v1/invitations/${encodeURIComponent(invId)}/revoke`, { method: "POST" });
-      await loadData();
+      await refetchAll();
     } catch (err: unknown) {
       const msg = err && typeof err === "object" && "error" in err
         ? (err as { error: { message: string } }).error.message

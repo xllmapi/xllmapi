@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { apiJson } from "@/lib/api";
 import { useLocale } from "@/hooks/useLocale";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
 
@@ -11,19 +12,22 @@ export function SecurityPage() {
   const { t } = useLocale();
   const [searchParams, setSearchParams] = useSearchParams();
   const isSetup = searchParams.get("setup") === "1";
+  const { data: sessionData } = useCachedFetch<{ data: { hasPassword?: boolean; email?: string } }>("/v1/auth/session");
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [welcomeMessage, setWelcomeMessage] = useState<string>("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  // Sync session data
   useEffect(() => {
-    apiJson<{ data: { hasPassword?: boolean; email?: string } }>("/v1/auth/session")
-      .then((res) => {
-        setHasPassword(res.data?.hasPassword ?? true);
-        setUserEmail(res.data?.email ?? null);
-      })
-      .catch(() => setHasPassword(true));
+    if (sessionData) {
+      setHasPassword(sessionData.data?.hasPassword ?? true);
+      setUserEmail(sessionData.data?.email ?? null);
+    }
+  }, [sessionData]);
 
+  // Welcome message uses raw fetch (public endpoint, different response format)
+  useEffect(() => {
     fetch("/v1/welcome-message")
       .then(r => r.json())
       .then((d: { enabled?: boolean; content?: string }) => {
