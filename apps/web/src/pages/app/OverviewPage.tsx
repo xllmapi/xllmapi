@@ -375,7 +375,7 @@ export function OverviewPage() {
       </div>
 
       {/* Contribution heatmap */}
-      <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 mb-8">
+      <div className="rounded-[var(--radius-card)] border border-line bg-panel p-3 md:p-5 mb-8 overflow-x-auto">
         <ContributionGraph
           data={heatmapData}
           weeks={52}

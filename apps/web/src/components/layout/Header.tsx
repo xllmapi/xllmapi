@@ -32,6 +32,7 @@ export function Header() {
   const [ecoOpen, setEcoOpen] = useState(false);
   const [qqCopied, setQqCopied] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileEcoOpen, setMobileEcoOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const ecoRef = useRef<HTMLDivElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -252,7 +253,7 @@ export function Header() {
           </div>
 
           {/* Mobile hamburger button */}
-          <button onClick={() => setMobileMenuOpen(p => !p)} className="md:hidden w-8 h-8 flex items-center justify-center bg-transparent border-none text-text-secondary hover:text-text-primary cursor-pointer transition-colors">
+          <button onClick={() => { setMobileMenuOpen(p => !p); if (mobileMenuOpen) setMobileEcoOpen(false); }} className="md:hidden w-8 h-8 flex items-center justify-center bg-transparent border-none text-text-secondary hover:text-text-primary cursor-pointer transition-colors">
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </nav>
@@ -266,17 +267,23 @@ export function Header() {
           <Link to="/mnetwork" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.models")}</Link>
           <a href={__XLLMAPI_DOCS_URL__} onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.docs")}</a>
           <Link to="/chat" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.chat")}</Link>
-          {/* Ecosystem links flat */}
-          <div className="py-1.5 text-xs text-text-tertiary font-medium uppercase tracking-wider">{t("nav.ecosystem")}</div>
-          {ECOSYSTEM_LINKS.map((item) => {
+          {/* Ecosystem — collapsible */}
+          <button
+            onClick={() => setMobileEcoOpen(p => !p)}
+            className="py-2.5 text-sm text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors flex items-center gap-1"
+          >
+            {t("nav.ecosystem")}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${mobileEcoOpen ? "rotate-180" : ""}`} />
+          </button>
+          {mobileEcoOpen && ECOSYSTEM_LINKS.map((item) => {
             const Icon = item.icon;
             if (item.href && (item as { internal?: boolean }).internal) {
-              return <Link key={item.key} to={item.href} onClick={() => setMobileMenuOpen(false)} className="py-2 pl-3 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors flex items-center gap-2">{Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}{t(item.key)}</Link>;
+              return <Link key={item.key} to={item.href} onClick={() => setMobileMenuOpen(false)} className="py-2 pl-4 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors flex items-center gap-2">{Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}{t(item.key)}</Link>;
             }
             if (item.href) {
-              return <a key={item.key} href={item.href} target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)} className="py-2 pl-3 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors flex items-center gap-2">{Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}{t(item.key)}</a>;
+              return <a key={item.key} href={item.href} target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)} className="py-2 pl-4 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors flex items-center gap-2">{Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}{t(item.key)}</a>;
             }
-            return <button key={item.key} onClick={handleQqCopy} className="py-2 pl-3 text-sm text-left text-text-secondary hover:text-text-primary cursor-pointer border-none bg-transparent transition-colors flex items-center gap-2">{Icon && <Icon className="w-3.5 h-3.5 text-text-tertiary" />}{qqCopied ? (locale === "zh" ? "已复制群号" : "Copied!") : t(item.key)}</button>;
+            return <button key={item.key} onClick={handleQqCopy} className="py-2 pl-4 text-sm text-left text-text-secondary hover:text-text-primary cursor-pointer border-none bg-transparent transition-colors flex items-center gap-2">{Icon && <Icon className="w-3.5 h-3.5 text-text-tertiary" />}{qqCopied ? (locale === "zh" ? "已复制群号" : "Copied!") : t(item.key)}</button>;
           })}
           {/* Divider */}
           <div className="my-1.5 border-t border-line/60" />
@@ -284,9 +291,9 @@ export function Header() {
             <>
               <Link to="/app" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.dashboard")}</Link>
               {isAdmin && <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.admin")}</Link>}
-              <button onClick={() => navigate("/app/notifications")} className="py-2.5 text-sm text-left text-text-secondary hover:text-text-primary cursor-pointer border-none bg-transparent transition-colors flex items-center gap-2">
+              <button onClick={() => { setMobileMenuOpen(false); navigate("/app/notifications"); }} className="py-2.5 text-sm text-left text-text-secondary hover:text-text-primary cursor-pointer border-none bg-transparent transition-colors flex items-center gap-2">
                 <Bell className="w-4 h-4" />
-                {t("nav.notifications") || "Notifications"}
+                {locale === "zh" ? "通知" : "Notifications"}
                 {unreadCount > 0 && <span className="min-w-[16px] h-4 rounded-full bg-danger text-[10px] font-bold text-white flex items-center justify-center px-1">{unreadCount > 99 ? "99+" : unreadCount}</span>}
               </button>
               <div className="my-1.5 border-t border-line/60" />

@@ -12,7 +12,7 @@ export function StatCard({ label, value, icon }: StatCardProps) {
       <div className="flex items-start justify-between">
         <div>
           <p className="text-text-secondary text-xs mb-2">{label}</p>
-          <p className="text-xl font-heading font-bold tracking-tight">{value}</p>
+          <p className="text-lg md:text-xl font-heading font-bold tracking-tight truncate">{value}</p>
         </div>
         {icon && (
           <div className="text-text-tertiary opacity-60">{icon}</div>
