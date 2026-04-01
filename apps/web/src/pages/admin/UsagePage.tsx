@@ -112,15 +112,11 @@ export function UsagePage() {
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <StatCard label={t("admin.usage.totalRequests")} value={formatNumber(data?.summary?.totalRequests ?? 0)} />
-            <StatCard label={t("admin.usage.totalTokens")} value={`${formatTokens(data?.summary?.totalTokens ?? 0)} xtokens`} />
-            <StatCard label={t("admin.usage.consumers")} value={formatNumber(data?.summary?.consumerCount ?? 0)} />
-            <StatCard label={t("admin.overview.models")} value={formatNumber(data?.summary?.offeringCount ?? 0)} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <StatCard label={t("admin.usage.totalRequests")} value={formatNumber(data?.summary?.totalRequests ?? 0)} loading={loading} />
+            <StatCard label={t("admin.usage.totalTokens")} value={`${formatTokens(data?.summary?.totalTokens ?? 0)} xtokens`} loading={loading} />
+            <StatCard label={t("admin.usage.consumers")} value={formatNumber(data?.summary?.consumerCount ?? 0)} loading={loading} />
+            <StatCard label={t("admin.overview.models")} value={formatNumber(data?.summary?.offeringCount ?? 0)} loading={loading} />
           </div>
 
           {data?.topModels && data.topModels.length > 0 && (
@@ -144,8 +140,6 @@ export function UsagePage() {
               />
             </div>
           )}
-        </>
-      )}
     </div>
   );
 }

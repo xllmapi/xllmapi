@@ -43,7 +43,7 @@ const CONFIG_GROUPS: Record<string, string[]> = {
 
 export function SettingsPage() {
   const { t } = useLocale();
-  const { data: raw, loading, refetch } = useCachedFetch<{ data: ConfigItem[] }>("/v1/admin/config");
+  const { data: raw, refetch } = useCachedFetch<{ data: ConfigItem[] }>("/v1/admin/config");
   const configs = raw?.data ?? [];
   const [values, setValues] = useState<Record<string, string>>({});
   const [original, setOriginal] = useState<Record<string, string>>({});
@@ -83,8 +83,6 @@ export function SettingsPage() {
       setSaving(false);
     }
   };
-
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
   const knownKeys = Object.values(CONFIG_GROUPS).flat();
   const otherConfigs = configs.filter((c) => !knownKeys.includes(c.key));

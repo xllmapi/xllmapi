@@ -17,9 +17,51 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   activeRowKey?: string | null;
   renderExpanded?: (row: T) => ReactNode | null;
+  loading?: boolean;
+  skeletonRows?: number;
 }
 
-export function DataTable<T>({ columns, data, rowKey, emptyText, rowClassName, onRowClick, activeRowKey, renderExpanded }: DataTableProps<T>) {
+function SkeletonRow({ colCount }: { colCount: number }) {
+  return (
+    <tr className="border-b border-line/50">
+      {Array.from({ length: colCount }, (_, i) => (
+        <td key={i} className="px-4 py-3">
+          <div className="h-4 rounded bg-line/30 animate-pulse" style={{ width: `${60 + (i * 17) % 30}%` }} />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+export function DataTable<T>({ columns, data, rowKey, emptyText, rowClassName, onRowClick, activeRowKey, renderExpanded, loading, skeletonRows = 5 }: DataTableProps<T>) {
+  if (loading) {
+    return (
+      <div className="overflow-x-auto rounded-[var(--radius-card)] border border-line">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line bg-[rgba(16,21,34,0.5)]">
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  className={`px-4 py-3 font-medium text-text-secondary text-xs ${
+                    col.align === "right" ? "text-right" : "text-left"
+                  } ${col.className ?? ""}`}
+                >
+                  {col.header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: skeletonRows }, (_, i) => (
+              <SkeletonRow key={i} colCount={columns.length} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   if (data.length === 0) {
     return (
       <div className="rounded-[var(--radius-card)] border border-line bg-panel px-6 py-12 text-center">

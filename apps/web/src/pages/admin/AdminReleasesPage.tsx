@@ -68,16 +68,13 @@ export function AdminReleasesPage() {
         <h1 className="text-2xl font-bold tracking-tight">{t("admin.releases.title")}</h1>
       </div>
 
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <DataTable
+      <DataTable
           columns={columns}
           data={data}
           rowKey={(r) => r.releaseId}
           emptyText={t("common.empty")}
+          loading={loading}
         />
-      )}
     </div>
   );
 }

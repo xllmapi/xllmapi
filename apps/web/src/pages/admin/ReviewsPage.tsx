@@ -24,7 +24,7 @@ interface PendingOffering {
 
 export function ReviewsPage() {
   const { t } = useLocale();
-  const { data: rawOfferings, loading, refetch: refetchOfferings } = useCachedFetch<{ data: PendingOffering[] }>("/v1/admin/offerings/pending");
+  const { data: rawOfferings, refetch: refetchOfferings } = useCachedFetch<{ data: PendingOffering[] }>("/v1/admin/offerings/pending");
   const offerings = rawOfferings?.data ?? [];
   const { data: rawConfig, refetch: refetchConfig } = useCachedFetch<{ data: { key: string; value: string }[] }>("/v1/admin/config");
   const autoApproveItem = (rawConfig?.data ?? []).find((c) => c.key === "offering_auto_approve");
@@ -68,8 +68,6 @@ export function ReviewsPage() {
     if (reason === null) return;
     void handleReview(id, "rejected", reason);
   };
-
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
   return (
     <div>

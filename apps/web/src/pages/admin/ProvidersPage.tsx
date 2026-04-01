@@ -147,8 +147,6 @@ function PresetsTab() {
     }
   };
 
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
-
   /* ---- editing form ---- */
   if (editing) {
     return (
@@ -409,7 +407,7 @@ function PresetsTab() {
       <div className="mb-4">
         <FormButton onClick={openCreate}>{t("admin.providers.addPreset")}</FormButton>
       </div>
-      <DataTable columns={columns} data={presets} rowKey={(p) => p.id} emptyText={t("common.empty")} />
+      <DataTable columns={columns} data={presets} rowKey={(p) => p.id} emptyText={t("common.empty")} loading={loading} />
     </div>
   );
 }
@@ -420,8 +418,6 @@ function StatusTab() {
   const { t } = useLocale();
   const { data: rawProviders, loading } = useCachedFetch<{ data: ProviderInfo[] }>("/v1/admin/providers");
   const providers = rawProviders?.data ?? [];
-
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
   const columns: Column<ProviderInfo>[] = [
     {
@@ -463,6 +459,7 @@ function StatusTab() {
       data={providers}
       rowKey={(p) => p.providerType}
       emptyText={t("common.empty")}
+      loading={loading}
     />
   );
 }

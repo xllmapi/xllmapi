@@ -72,8 +72,6 @@ export function InvitationsPage() {
     }
   };
 
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
-
   // Redirect non-admin users when invitations are disabled
   if (stats && !stats.enabled && !stats.unlimited) {
     return <Navigate to="/app" replace />;
@@ -227,6 +225,7 @@ export function InvitationsPage() {
         data={invitations}
         rowKey={(inv) => inv.id}
         emptyText={t("invitations.noRecords")}
+        loading={loading}
       />
     </div>
   );

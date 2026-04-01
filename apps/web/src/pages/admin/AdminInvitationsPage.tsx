@@ -120,8 +120,6 @@ export function AdminInvitationsPage() {
     }
   };
 
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
-
   const statusVariant = (s: string) => {
     switch (s.toLowerCase()) {
       case "pending": return "warning" as const;
@@ -347,20 +345,18 @@ export function AdminInvitationsPage() {
           data={invitations}
           rowKey={(inv) => inv.id}
           emptyText={t("admin.invitations.noRecords")}
+          loading={loading}
         />
       )}
 
       {tab === "all" && (
-        allLoading ? (
-          <p className="text-text-secondary py-8">{t("common.loading")}</p>
-        ) : (
-          <DataTable
-            columns={allColumns}
-            data={allInvitations}
-            rowKey={(inv) => inv.id}
-            emptyText={t("admin.invitations.noRecords")}
-          />
-        )
+        <DataTable
+          columns={allColumns}
+          data={allInvitations}
+          rowKey={(inv) => inv.id}
+          emptyText={t("admin.invitations.noRecords")}
+          loading={allLoading}
+        />
       )}
     </div>
   );

@@ -466,7 +466,7 @@ function GroupedPoolCard({
 
 function UsingTab() {
   const { t } = useLocale();
-  const { data: poolData, loading, refetch } = useCachedFetch<{ data: PoolModelEntry[] }>("/v1/me/connection-pool/grouped", { ttl: 30_000 });
+  const { data: poolData, refetch } = useCachedFetch<{ data: PoolModelEntry[] }>("/v1/me/connection-pool/grouped", { ttl: 30_000 });
   const models = poolData?.data ?? [];
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState("");
@@ -523,8 +523,6 @@ function UsingTab() {
       setActionLoading("");
     }
   };
-
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
   return (
     <div>
@@ -903,18 +901,17 @@ function ProvidingTab() {
   const platformWsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/node`;
 
   // ── Offering data via useCachedFetch ──
-  const { data: catalogData, loading: catalogLoading, refetch: refetchCatalog } = useCachedFetch<{ data: ProviderPreset[] }>("/v1/provider-catalog", { ttl: 30_000 });
-  const { data: offeringsData, loading: offeringsLoading, refetch: refetchOfferings } = useCachedFetch<{ data: Offering[] }>("/v1/offerings", { ttl: 30_000 });
-  const { data: usageData, loading: usageLoading, refetch: refetchUsage } = useCachedFetch<{ data: { items: SupplyUsageItem[] } }>("/v1/usage/supply", { ttl: 30_000 });
-  const { data: tokensData, loading: tokensLoading, refetch: refetchTokens } = useCachedFetch<{ data: NodeToken[] }>("/v1/nodes/tokens", { ttl: 30_000 });
-  const { data: nodesData, loading: nodesLoading, refetch: refetchNodes } = useCachedFetch<{ data: ConnectedNode[] }>("/v1/nodes", { ttl: 30_000 });
+  const { data: catalogData, refetch: refetchCatalog } = useCachedFetch<{ data: ProviderPreset[] }>("/v1/provider-catalog", { ttl: 30_000 });
+  const { data: offeringsData, refetch: refetchOfferings } = useCachedFetch<{ data: Offering[] }>("/v1/offerings", { ttl: 30_000 });
+  const { data: usageData, refetch: refetchUsage } = useCachedFetch<{ data: { items: SupplyUsageItem[] } }>("/v1/usage/supply", { ttl: 30_000 });
+  const { data: tokensData, refetch: refetchTokens } = useCachedFetch<{ data: NodeToken[] }>("/v1/nodes/tokens", { ttl: 30_000 });
+  const { data: nodesData, refetch: refetchNodes } = useCachedFetch<{ data: ConnectedNode[] }>("/v1/nodes", { ttl: 30_000 });
 
   const catalog = catalogData?.data ?? [];
   const offerings = offeringsData?.data ?? [];
   const supplyUsage = usageData?.data?.items ?? [];
   const tokens = tokensData?.data ?? [];
   const nodes = nodesData?.data ?? [];
-  const loading = catalogLoading || offeringsLoading || usageLoading || tokensLoading || nodesLoading;
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -1281,8 +1278,6 @@ function ProvidingTab() {
       setRevokingId("");
     }
   };
-
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
   const isEnabled = (o: Offering) => o.enabled === 1 || o.enabled === true;
   const onlineNodes = nodes.filter((n) => n.status === "online");

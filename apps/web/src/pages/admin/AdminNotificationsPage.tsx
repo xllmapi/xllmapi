@@ -177,15 +177,12 @@ export function AdminNotificationsPage() {
 
       {/* Sent Notifications */}
       <h2 className="text-sm font-semibold mb-3 text-text-secondary">{t("admin.notifications.sentList")}</h2>
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <>
-          <DataTable
+      <DataTable
             columns={columns}
             data={notifications}
             rowKey={(n) => n.id}
             emptyText={t("common.empty")}
+            loading={loading}
           />
           {(() => {
             const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -201,8 +198,6 @@ export function AdminNotificationsPage() {
               </div>
             ) : null;
           })()}
-        </>
-      )}
     </div>
   );
 }

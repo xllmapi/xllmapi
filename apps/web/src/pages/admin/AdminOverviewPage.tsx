@@ -61,8 +61,6 @@ export function AdminOverviewPage() {
   const providers = provs.data?.data ?? [];
   const settlementFailures = failures.data?.data ?? [];
 
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
-
   const recentColumns: Column<RecentRequest>[] = [
     {
       key: "logicalModel",
@@ -101,11 +99,11 @@ export function AdminOverviewPage() {
       <h1 className="text-2xl font-bold mb-6 tracking-tight">{t("admin.overview.title")}</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        <StatCard label={t("admin.overview.users")} value={formatNumber(userCount)} />
-        <StatCard label={t("admin.overview.active7d")} value={formatNumber(activeUsers)} />
-        <StatCard label={t("admin.usage.totalRequests")} value={formatNumber(totalRequests)} />
-        <StatCard label={t("admin.overview.models")} value={formatNumber(modelCount)} />
-        <StatCard label={t("admin.overview.pending")} value={formatNumber(pendingCount)} />
+        <StatCard label={t("admin.overview.users")} value={formatNumber(userCount)} loading={loading} />
+        <StatCard label={t("admin.overview.active7d")} value={formatNumber(activeUsers)} loading={loading} />
+        <StatCard label={t("admin.usage.totalRequests")} value={formatNumber(totalRequests)} loading={loading} />
+        <StatCard label={t("admin.overview.models")} value={formatNumber(modelCount)} loading={loading} />
+        <StatCard label={t("admin.overview.pending")} value={formatNumber(pendingCount)} loading={loading} />
         <Link to="/admin/settlement-failures" className="no-underline">
           <div className="rounded-[var(--radius-card)] border border-danger/30 bg-danger/5 p-5 hover:bg-danger/10 transition-colors">
             <div className="flex items-start justify-between">
@@ -130,6 +128,7 @@ export function AdminOverviewPage() {
             data={recentRequests}
             rowKey={(r) => r.requestId}
             emptyText={t("common.empty")}
+            loading={loading}
           />
         </div>
 
