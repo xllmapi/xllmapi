@@ -36,7 +36,7 @@ function AnimatedTitle() {
   }, [isX, display]);
 
   return (
-    <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight tracking-tight text-center">
+    <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight tracking-tight text-center">
       <span
         className="inline-block transition-all duration-350 ease-in-out"
         style={{
@@ -72,13 +72,13 @@ function InfiniteScrollRow({ models, reverse }: { models: string[]; reverse?: bo
   return (
     <div className="overflow-hidden">
       <div
-        className="flex gap-5 whitespace-nowrap"
+        className="flex gap-3 md:gap-5 whitespace-nowrap"
         style={{ width: "max-content", animation: `${reverse ? "scroll-r" : "scroll-l"} ${dur}s linear infinite` }}
       >
         {items.map((m, i) => (
           <span
             key={`${m}-${i}`}
-            className={`inline-block rounded-full border px-6 py-2.5 text-base font-semibold select-none ${
+            className={`inline-block rounded-full border px-3 py-1.5 text-sm md:px-6 md:py-2.5 md:text-base font-semibold select-none ${
               isActive(m) ? "border-accent/40 bg-accent/8 text-accent" : "border-line/60 bg-panel/20 text-text-tertiary/60"
             }`}
           >
@@ -170,13 +170,13 @@ function AgentTabs() {
   const [idx, setIdx] = useState(0);
   const config = AGENTS[idx]!;
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-[#0d1117] overflow-hidden text-[clamp(10px,1.2vw,13px)]">
+    <div className="rounded-[var(--radius-card)] border border-line bg-[#0d1117] overflow-hidden text-xs md:text-[13px]">
       <div className="flex border-b border-line/50">
         {AGENTS.map((a, i) => (
           <button
             key={a.name}
             onClick={() => setIdx(i)}
-            className={`px-4 py-2 text-[1em] font-medium cursor-pointer transition-colors border-none ${
+            className={`px-3 py-2 md:px-4 text-[1em] font-medium cursor-pointer transition-colors border-none ${
               i === idx ? "bg-accent/10 text-accent" : "bg-transparent text-text-tertiary hover:text-text-secondary"
             }`}
           >
@@ -220,9 +220,9 @@ function ApiEndpointBox({ onGetKey, t }: { onGetKey: () => void; t: (k: string) 
   const current = API_FORMATS[fmt]!;
 
   return (
-    <div className="flex items-center gap-2 max-w-xl w-full mb-12">
+    <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 max-w-xl w-full mb-12">
       {/* Format icon buttons */}
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-1 shrink-0 justify-center md:justify-start">
         {API_FORMATS.map((f, i) => (
           <button
             key={f.id}
@@ -248,7 +248,7 @@ function ApiEndpointBox({ onGetKey, t }: { onGetKey: () => void; t: (k: string) 
       {/* Get key */}
       <button
         onClick={onGetKey}
-        className="shrink-0 rounded-[var(--radius-btn)] border border-accent/30 bg-transparent px-4 py-2.5 text-sm font-medium text-accent cursor-pointer hover:bg-accent/5 transition-colors whitespace-nowrap"
+        className="rounded-[var(--radius-btn)] border border-accent/30 bg-transparent px-4 py-2.5 text-sm font-medium text-accent cursor-pointer hover:bg-accent/5 transition-colors whitespace-nowrap w-full md:w-auto text-center"
       >
         {t("home.getApiKey")} →
       </button>
@@ -271,7 +271,7 @@ export function HomePage() {
           {t("home.badge")}
         </span>
         <AnimatedTitle />
-        <p className="text-text-secondary text-lg max-w-2xl mt-6 mb-8 leading-relaxed text-center">
+        <p className="text-text-secondary text-base md:text-lg max-w-2xl mt-6 mb-8 leading-relaxed text-center">
           {t("home.subtitle.prefix")}
           <span className="inline-block mx-1.5 rounded-md border border-accent/20 bg-accent/5 px-2 py-0.5 text-accent font-medium">{t("home.subtitle.platform")}</span>
           {t("home.subtitle.and")}
@@ -364,12 +364,16 @@ export function HomePage() {
           scroll-behavior: smooth;
         }
         .home-snap-section {
-          min-height: 100vh;
+          min-height: 100dvh;
           scroll-snap-align: start;
           scroll-snap-stop: always;
         }
         .home-snap-section-auto {
           scroll-snap-align: end;
+        }
+        @media (max-height: 600px) {
+          .home-snap-container { scroll-snap-type: none; }
+          .home-snap-section { min-height: auto; padding-top: 4rem; padding-bottom: 4rem; }
         }
         @keyframes scroll-l {
           0% { transform: translateX(0); }

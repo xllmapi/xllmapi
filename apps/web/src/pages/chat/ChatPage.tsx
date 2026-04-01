@@ -80,19 +80,21 @@ export function ChatPage() {
       )}
 
       {/* Mobile toggle */}
-      <button
-        onClick={() => setSidebarOpen(true)}
-        className="md:hidden fixed left-3 top-[72px] z-[40] w-8 h-8 flex items-center justify-center rounded-[var(--radius-btn)] bg-panel border border-line text-text-tertiary hover:text-text-secondary cursor-pointer transition-colors"
-      >
-        <PanelLeftOpen className="w-4 h-4" />
-      </button>
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="md:hidden fixed left-3 top-[72px] z-[40] w-8 h-8 flex items-center justify-center rounded-[var(--radius-btn)] bg-panel border border-line text-text-tertiary hover:text-text-secondary cursor-pointer transition-colors"
+        >
+          <PanelLeftOpen className="w-4 h-4" />
+        </button>
+      )}
 
       <ChatSidebar
         model={store.model}
         onModelChange={store.setModel}
         conversations={store.conversations}
         activeId={store.activeId}
-        onSelect={store.setActiveId}
+        onSelect={(id) => { store.setActiveId(id); if (window.innerWidth < 768) setSidebarOpen(false); }}
         onNewChat={handleNewChat}
         onRename={(id, title) => void store.renameConversation(id, title)}
         onDelete={(id) => void store.deleteConversation(id)}

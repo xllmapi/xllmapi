@@ -44,17 +44,20 @@ export function DashboardLayout() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-[var(--spacing-content)] px-6 pt-[72px] pb-12 min-h-screen">
+    <div className="mx-auto max-w-[var(--spacing-content)] px-4 md:px-6 pt-[72px] pb-12 min-h-screen">
       {/* Mobile tab bar */}
-      <nav className="md:hidden flex gap-1 overflow-x-auto pb-4 -mx-2 px-2">
-        <SidebarLink to="/app" label={t("sidebar.overview")} end />
-        <SidebarLink to="/app/models/connected" label={t("sidebar.connected")} />
-        <SidebarLink to="/app/models/provided" label={t("sidebar.provided")} />
-        {invitationsEnabled && <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />}
-        <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
-        <SidebarLink to="/app/security" label={t("sidebar.security")} />
-        <SidebarLink to="/app/api-keys" label={t("sidebar.apiKeys")} />
-      </nav>
+      <div className="md:hidden relative">
+        <nav className="flex gap-1 overflow-x-auto pb-4 scrollbar-hidden -mx-2 px-2">
+          <SidebarLink to="/app" label={t("sidebar.overview")} end />
+          <SidebarLink to="/app/models/connected" label={t("sidebar.connected")} />
+          <SidebarLink to="/app/models/provided" label={t("sidebar.provided")} />
+          {invitationsEnabled && <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />}
+          <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
+          <SidebarLink to="/app/security" label={t("sidebar.security")} />
+          <SidebarLink to="/app/api-keys" label={t("sidebar.apiKeys")} />
+        </nav>
+        <div className="absolute right-0 top-0 bottom-4 w-8 pointer-events-none bg-gradient-to-l from-bg-0 to-transparent" />
+      </div>
 
       <div className="flex gap-6">
         {/* Desktop sidebar */}

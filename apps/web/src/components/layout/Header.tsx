@@ -3,11 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/hooks/useLocale";
 import { apiJson } from "@/lib/api";
-import { LogOut, LayoutDashboard, Bell, ChevronDown, MessageSquare, Globe, Users } from "lucide-react";
+import { LogOut, LayoutDashboard, Bell, ChevronDown, MessageSquare, Globe, Users, Sparkles, Menu, X } from "lucide-react";
 
 declare const __XLLMAPI_DOCS_URL__: string;
+declare const __DEV__: boolean;
 
 const ECOSYSTEM_LINKS = [
+  ...(__DEV__ ? [{ key: "nav.ecosystem.brand", href: "/brand", icon: Sparkles, internal: true }] : []),
   { key: "nav.ecosystem.forum", href: "https://forum.d2learn.org/category/25/xllmapi", icon: MessageSquare },
   { key: "nav.ecosystem.github", href: "https://github.com/xllmapi", icon: null /* custom SVG */ },
   { key: "nav.ecosystem.mcpp", href: "https://mcpp.d2learn.org", icon: Globe },
@@ -29,6 +31,7 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [ecoOpen, setEcoOpen] = useState(false);
   const [qqCopied, setQqCopied] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const ecoRef = useRef<HTMLDivElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -77,88 +80,106 @@ export function Header() {
   };
 
   return (
+    <>
     <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-line bg-panel-strong">
       <div className="mx-auto flex h-full max-w-[var(--spacing-content)] items-center justify-between px-6">
         <Link
           to="/"
-          className="font-heading text-lg font-bold text-accent no-underline hover:no-underline tracking-tight"
+          className="flex items-center gap-1.5 font-heading text-lg font-bold no-underline hover:no-underline tracking-tight"
+          style={{ color: "var(--color-accent)" }}
         >
+          <img src="/logo-sm.svg" alt="xllmapi" width={32} height={32} className="block" />
           xllmapi
         </Link>
 
         <nav className="flex items-center gap-5 text-sm">
-          <Link to="/mnetwork" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
-            {t("nav.models")}
-          </Link>
-          <a href={__XLLMAPI_DOCS_URL__} className="text-text-secondary hover:text-text-primary no-underline transition-colors">
-            {t("nav.docs")}
-          </a>
-          <Link to="/chat" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
-            {t("nav.chat")}
-          </Link>
+          <div className="hidden md:flex items-center gap-5">
+            <Link to="/mnetwork" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+              {t("nav.models")}
+            </Link>
+            <a href={__XLLMAPI_DOCS_URL__} className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+              {t("nav.docs")}
+            </a>
+            <Link to="/chat" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+              {t("nav.chat")}
+            </Link>
 
-          {/* Ecosystem dropdown */}
-          <div ref={ecoRef} className="relative">
-            <button
-              onClick={() => setEcoOpen((prev) => !prev)}
-              className="flex items-center gap-1 text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors text-sm"
-            >
-              {t("nav.ecosystem")}
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${ecoOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {ecoOpen && (
-              <div
-                className="absolute right-0 top-full mt-2 w-48 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden z-50"
-                style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+            {/* Ecosystem dropdown */}
+            <div ref={ecoRef} className="relative">
+              <button
+                onClick={() => setEcoOpen((prev) => !prev)}
+                className="flex items-center gap-1 text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors text-sm"
               >
-                <div className="py-1">
-                  {ECOSYSTEM_LINKS.map((item) => {
-                    const Icon = item.icon;
-                    if (item.href) {
+                {t("nav.ecosystem")}
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${ecoOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {ecoOpen && (
+                <div
+                  className="absolute right-0 top-full mt-2 w-48 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden z-50"
+                  style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+                >
+                  <div className="py-1">
+                    {ECOSYSTEM_LINKS.map((item) => {
+                      const Icon = item.icon;
+                      if (item.href && (item as { internal?: boolean }).internal) {
+                        return (
+                          <Link
+                            key={item.key}
+                            to={item.href}
+                            onClick={() => setEcoOpen(false)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-accent-bg no-underline transition-colors"
+                          >
+                            {Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}
+                            {t(item.key)}
+                          </Link>
+                        );
+                      }
+                      if (item.href) {
+                        return (
+                          <a
+                            key={item.key}
+                            href={item.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setEcoOpen(false)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-accent-bg no-underline transition-colors"
+                          >
+                            {Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}
+                            {t(item.key)}
+                          </a>
+                        );
+                      }
+                      // QQ group — copy action
                       return (
-                        <a
+                        <button
                           key={item.key}
-                          href={item.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => setEcoOpen(false)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-accent-bg no-underline transition-colors"
+                          onClick={handleQqCopy}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-text-primary hover:bg-accent-bg cursor-pointer border-none bg-transparent transition-colors"
                         >
-                          {Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}
-                          {t(item.key)}
-                        </a>
+                          {Icon && <Icon className="w-3.5 h-3.5 text-text-tertiary" />}
+                          {qqCopied ? (locale === "zh" ? "已复制群号" : "Copied!") : t(item.key)}
+                        </button>
                       );
-                    }
-                    // QQ group — copy action
-                    return (
-                      <button
-                        key={item.key}
-                        onClick={handleQqCopy}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-text-primary hover:bg-accent-bg cursor-pointer border-none bg-transparent transition-colors"
-                      >
-                        {Icon && <Icon className="w-3.5 h-3.5 text-text-tertiary" />}
-                        {qqCopied ? (locale === "zh" ? "已复制群号" : "Copied!") : t(item.key)}
-                      </button>
-                    );
-                  })}
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
+            </div>
+
+            {isLoggedIn && (
+              <>
+                <Link to="/app" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+                  {t("nav.dashboard")}
+                </Link>
+                {isAdmin && (
+                  <Link to="/admin" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
+                    {t("nav.admin")}
+                  </Link>
+                )}
+              </>
             )}
           </div>
-
-          {isLoggedIn && (
-            <>
-              <Link to="/app" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
-                {t("nav.dashboard")}
-              </Link>
-              {isAdmin && (
-                <Link to="/admin" className="text-text-secondary hover:text-text-primary no-underline transition-colors">
-                  {t("nav.admin")}
-                </Link>
-              )}
-            </>
-          )}
 
           {/* Locale toggle */}
           <button
@@ -168,67 +189,115 @@ export function Header() {
             {locale === "zh" ? "EN" : "\u4e2d"}
           </button>
 
-          {isLoggedIn ? (
-            <>
-              {/* Notification bell */}
-              <button
-                onClick={() => navigate("/app/notifications")}
-                className="relative text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors"
-              >
-                <Bell className="w-4 h-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-danger text-[10px] font-bold text-white flex items-center justify-center px-1">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-              </button>
-
-              <div ref={menuRef} className="relative ml-1">
-                {/* Avatar button */}
+          <div className="hidden md:flex items-center gap-3">
+            {isLoggedIn ? (
+              <>
+                {/* Notification bell */}
                 <button
-                  onClick={() => setMenuOpen((prev) => !prev)}
-                  className="w-7 h-7 rounded-[var(--radius-avatar)] bg-accent/15 flex items-center justify-center text-accent text-xs font-semibold cursor-pointer border-none transition-colors hover:bg-accent/25"
+                  onClick={() => navigate("/app/notifications")}
+                  className="relative text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-none transition-colors"
                 >
-                  {(user?.displayName ?? user?.email ?? "U").charAt(0).toUpperCase()}
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-danger text-[10px] font-bold text-white flex items-center justify-center px-1">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                 </button>
 
-                {/* Dropdown menu */}
-                {menuOpen && (
-                  <div
-                    className="absolute right-0 top-full mt-2 w-40 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden z-50"
-                    style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+                <div ref={menuRef} className="relative ml-1">
+                  {/* Avatar button */}
+                  <button
+                    onClick={() => setMenuOpen((prev) => !prev)}
+                    className="w-7 h-7 rounded-[var(--radius-avatar)] bg-accent/15 flex items-center justify-center text-accent text-xs font-semibold cursor-pointer border-none transition-colors hover:bg-accent/25"
                   >
-                    <div className="py-1">
-                      <button
-                        onClick={() => { setMenuOpen(false); navigate("/app"); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-text-primary hover:bg-accent-bg cursor-pointer border-none bg-transparent transition-colors"
-                      >
-                        <LayoutDashboard className="w-3.5 h-3.5 text-text-tertiary" />
-                        {t("nav.dashboard")}
-                      </button>
-                      <div className="my-1 border-t border-line/60" />
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-danger/80 hover:bg-danger/10 cursor-pointer border-none bg-transparent transition-colors"
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        {t("nav.logout")}
-                      </button>
+                    {(user?.displayName ?? user?.email ?? "U").charAt(0).toUpperCase()}
+                  </button>
+
+                  {/* Dropdown menu */}
+                  {menuOpen && (
+                    <div
+                      className="absolute right-0 top-full mt-2 w-40 rounded-[var(--radius-card)] border border-line/80 bg-bg-1/95 shadow-[var(--shadow-card)] overflow-hidden z-50"
+                      style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+                    >
+                      <div className="py-1">
+                        <button
+                          onClick={() => { setMenuOpen(false); navigate("/app"); }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-text-primary hover:bg-accent-bg cursor-pointer border-none bg-transparent transition-colors"
+                        >
+                          <LayoutDashboard className="w-3.5 h-3.5 text-text-tertiary" />
+                          {t("nav.dashboard")}
+                        </button>
+                        <div className="my-1 border-t border-line/60" />
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-danger/80 hover:bg-danger/10 cursor-pointer border-none bg-transparent transition-colors"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          {t("nav.logout")}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <Link
-              to="/auth"
-              className="rounded-[var(--radius-btn)] bg-accent px-4 py-1.5 text-sm font-semibold text-[#081018] no-underline hover:no-underline hover:opacity-90 shadow-[var(--shadow-cta)] transition-opacity"
-            >
-              {t("nav.signIn")}
-            </Link>
-          )}
+                  )}
+                </div>
+              </>
+            ) : (
+              <Link
+                to="/auth"
+                className="rounded-[var(--radius-btn)] bg-accent px-4 py-1.5 text-sm font-semibold text-[#081018] no-underline hover:no-underline hover:opacity-90 shadow-[var(--shadow-cta)] transition-opacity"
+              >
+                {t("nav.signIn")}
+              </Link>
+            )}
+          </div>
+
+          {/* Mobile hamburger button */}
+          <button onClick={() => setMobileMenuOpen(p => !p)} className="md:hidden w-8 h-8 flex items-center justify-center bg-transparent border-none text-text-secondary hover:text-text-primary cursor-pointer transition-colors">
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </nav>
       </div>
     </header>
+
+    {mobileMenuOpen && (
+      <div className="md:hidden fixed top-14 left-0 right-0 z-[49] border-b border-line bg-panel-strong/95 py-3 px-6" style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+        <nav className="flex flex-col gap-1">
+          {/* All nav links as vertical list */}
+          <Link to="/mnetwork" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.models")}</Link>
+          <a href={__XLLMAPI_DOCS_URL__} onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.docs")}</a>
+          <Link to="/chat" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.chat")}</Link>
+          {/* Ecosystem links flat */}
+          <div className="py-1.5 text-xs text-text-tertiary font-medium uppercase tracking-wider">{t("nav.ecosystem")}</div>
+          {ECOSYSTEM_LINKS.map((item) => {
+            const Icon = item.icon;
+            if (item.href && (item as { internal?: boolean }).internal) {
+              return <Link key={item.key} to={item.href} onClick={() => setMobileMenuOpen(false)} className="py-2 pl-3 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors flex items-center gap-2">{Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}{t(item.key)}</Link>;
+            }
+            if (item.href) {
+              return <a key={item.key} href={item.href} target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)} className="py-2 pl-3 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors flex items-center gap-2">{Icon ? <Icon className="w-3.5 h-3.5 text-text-tertiary" /> : <GitHubSmallIcon className="w-3.5 h-3.5 text-text-tertiary" />}{t(item.key)}</a>;
+            }
+            return <button key={item.key} onClick={handleQqCopy} className="py-2 pl-3 text-sm text-left text-text-secondary hover:text-text-primary cursor-pointer border-none bg-transparent transition-colors flex items-center gap-2">{Icon && <Icon className="w-3.5 h-3.5 text-text-tertiary" />}{qqCopied ? (locale === "zh" ? "已复制群号" : "Copied!") : t(item.key)}</button>;
+          })}
+          {/* Divider */}
+          <div className="my-1.5 border-t border-line/60" />
+          {isLoggedIn ? (
+            <>
+              <Link to="/app" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.dashboard")}</Link>
+              {isAdmin && <Link to="/admin" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.admin")}</Link>}
+              <button onClick={() => navigate("/app/notifications")} className="py-2.5 text-sm text-left text-text-secondary hover:text-text-primary cursor-pointer border-none bg-transparent transition-colors flex items-center gap-2">
+                <Bell className="w-4 h-4" />
+                {t("nav.notifications") || "Notifications"}
+                {unreadCount > 0 && <span className="min-w-[16px] h-4 rounded-full bg-danger text-[10px] font-bold text-white flex items-center justify-center px-1">{unreadCount > 99 ? "99+" : unreadCount}</span>}
+              </button>
+              <div className="my-1.5 border-t border-line/60" />
+              <button onClick={handleLogout} className="py-2.5 text-sm text-left text-danger/80 hover:text-danger cursor-pointer border-none bg-transparent transition-colors flex items-center gap-2"><LogOut className="w-3.5 h-3.5" />{t("nav.logout")}</button>
+            </>
+          ) : (
+            <Link to="/auth" onClick={() => setMobileMenuOpen(false)} className="mt-2 block text-center rounded-[var(--radius-btn)] bg-accent px-4 py-2.5 text-sm font-semibold text-[#081018] no-underline hover:no-underline hover:opacity-90 shadow-[var(--shadow-cta)] transition-opacity">{t("nav.signIn")}</Link>
+          )}
+        </nav>
+      </div>
+    )}
+    </>
   );
 }

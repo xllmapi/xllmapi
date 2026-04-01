@@ -40,7 +40,7 @@ export function ChatInput({ input, onInputChange, onSend, onStop, streaming, mod
   };
 
   return (
-    <div className="shrink-0 overscroll-contain px-4 pb-8 pt-2 pointer-events-none">
+    <div className="shrink-0 overscroll-contain px-2 md:px-4 pb-6 md:pb-8 pt-2 pointer-events-none">
       <div className="max-w-3xl mx-auto pointer-events-auto">
         <div
           className="rounded-2xl border border-line/60 bg-bg-1/80 shadow-[0_-4px_24px_rgba(0,0,0,0.25)] p-3"

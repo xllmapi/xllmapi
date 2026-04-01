@@ -83,7 +83,7 @@ export function ChatMessage({ message, model, meta, isError, isStreaming, onRetr
   if (message.role === "user") {
     return (
       <div className="flex justify-end mb-4">
-        <div className="max-w-[75%]">
+        <div className="max-w-[85%] md:max-w-[75%]">
           <div className="bg-accent/12 text-text-primary rounded-[16px] rounded-br-[4px] px-4 py-3">
             <p className="whitespace-pre-wrap text-sm">{message.content}</p>
           </div>
