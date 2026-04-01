@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { apiJson } from "@/lib/api";
+import { useMemo } from "react";
 import { useLocale } from "@/hooks/useLocale";
+import { useAdminData } from "@/hooks/useAdminData";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 
 type EmailDelivery = {
@@ -16,13 +16,8 @@ type EmailDelivery = {
 
 export function AdminEmailDeliveriesPage() {
   const { t } = useLocale();
-  const [rows, setRows] = useState<EmailDelivery[]>([]);
-
-  useEffect(() => {
-    void apiJson<{ data: EmailDelivery[] }>("/v1/admin/email-deliveries?limit=100")
-      .then((result) => setRows(result.data ?? []))
-      .catch(() => setRows([]));
-  }, []);
+  const { data: raw } = useAdminData<{ data: EmailDelivery[] }>("/v1/admin/email-deliveries?limit=100");
+  const rows = raw?.data ?? [];
 
   const columns = useMemo<Column<EmailDelivery>[]>(() => [
     { key: "createdAt", header: t("admin.emailDeliveries.time") },

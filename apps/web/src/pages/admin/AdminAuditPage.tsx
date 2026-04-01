@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { apiJson } from "@/lib/api";
 import { useLocale } from "@/hooks/useLocale";
+import { useAdminData } from "@/hooks/useAdminData";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 
 interface AuditRow {
@@ -16,15 +15,8 @@ interface AuditRow {
 
 export function AdminAuditPage() {
   const { t } = useLocale();
-  const [data, setData] = useState<AuditRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    apiJson<{ data: AuditRow[] }>("/v1/admin/audit-logs?limit=100")
-      .then((r) => setData(r.data ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: raw, loading } = useAdminData<{ data: AuditRow[] }>("/v1/admin/audit-logs?limit=100");
+  const data = raw?.data ?? [];
 
   const columns: Column<AuditRow>[] = [
     {
