@@ -366,7 +366,7 @@ export const sqlitePlatformRepository: PlatformRepository = {
     return { activeUsers: 0, openSettlementFailures: openFailures };
   },
 
-  updateAdminUser() {
+  updateAdminUser(_userId: string, _updates: { role?: string; status?: string; walletAdjust?: number; walletAdjustNote?: string }, _actorUserId?: string) {
     return { ok: true };
   },
 
@@ -521,6 +521,10 @@ export const sqlitePlatformRepository: PlatformRepository = {
   getProviderPresetRaw() { return null; },
   upsertProviderPreset() {},
   deleteProviderPreset() { return false; },
+
+  // --- Ledger (stubs) ---
+  recordLedgerEntry() {},
+  getLedgerHistory() { return { data: [], total: 0 }; },
 
   devUserApiKey: DEV_USER_API_KEY,
   devAdminApiKey: DEV_ADMIN_API_KEY

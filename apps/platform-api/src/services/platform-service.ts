@@ -1098,8 +1098,8 @@ export const platformService = {
     return platformRepository.getAdminStats();
   },
 
-  updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number }) {
-    return platformRepository.updateAdminUser(userId, updates);
+  updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number; walletAdjustNote?: string }, actorUserId?: string) {
+    return platformRepository.updateAdminUser(userId, updates, actorUserId);
   },
 
   getAdminProviders() {

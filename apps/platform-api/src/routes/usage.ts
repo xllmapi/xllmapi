@@ -153,5 +153,29 @@ export async function handleUsageRoutes(
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/v1/ledger") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth) {
+      const response = unauthorized_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
+    const offset = Number(url.searchParams.get("offset") ?? 0);
+    const entryType = url.searchParams.get("type") ?? undefined;
+    const { ledgerService } = await import("../services/ledger-service.js");
+    const result = await ledgerService.getLedgerHistory({
+      userId: auth.userId,
+      limit,
+      offset,
+      entryType,
+    });
+    const response = json(200, { requestId, data: result.data, total: result.total });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   return false;
 }

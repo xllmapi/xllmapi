@@ -150,11 +150,14 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS ledger_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_id TEXT NOT NULL,
+    request_id TEXT,
     user_id TEXT NOT NULL,
     direction TEXT NOT NULL,
     amount INTEGER NOT NULL,
     entry_type TEXT NOT NULL,
+    note TEXT,
+    related_id TEXT,
+    actor_id TEXT,
     created_at TEXT NOT NULL
   );
 

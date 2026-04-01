@@ -6,7 +6,7 @@ import { FormInput } from "./FormInput";
 interface ConfirmDialogProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: (inputValue?: string) => void;
+  onConfirm: (inputValue?: string, inputValues?: Record<string, string>) => void;
   title: string;
   description: string;
   variant?: "warning" | "danger";
@@ -18,6 +18,12 @@ interface ConfirmDialogProps {
     placeholder?: string;
     type?: string;
   };
+  inputs?: Array<{
+    key: string;
+    label: string;
+    placeholder?: string;
+    type?: string;
+  }>;
 }
 
 export function ConfirmDialog({
@@ -31,10 +37,12 @@ export function ConfirmDialog({
   cancelLabel,
   cooldownSeconds = 5,
   input,
+  inputs,
 }: ConfirmDialogProps) {
   const { t } = useLocale();
   const [countdown, setCountdown] = useState(cooldownSeconds);
   const [inputValue, setInputValue] = useState("");
+  const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   // Reset countdown and input when dialog opens
@@ -42,6 +50,7 @@ export function ConfirmDialog({
     if (open) {
       setCountdown(cooldownSeconds);
       setInputValue("");
+      setInputValues({});
       timerRef.current = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
@@ -105,8 +114,8 @@ export function ConfirmDialog({
         </h3>
         {/* Description */}
         <p className="text-sm text-text-secondary mb-4">{description}</p>
-        {/* Optional input */}
-        {input && (
+        {/* Optional single input */}
+        {input && !inputs && (
           <div className="mb-4">
             <FormInput
               label={input.label}
@@ -117,6 +126,23 @@ export function ConfirmDialog({
             />
           </div>
         )}
+        {/* Optional multi-input */}
+        {inputs && (
+          <div className="mb-4 flex flex-col gap-3">
+            {inputs.map((inp) => (
+              <FormInput
+                key={inp.key}
+                label={inp.label}
+                type={inp.type ?? "text"}
+                placeholder={inp.placeholder}
+                value={inputValues[inp.key] ?? ""}
+                onChange={(e) =>
+                  setInputValues((prev) => ({ ...prev, [inp.key]: e.target.value }))
+                }
+              />
+            ))}
+          </div>
+        )}
         {/* Buttons */}
         <div className="flex justify-end gap-3">
           <FormButton variant="ghost" onClick={onClose}>
@@ -124,8 +150,16 @@ export function ConfirmDialog({
           </FormButton>
           <FormButton
             variant="primary"
-            disabled={!isReady || (!!input && !inputValue.trim())}
-            onClick={() => onConfirm(input ? inputValue : undefined)}
+            disabled={
+              !isReady ||
+              (!!input && !inputs && !inputValue.trim()) ||
+              (!!inputs && inputs.length > 0 && !(inputValues[inputs[0]!.key] ?? "").trim())
+            }
+            onClick={() =>
+              inputs
+                ? onConfirm(undefined, inputValues)
+                : onConfirm(input ? inputValue : undefined)
+            }
             className={
               variant === "danger"
                 ? "!bg-danger hover:!bg-danger/80 disabled:!bg-danger/30"

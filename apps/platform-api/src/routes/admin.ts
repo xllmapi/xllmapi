@@ -183,8 +183,8 @@ export async function handleAdminRoutes(
         res.end(response.payload);
         return true;
       }
-      const body = await read_json<{ role?: string; status?: string; walletAdjust?: number }>(req);
-      const result = await platformService.updateAdminUser(userId, body);
+      const body = await read_json<{ role?: string; status?: string; walletAdjust?: number; walletAdjustNote?: string }>(req);
+      const result = await platformService.updateAdminUser(userId, body, auth.userId);
       const response = json(200, { requestId, data: result });
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
