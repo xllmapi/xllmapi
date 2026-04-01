@@ -2,6 +2,34 @@
 
 ---
 
+## v0.3.0 — 2026-04-01
+
+**Release ID**: `6f452b2-20260401213024`
+
+### 核心功能
+
+- **统一 Token 流水记录** — 所有余额变动（注册赠送、管理员调整、API 消费、供应收入、邀请奖励）统一记录到 ledger，可追溯、可备注
+- **`GET /v1/ledger` API** — 分页查询 token 流水，支持 `type`/`date`/`model` 过滤，返回关联的模型和 token 明细
+- **LedgerService** — 独立服务封装所有 wallet 变动（余额更新 + 流水写入原子事务）
+- **邀请奖励机制** — 通过 `platform_config.referral_reward_amount` 控制（默认关闭），邀请人在被邀请者注册后自动获得 token 奖励
+
+### 前端
+
+- **Overview 明细视图统一展示** — 删除冗余「资金流水」tab，所有 token 变动在「按日期」视图中混合显示，系统条目（注册赠送/平台调整/邀请奖励）用天蓝色行区分
+- **管理员余额调整 UX** — 实时预览调整后余额，两步确认（首次点击启动 5s 冷却倒计时，结束后再次点击提交），支持备注
+- **ConfirmDialog 多输入 + renderExtra** — 通用对话框支持多输入字段和动态内容渲染
+- **邀请菜单高亮** — 当平台邀请奖励开启时，侧边栏「邀请注册」菜单绿色高亮 + 脉冲圆点，邀请页面顶部显示奖励横幅
+
+### 数据库
+
+- **022_unified_ledger.sql** — `ledger_entries` 新增 `note`/`related_id`/`actor_id` 列（nullable），`request_id` 改为 nullable 以支持非结算类条目
+
+### 运维
+
+- **Cloudflare WAF 规则** — 新增 Skip 规则：`api.xllmapi.com` 跳过所有 WAF/Bot 检测，解决 OpenAI Python SDK（`User-Agent: OpenAI/Python`）被 Cloudflare "Block AI Bots" 误拦 403 的问题。根因：Cloudflare 按 UA 字符串粗暴匹配 "OpenAI" 关键词，不区分训练爬虫和合法 SDK 调用
+
+---
+
 ## v0.2.1 — 2026-03-27
 
 ### 核心
