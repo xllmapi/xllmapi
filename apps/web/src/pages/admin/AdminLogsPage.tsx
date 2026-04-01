@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { apiJson } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useLocale } from "@/hooks/useLocale";
 import { FormButton } from "@/components/ui/FormButton";
 import { FormInput } from "@/components/ui/FormInput";
@@ -24,31 +24,23 @@ const LEVEL_COLORS: Record<string, string> = {
 
 export function AdminLogsPage() {
   const { t } = useLocale();
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [level, setLevel] = useState<LevelFilter>("");
   const [search, setSearch] = useState("");
   const [limit, setLimit] = useState(200);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    params.set("limit", String(limit));
-    if (level) params.set("level", level);
-    if (search) params.set("search", search);
-    apiJson<{ data: LogEntry[] }>(`/v1/admin/logs?${params}`)
-      .then((r) => setLogs(r.data ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [limit, level, search]);
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  if (level) params.set("level", level);
+  if (search) params.set("search", search);
 
-  useEffect(() => { load(); }, [load]);
+  const { data: raw, loading, refetch } = useCachedFetch<{ data: LogEntry[] }>(`/v1/admin/logs?${params}`);
+  const logs = raw?.data ?? [];
 
   // Auto-refresh every 30s
   useEffect(() => {
-    const timer = setInterval(load, 30_000);
+    const timer = setInterval(() => void refetch(), 30_000);
     return () => clearInterval(timer);
-  }, [load]);
+  }, [refetch]);
 
   const levels: { key: LevelFilter; label: string }[] = [
     { key: "", label: t("admin.logs.all") },
@@ -63,7 +55,7 @@ export function AdminLogsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold tracking-tight">{t("admin.logs.title")}</h1>
-        <FormButton variant="ghost" onClick={load} className="!px-3 !py-1.5 !text-xs">
+        <FormButton variant="ghost" onClick={() => void refetch()} className="!px-3 !py-1.5 !text-xs">
           {t("admin.nodeHealth.refresh")}
         </FormButton>
       </div>

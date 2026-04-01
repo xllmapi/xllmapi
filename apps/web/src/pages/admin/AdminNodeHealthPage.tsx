@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useLocale } from "@/hooks/useLocale";
 import { Badge } from "@/components/ui/Badge";
 import { FormButton } from "@/components/ui/FormButton";
@@ -79,30 +80,23 @@ function formatCooldown(ms: number): string {
 /* ---------- Stats Panel ---------- */
 
 function StatsPanel({ offeringId, t }: { offeringId: string; t: (k: string) => string }) {
-  const [stats, setStats] = useState<OfferingStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: rawStats, loading } = useCachedFetch<{ data: { total: Record<string, string>; today: Record<string, string>; avgLatency: Record<string, string>; recentRequests: Array<{ id: string; status: string; totalMs: number | null; ttfbMs: number | null; tokens: number; createdAt: string }> } }>(`/v1/admin/offering-health/${encodeURIComponent(offeringId)}/stats`);
 
-  useEffect(() => {
-    setLoading(true);
-    apiJson<{ data: { total: Record<string, string>; today: Record<string, string>; avgLatency: Record<string, string>; recentRequests: Array<{ id: string; status: string; totalMs: number | null; ttfbMs: number | null; tokens: number; createdAt: string }> } }>(`/v1/admin/offering-health/${encodeURIComponent(offeringId)}/stats`)
-      .then((res) => {
-        const d = res.data;
-        setStats({
-          avgLatency: { total: Number(d.avgLatency?.total ?? 0), ttfb: Number(d.avgLatency?.ttfb ?? 0), queue: Number(d.avgLatency?.queue ?? 0), upstream: Number(d.avgLatency?.upstream ?? 0) },
-          totalRequests: Number(d.total?.totalRequests ?? 0),
-          totalInputTokens: Number(d.total?.totalInputTokens ?? 0),
-          totalOutputTokens: Number(d.total?.totalOutputTokens ?? 0),
-          successRate: Number(d.total?.successRate ?? 0),
-          todayRequests: Number(d.today?.todayRequests ?? 0),
-          todayInputTokens: Number(d.today?.todayInputTokens ?? 0),
-          todayOutputTokens: Number(d.today?.todayOutputTokens ?? 0),
-          todaySuccessRate: Number(d.today?.todaySuccessRate ?? 0),
-          recentRequests: d.recentRequests ?? [],
-        });
-      })
-      .catch(() => setStats(null))
-      .finally(() => setLoading(false));
-  }, [offeringId]);
+  const stats: OfferingStats | null = rawStats?.data ? (() => {
+    const d = rawStats.data;
+    return {
+      avgLatency: { total: Number(d.avgLatency?.total ?? 0), ttfb: Number(d.avgLatency?.ttfb ?? 0), queue: Number(d.avgLatency?.queue ?? 0), upstream: Number(d.avgLatency?.upstream ?? 0) },
+      totalRequests: Number(d.total?.totalRequests ?? 0),
+      totalInputTokens: Number(d.total?.totalInputTokens ?? 0),
+      totalOutputTokens: Number(d.total?.totalOutputTokens ?? 0),
+      successRate: Number(d.total?.successRate ?? 0),
+      todayRequests: Number(d.today?.todayRequests ?? 0),
+      todayInputTokens: Number(d.today?.todayInputTokens ?? 0),
+      todayOutputTokens: Number(d.today?.todayOutputTokens ?? 0),
+      todaySuccessRate: Number(d.today?.todaySuccessRate ?? 0),
+      recentRequests: d.recentRequests ?? [],
+    };
+  })() : null;
 
   if (loading) return <p className="text-text-secondary text-xs py-2">{t("common.loading")}</p>;
   if (!stats) return <p className="text-text-tertiary text-xs py-2">No stats available</p>;
@@ -354,8 +348,8 @@ const PAGE_SIZE = 20;
 
 export function AdminNodeHealthPage() {
   const { t } = useLocale();
-  const [data, setData] = useState<OfferingHealth[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: raw, loading, refetch } = useCachedFetch<{ data: OfferingHealth[] }>("/v1/admin/offering-health");
+  const data = raw?.data ?? [];
   const [acting, setActing] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("all");
   const [search, setSearch] = useState("");
@@ -371,21 +365,11 @@ export function AdminNodeHealthPage() {
     onConfirm: () => void;
   }>({ open: false, title: "", description: "", variant: "warning", onConfirm: () => {} });
 
-  const load = useCallback(() => {
-    setLoading(true);
-    apiJson<{ data: OfferingHealth[] }>("/v1/admin/offering-health")
-      .then((r) => setData(r.data ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
   const handleReset = async (id: string) => {
     setActing(id);
     try {
       await apiJson(`/v1/admin/offering-health/${encodeURIComponent(id)}/reset`, { method: "POST" });
-      load();
+      void refetch();
     } catch { /* ignore */ }
     finally { setActing(null); }
   };
@@ -395,7 +379,7 @@ export function AdminNodeHealthPage() {
     setActing(id);
     try {
       await apiJson(`/v1/admin/offering-health/${encodeURIComponent(id)}/stop`, { method: "POST" });
-      load();
+      void refetch();
     } catch { /* ignore */ }
     finally { setActing(null); }
   };
@@ -411,7 +395,7 @@ export function AdminNodeHealthPage() {
         setActing(id);
         try {
           await apiJson(`/v1/admin/offering-health/${encodeURIComponent(id)}/ban`, { method: "POST" });
-          load();
+          void refetch();
         } catch { /* ignore */ }
         finally { setActing(null); }
       },
@@ -422,7 +406,7 @@ export function AdminNodeHealthPage() {
     setActing(id);
     try {
       await apiJson(`/v1/admin/offering-health/${encodeURIComponent(id)}/unban`, { method: "POST" });
-      load();
+      void refetch();
     } catch { /* ignore */ }
     finally { setActing(null); }
   };
@@ -431,7 +415,7 @@ export function AdminNodeHealthPage() {
     setActing(id);
     try {
       await apiJson(`/v1/admin/offering-health/${encodeURIComponent(id)}/start`, { method: "POST" });
-      load();
+      void refetch();
     } catch { /* ignore */ }
     finally { setActing(null); }
   };
@@ -447,7 +431,7 @@ export function AdminNodeHealthPage() {
         setActing(id);
         try {
           await apiJson(`/v1/admin/offering-health/${encodeURIComponent(id)}`, { method: "DELETE" });
-          load();
+          void refetch();
         } catch { /* ignore */ }
         finally { setActing(null); }
       },
@@ -561,7 +545,7 @@ export function AdminNodeHealthPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold tracking-tight">{t("admin.nodeHealth.title")}</h1>
-        <FormButton variant="ghost" onClick={load} className="!px-3 !py-1.5 !text-xs">
+        <FormButton variant="ghost" onClick={() => void refetch()} className="!px-3 !py-1.5 !text-xs">
           {t("admin.nodeHealth.refresh")}
         </FormButton>
       </div>

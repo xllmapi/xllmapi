@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatTokens, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { FormButton } from "@/components/ui/FormButton";
@@ -23,39 +24,13 @@ interface PendingOffering {
 
 export function ReviewsPage() {
   const { t } = useLocale();
-  const [offerings, setOfferings] = useState<PendingOffering[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawOfferings, loading, refetch: refetchOfferings } = useCachedFetch<{ data: PendingOffering[] }>("/v1/admin/offerings/pending");
+  const offerings = rawOfferings?.data ?? [];
+  const { data: rawConfig, refetch: refetchConfig } = useCachedFetch<{ data: { key: string; value: string }[] }>("/v1/admin/config");
+  const autoApproveItem = (rawConfig?.data ?? []).find((c) => c.key === "offering_auto_approve");
+  const autoApprove = autoApproveItem?.value === "true";
   const [acting, setActing] = useState<string | null>(null);
-  const [autoApprove, setAutoApprove] = useState(false);
   const [autoApproveLoading, setAutoApproveLoading] = useState(false);
-
-  const loadData = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: PendingOffering[] }>(
-        "/v1/admin/offerings/pending",
-      );
-      setOfferings(res.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadAutoApprove = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: { key: string; value: string }[] }>("/v1/admin/config");
-      const item = (res.data ?? []).find((c) => c.key === "offering_auto_approve");
-      setAutoApprove(item?.value === "true");
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-    void loadAutoApprove();
-  }, [loadData, loadAutoApprove]);
 
   const toggleAutoApprove = async () => {
     setAutoApproveLoading(true);
@@ -65,7 +40,7 @@ export function ReviewsPage() {
         method: "PUT",
         body: JSON.stringify({ key: "offering_auto_approve", value: String(newValue) }),
       });
-      setAutoApprove(newValue);
+      await refetchConfig();
     } catch {
       // ignore
     } finally {
@@ -80,7 +55,7 @@ export function ReviewsPage() {
         method: "POST",
         body: JSON.stringify({ reviewStatus: status, reason }),
       });
-      await loadData();
+      await refetchOfferings();
     } catch {
       // ignore
     } finally {

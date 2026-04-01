@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiJson } from "@/lib/api";
 import { useLocale } from "@/hooks/useLocale";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 
 interface Notification {
   id: string;
@@ -13,17 +14,13 @@ interface Notification {
 
 export function NotificationsPage() {
   const { t } = useLocale();
+  const { data: notifData, loading } = useCachedFetch<{ data: Notification[] }>("/v1/notifications");
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(() => {
-    apiJson<{ data: Notification[] }>("/v1/notifications")
-      .then((r) => setNotifications(r.data ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  // Sync fetched data into local state for optimistic updates
+  useEffect(() => {
+    if (notifData?.data) setNotifications(notifData.data);
+  }, [notifData]);
 
   const markRead = async (id: string) => {
     await apiJson(`/v1/notifications/${encodeURIComponent(id)}/read`, { method: "POST" }).catch(() => {});

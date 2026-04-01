@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { apiJson } from "@/lib/api";
+import { useState } from "react";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatNumber, formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { StatCard } from "@/components/ui/StatCard";
@@ -35,18 +35,10 @@ type TimeRange = 7 | 30 | 0;
 
 export function UsagePage() {
   const { t } = useLocale();
-  const [data, setData] = useState<UsageResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<TimeRange>(7);
-
-  useEffect(() => {
-    setLoading(true);
-    const query = days > 0 ? `?days=${days}` : "";
-    apiJson<{ data: UsageResponse }>(`/v1/admin/usage${query}`)
-      .then((r) => setData(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [days]);
+  const query = days > 0 ? `?days=${days}` : "";
+  const { data: raw, loading } = useCachedFetch<{ data: UsageResponse }>(`/v1/admin/usage${query}`);
+  const data = raw?.data ?? null;
 
   const timeRanges: { key: TimeRange; label: string }[] = [
     { key: 7, label: "7d" },

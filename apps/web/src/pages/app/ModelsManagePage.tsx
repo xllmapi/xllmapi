@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiJson, getApiKey } from "@/lib/api";
 import { formatTokens, getContextLimit, formatContextLength, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -465,28 +466,17 @@ function GroupedPoolCard({
 
 function UsingTab() {
   const { t } = useLocale();
-  const [models, setModels] = useState<PoolModelEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: poolData, loading, refetch } = useCachedFetch<{ data: PoolModelEntry[] }>("/v1/me/connection-pool/grouped", { ttl: 30_000 });
+  const models = poolData?.data ?? [];
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: PoolModelEntry[] }>("/v1/me/connection-pool/grouped").catch(() => ({ data: [] as PoolModelEntry[] }));
-      setModels(res.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void loadData(); }, [loadData]);
+  // Auto-refresh every 30s
   useEffect(() => {
-    const timer = setInterval(() => { void loadData(); }, 30_000);
+    const timer = setInterval(() => { void refetch(); }, 30_000);
     return () => clearInterval(timer);
-  }, [loadData]);
+  }, [refetch]);
 
   // Split by active count: model group is active if at least one offering is enabled and not paused
   const activeModels = models.filter((m) => (m.activeCount ?? 0) > 0);
@@ -498,7 +488,7 @@ function UsingTab() {
     try {
       await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`, { method: "DELETE" });
       invalidateUserModels();
-      await loadData();
+      await refetch();
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
@@ -512,7 +502,7 @@ function UsingTab() {
     try {
       await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}`, { method: "POST" });
       invalidateUserModels();
-      await loadData();
+      await refetch();
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
@@ -526,7 +516,7 @@ function UsingTab() {
     try {
       await apiJson(`/v1/me/connection-pool/model/${encodeURIComponent(logicalModel)}/remove`, { method: "POST" });
       invalidateUserModels();
-      await loadData();
+      await refetch();
     } catch (err: unknown) {
       setError(extractError(err));
     } finally {
@@ -912,19 +902,24 @@ function ProvidingTab() {
   const myKey = getApiKey() ?? "";
   const platformWsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/node`;
 
-  // ── Offering data ──
-  const [catalog, setCatalog] = useState<ProviderPreset[]>([]);
-  const [offerings, setOfferings] = useState<Offering[]>([]);
-  const [supplyUsage, setSupplyUsage] = useState<SupplyUsageItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // ── Offering data via useCachedFetch ──
+  const { data: catalogData, loading: catalogLoading, refetch: refetchCatalog } = useCachedFetch<{ data: ProviderPreset[] }>("/v1/provider-catalog", { ttl: 30_000 });
+  const { data: offeringsData, loading: offeringsLoading, refetch: refetchOfferings } = useCachedFetch<{ data: Offering[] }>("/v1/offerings", { ttl: 30_000 });
+  const { data: usageData, loading: usageLoading, refetch: refetchUsage } = useCachedFetch<{ data: { items: SupplyUsageItem[] } }>("/v1/usage/supply", { ttl: 30_000 });
+  const { data: tokensData, loading: tokensLoading, refetch: refetchTokens } = useCachedFetch<{ data: NodeToken[] }>("/v1/nodes/tokens", { ttl: 30_000 });
+  const { data: nodesData, loading: nodesLoading, refetch: refetchNodes } = useCachedFetch<{ data: ConnectedNode[] }>("/v1/nodes", { ttl: 30_000 });
+
+  const catalog = catalogData?.data ?? [];
+  const offerings = offeringsData?.data ?? [];
+  const supplyUsage = usageData?.data?.items ?? [];
+  const tokens = tokensData?.data ?? [];
+  const nodes = nodesData?.data ?? [];
+  const loading = catalogLoading || offeringsLoading || usageLoading || tokensLoading || nodesLoading;
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [togglingId, setTogglingId] = useState("");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
-
-  // ── Node data ──
-  const [tokens, setTokens] = useState<NodeToken[]>([]);
-  const [nodes, setNodes] = useState<ConnectedNode[]>([]);
 
   // ── Add new modal ──
   const [showAddModal, setShowAddModal] = useState(false);
@@ -973,27 +968,8 @@ function ProvidingTab() {
   const [publishTarget, setPublishTarget] = useState<{ nodeId: string; realModel: string; providerType: string } | null>(null);
 
   const loadData = useCallback(async () => {
-    try {
-      const [catalogRes, offeringsRes, usageRes, tokensRes, nodesRes] = await Promise.all([
-        apiJson<{ data: ProviderPreset[] }>("/v1/provider-catalog"),
-        apiJson<{ data: Offering[] }>("/v1/offerings"),
-        apiJson<{ data: { items: SupplyUsageItem[] } }>("/v1/usage/supply").catch(() => ({ data: { items: [] } })),
-        apiJson<{ data: NodeToken[] }>("/v1/nodes/tokens").catch(() => ({ data: [] as NodeToken[] })),
-        apiJson<{ data: ConnectedNode[] }>("/v1/nodes").catch(() => ({ data: [] as ConnectedNode[] })),
-      ]);
-      setCatalog(catalogRes.data ?? []);
-      setOfferings(offeringsRes.data ?? []);
-      setSupplyUsage(usageRes.data?.items ?? []);
-      setTokens(tokensRes.data ?? []);
-      setNodes(nodesRes.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void loadData(); }, [loadData]);
+    await Promise.all([refetchCatalog(), refetchOfferings(), refetchUsage(), refetchTokens(), refetchNodes()]);
+  }, [refetchCatalog, refetchOfferings, refetchUsage, refetchTokens, refetchNodes]);
 
   // Auto-refresh node/offering data every 30s (paused during add flow)
   useEffect(() => {

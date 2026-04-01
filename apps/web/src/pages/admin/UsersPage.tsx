@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { apiJson } from "@/lib/api";
+import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -112,28 +113,13 @@ function UserDetailPanel({ user, acting, onSetRole, onToggleStatus, onAdjustBala
 
 export function UsersPage() {
   const { t } = useLocale();
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: raw, loading, refetch } = useCachedFetch<{ data: AdminUser[] }>("/v1/admin/users");
+  const users = raw?.data ?? [];
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterTab>("all");
   const [acting, setActing] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<DialogState | null>(null);
-
-  const loadData = useCallback(async () => {
-    try {
-      const res = await apiJson<{ data: AdminUser[] }>("/v1/admin/users");
-      setUsers(res.data ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
 
   /* ---- Action handlers ---- */
 
@@ -145,7 +131,7 @@ export function UsersPage() {
         method: "PATCH",
         body: JSON.stringify({ role: newRole }),
       });
-      await loadData();
+      await refetch();
     } catch {
       // ignore
     } finally {
@@ -161,7 +147,7 @@ export function UsersPage() {
         method: "PATCH",
         body: JSON.stringify({ status: newStatus }),
       });
-      await loadData();
+      await refetch();
     } catch {
       // ignore
     } finally {
@@ -176,7 +162,7 @@ export function UsersPage() {
         method: "PATCH",
         body: JSON.stringify({ walletAdjust: amount, ...(note ? { walletAdjustNote: note } : {}) }),
       });
-      await loadData();
+      await refetch();
     } catch {
       // ignore
     } finally {
