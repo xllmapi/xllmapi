@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { apiJson } from "@/lib/api";
+import { formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormButton } from "@/components/ui/FormButton";
@@ -13,6 +14,7 @@ interface InvitationStats {
   used: number;
   unlimited: boolean;
   enabled: boolean;
+  referralReward?: number;
 }
 
 interface Invitation {
@@ -148,6 +150,23 @@ export function InvitationsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6 tracking-tight">{t("invitations.title")}</h1>
+
+      {/* Referral reward banner */}
+      {stats && Number(stats.referralReward ?? 0) > 0 && (
+        <div className="rounded-[var(--radius-card)] border border-emerald-400/30 bg-emerald-400/5 p-4 mb-6 flex items-center gap-3">
+          <span className="w-8 h-8 rounded-full bg-emerald-400/15 border border-emerald-400/30 flex items-center justify-center shrink-0">
+            <span className="text-emerald-400 text-sm">+</span>
+          </span>
+          <div>
+            <p className="text-sm font-medium text-emerald-400">
+              {t("invitations.rewardTitle")}
+            </p>
+            <p className="text-xs text-text-secondary mt-0.5">
+              {t("invitations.rewardDesc").replace("{amount}", formatTokens(Number(stats.referralReward)))}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Quota */}
       {stats && (

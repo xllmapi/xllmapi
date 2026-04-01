@@ -16,4 +16,5 @@ export interface InvitationStats {
   remaining: number | null;
   unlimited: boolean;
   enabled: boolean;
+  referralReward: number;
 }

@@ -237,6 +237,8 @@ const messages: Record<string, Record<string, string>> = {
     "invitations.acceptedAt": "接受时间",
     "invitations.revoke": "撤回",
     "invitations.noRecords": "暂无邀请记录",
+    "invitations.rewardTitle": "邀请有奖",
+    "invitations.rewardDesc": "每成功邀请一位用户注册，您将获得 {amount} xtokens 奖励",
 
     // Profile
     "profile.title": "基础信息",
@@ -1162,6 +1164,8 @@ const messages: Record<string, Record<string, string>> = {
     "invitations.acceptedAt": "Accepted",
     "invitations.revoke": "Revoke",
     "invitations.noRecords": "No invitations sent yet",
+    "invitations.rewardTitle": "Earn Rewards",
+    "invitations.rewardDesc": "Get {amount} xtokens for each user you successfully invite",
 
     // Profile
     "profile.title": "Profile",
