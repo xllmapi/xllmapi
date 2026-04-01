@@ -751,7 +751,6 @@ export const postgresPlatformRepository: PlatformRepository = {
           await ls.creditReferral({
             userId: invitation.rows[0].inviter_user_id,
             amount: referralReward,
-            invitedEmail: normalizedEmail,
             invitationId: invitation.rows[0].id,
             client,
           });

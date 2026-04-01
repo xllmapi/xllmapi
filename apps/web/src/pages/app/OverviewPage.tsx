@@ -24,41 +24,29 @@ interface ConsumptionItem {
   lastUsedAt?: string;
 }
 
-interface RequestRecord {
-  requestId: string;
-  logicalModel: string;
-  provider: string;
-  providerLabel?: string;
-  realModel: string;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  createdAt: string;
-  consumerCost?: number;
-  supplierReward?: number;
-}
-
 interface DailyData {
   date: string;
   totalTokens: number;
   requestCount: number;
 }
 
-type ViewMode = "requests" | "models" | "ledger";
+type ViewMode = "requests" | "models";
 
-interface MergedRecord {
-  id: string;
-  type: "consume" | "supply";
-  logicalModel: string;
-  provider?: string;
-  providerLabel?: string;
-  realModel?: string;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  createdAt?: string;
-  consumerCost?: number;
-  supplierReward?: number;
+interface LedgerRecord {
+  id: number;
+  requestId: string | null;
+  direction: "credit" | "debit";
+  amount: string;
+  entryType: string;
+  note: string | null;
+  createdAt: string;
+  logicalModel: string | null;
+  provider: string | null;
+  providerLabel: string | null;
+  realModel: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
 }
 
 export function OverviewPage() {
@@ -71,8 +59,6 @@ export function OverviewPage() {
   const [supplyUsage, setSupplyUsage] = useState<UsageSummary | null>(null);
   const [consumptionUsage, setConsumptionUsage] = useState<UsageSummary | null>(null);
   const [consumptionItems, setConsumptionItems] = useState<ConsumptionItem[]>([]);
-  const [recentRequests, setRecentRequests] = useState<RequestRecord[]>([]);
-  const [supplyRecent, setSupplyRecent] = useState<RequestRecord[]>([]);
   const [supplyModelItems, setSupplyModelItems] = useState<ConsumptionItem[]>([]);
   const [offeringCount, setOfferingCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -86,13 +72,13 @@ export function OverviewPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("requests");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  // supply always included in merged list
 
-  // Ledger
-  const [ledgerData, setLedgerData] = useState<any[]>([]);
+  // Ledger-backed records for "by date" view
+  const PAGE_SIZE = 20;
+  const [ledgerRecords, setLedgerRecords] = useState<LedgerRecord[]>([]);
   const [ledgerTotal, setLedgerTotal] = useState(0);
-  const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const availableYears = Array.from(
     { length: currentYear - 2024 + 1 },
@@ -107,10 +93,8 @@ export function OverviewPage() {
       apiJson<{ data: { summary: UsageSummary; items: ConsumptionItem[] } }>("/v1/usage/supply"),
       apiJson<{ data: { summary: UsageSummary; items: ConsumptionItem[] } }>("/v1/usage/consumption"),
       apiJson<{ data: unknown[] }>("/v1/offerings"),
-      apiJson<{ data: RequestRecord[] }>("/v1/usage/consumption/recent?days=30"),
-      apiJson<{ data: RequestRecord[] }>("/v1/usage/supply/recent?days=30").catch(() => ({ data: [] })),
     ])
-      .then(([meRes, walletRes, supplyRes, consumptionRes, offeringsRes, recentRes, supplyRecentRes]) => {
+      .then(([meRes, walletRes, supplyRes, consumptionRes, offeringsRes]) => {
         setMe(meRes.data);
         setWallet(walletRes.data?.balance ?? 0);
         setSupplyUsage(supplyRes.data?.summary ?? null);
@@ -120,8 +104,6 @@ export function OverviewPage() {
         setConsumptionItems(items);
         setActiveModels(items.map((i: ConsumptionItem) => i.logicalModel));
         setOfferingCount(offeringsRes.data?.length ?? 0);
-        setRecentRequests(recentRes.data ?? []);
-        setSupplyRecent((supplyRecentRes as { data: RequestRecord[] }).data ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -147,16 +129,19 @@ export function OverviewPage() {
     }).catch(() => {});
   }, [selectedYear]);
 
-  // Ledger fetch
-  const loadLedger = useCallback(async (page = 1) => {
+  // Load ledger records for "by date" view
+  const loadRecords = useCallback(async (page: number, date?: string | null, model?: string | null) => {
     setLedgerLoading(true);
     try {
-      const limit = 50;
+      const limit = PAGE_SIZE;
       const offset = (page - 1) * limit;
-      const res = await apiJson<{ data: any[]; total: number }>(`/v1/ledger?limit=${limit}&offset=${offset}`);
-      setLedgerData(res.data ?? []);
+      let url = `/v1/ledger?limit=${limit}&offset=${offset}`;
+      if (date) url += `&date=${date}`;
+      if (model) url += `&model=${encodeURIComponent(model)}`;
+      const res = await apiJson<{ data: LedgerRecord[]; total: number }>(url);
+      setLedgerRecords(res.data ?? []);
       setLedgerTotal(res.total ?? 0);
-      setLedgerPage(page);
+      setCurrentPage(page);
     } catch {
       // ignore
     } finally {
@@ -165,10 +150,8 @@ export function OverviewPage() {
   }, []);
 
   useEffect(() => {
-    if (viewMode === "ledger") {
-      void loadLedger(1);
-    }
-  }, [viewMode, loadLedger]);
+    void loadRecords(1, selectedDate, selectedModel);
+  }, [selectedDate, selectedModel, loadRecords]);
 
   // Handle date click on heatmap
   const handleDateClick = useCallback((date: string) => {
@@ -190,55 +173,8 @@ export function OverviewPage() {
     setSelectedDate(null);
   }, [selectedModel]);
 
-  // Build merged list (consume + supply when toggled)
-  const mergedRecords: MergedRecord[] = recentRequests.map((r) => ({
-    id: r.requestId,
-    type: "consume" as const,
-    logicalModel: r.logicalModel,
-    provider: r.provider,
-    providerLabel: r.providerLabel,
-    realModel: r.realModel,
-    inputTokens: Number(r.inputTokens),
-    outputTokens: Number(r.outputTokens),
-    totalTokens: Number(r.totalTokens),
-    createdAt: r.createdAt,
-    consumerCost: Number(r.consumerCost ?? 0),
-  }));
-  {
-    const consumeIds = new Set(recentRequests.map((r) => r.requestId));
-    for (const s of supplyRecent) {
-      if (consumeIds.has(s.requestId)) continue;
-      mergedRecords.push({
-        id: `supply-${s.requestId}`,
-        type: "supply",
-        logicalModel: s.logicalModel,
-        provider: s.provider,
-        providerLabel: s.providerLabel,
-        realModel: s.realModel,
-        inputTokens: Number(s.inputTokens),
-        outputTokens: Number(s.outputTokens),
-        totalTokens: Number(s.totalTokens),
-        createdAt: s.createdAt,
-        supplierReward: Number(s.supplierReward ?? 0),
-      });
-    }
-    mergedRecords.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
-  }
-
-  // Filtered data
-  const filteredRequests = mergedRecords.filter((r) => {
-    if (selectedDate && r.createdAt?.slice(0, 10) !== selectedDate) return false;
-    if (selectedModel && r.logicalModel !== selectedModel) return false;
-    return true;
-  });
-
   // Pagination
-  const PAGE_SIZE = 10;
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
-  const pagedRequests = filteredRequests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  // Reset page when filters change
-  useEffect(() => { setCurrentPage(1); }, [selectedDate, selectedModel]);
+  const totalPages = Math.max(1, Math.ceil(ledgerTotal / PAGE_SIZE));
 
   // Build merged model data (consume + supply per model)
   interface MergedModelRow {
@@ -274,14 +210,17 @@ export function OverviewPage() {
     return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
   }
 
-  const requestColumns: Column<MergedRecord>[] = [
+  const isApiEntry = (r: LedgerRecord) => r.entryType === "consumer_cost" || r.entryType === "supplier_reward";
+
+  const requestColumns: Column<LedgerRecord>[] = [
     {
       key: "type",
       header: "",
       className: "w-2 !px-0",
-      render: (r) => (
-        <span className={`inline-block w-1.5 h-4 rounded-full ${r.type === "supply" ? "bg-emerald-400/60" : "bg-amber-300/50"}`} />
-      ),
+      render: (r) => {
+        if (!isApiEntry(r)) return <span className="inline-block w-1.5 h-4 rounded-full bg-sky-400/50" />;
+        return <span className={`inline-block w-1.5 h-4 rounded-full ${r.direction === "credit" ? "bg-emerald-400/60" : "bg-amber-300/50"}`} />;
+      },
     },
     {
       key: "createdAt",
@@ -296,41 +235,55 @@ export function OverviewPage() {
       key: "logicalModel",
       header: t("overview.model"),
       className: "font-mono text-xs",
+      render: (r) => {
+        if (isApiEntry(r) && r.logicalModel) return r.logicalModel;
+        return <span className="text-text-tertiary">—</span>;
+      },
     },
     {
       key: "cost",
       header: "xtokens",
       align: "right",
       render: (r) => {
-        const xt = r.type === "supply" ? (r.supplierReward ?? 0) : (r.consumerCost ?? 0);
-        return <span className={r.type === "supply" ? "text-emerald-400 font-medium" : "text-amber-300 font-medium"}>{formatTokens(xt)}</span>;
+        const amt = Number(r.amount);
+        const isCredit = r.direction === "credit";
+        return (
+          <span className={isCredit ? "text-emerald-400 font-medium" : "text-amber-300 font-medium"}>
+            {isCredit ? "+" : "−"}{formatTokens(amt)}
+          </span>
+        );
       },
     },
     {
       key: "totalTokens",
       header: "Tokens",
       align: "right",
-      render: (r) => <span className="text-text-tertiary">{formatTokens(r.totalTokens)}</span>,
+      render: (r) => <span className="text-text-tertiary">{r.totalTokens != null ? formatTokens(r.totalTokens) : "—"}</span>,
     },
     {
       key: "inputTokens",
       header: "Input",
       align: "right",
       className: "hidden md:table-cell",
-      render: (r) => <span className="text-text-tertiary">{formatTokens(r.inputTokens)}</span>,
+      render: (r) => <span className="text-text-tertiary">{r.inputTokens != null ? formatTokens(r.inputTokens) : "—"}</span>,
     },
     {
       key: "outputTokens",
       header: "Output",
       align: "right",
       className: "hidden md:table-cell",
-      render: (r) => <span className="text-text-tertiary">{formatTokens(r.outputTokens)}</span>,
+      render: (r) => <span className="text-text-tertiary">{r.outputTokens != null ? formatTokens(r.outputTokens) : "—"}</span>,
     },
     {
       key: "provider",
       header: "Provider",
       className: "text-xs text-text-tertiary",
-      render: (r) => r.type === "supply" ? t("overview.viewSupply") : formatProviderType(r.provider ?? "", r.providerLabel),
+      render: (r) => {
+        if (isApiEntry(r)) {
+          return r.direction === "credit" ? t("overview.viewSupply") : formatProviderType(r.provider ?? "", r.providerLabel);
+        }
+        return r.note ?? "—";
+      },
     },
   ];
 
@@ -446,16 +399,6 @@ export function OverviewPage() {
             >
               按模型
             </button>
-            <button
-              onClick={() => setViewMode("ledger")}
-              className={`px-2.5 py-1 text-[11px] rounded transition-colors ${
-                viewMode === "ledger"
-                  ? "bg-bg-1 text-text-primary shadow-sm"
-                  : "text-text-tertiary hover:text-text-secondary"
-              }`}
-            >
-              {t("ledger.title")}
-            </button>
           </div>
 
           {/* Color legend */}
@@ -479,23 +422,30 @@ export function OverviewPage() {
         </div>
 
         <span className="text-[11px] text-text-tertiary">
-          {viewMode === "requests" ? `${filteredRequests.length} records · ${currentPage}/${totalPages}` : viewMode === "models" ? `${filteredModels.length} models` : `${ledgerTotal} records · ${ledgerPage}/${Math.max(1, Math.ceil(ledgerTotal / 50))}`}
+          {viewMode === "requests" ? `${ledgerTotal} records · ${currentPage}/${totalPages}` : `${filteredModels.length} models`}
         </span>
       </div>
 
       {viewMode === "requests" ? (
         <>
-          <DataTable
-            columns={requestColumns}
-            data={pagedRequests}
-            rowKey={(r) => r.id}
-            emptyText={t("overview.noRecords")}
-            rowClassName={(r) => r.type === "supply" ? "bg-emerald-400/5" : "bg-amber-300/3"}
-          />
+          {ledgerLoading ? (
+            <div className="text-center py-8 text-text-tertiary text-xs">{t("common.loading")}</div>
+          ) : (
+            <DataTable
+              columns={requestColumns}
+              data={ledgerRecords}
+              rowKey={(r) => String(r.id)}
+              emptyText={t("overview.noRecords")}
+              rowClassName={(r) => {
+                if (!isApiEntry(r)) return "bg-sky-400/3";
+                return r.direction === "credit" ? "bg-emerald-400/5" : "bg-amber-300/3";
+              }}
+            />
+          )}
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-4">
               <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                onClick={() => void loadRecords(currentPage - 1, selectedDate, selectedModel)}
                 disabled={currentPage <= 1}
                 className="px-3 py-1 text-xs rounded-[var(--radius-btn)] border border-line text-text-secondary hover:bg-accent/10 cursor-pointer bg-transparent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
@@ -503,7 +453,7 @@ export function OverviewPage() {
               </button>
               <span className="text-xs text-text-tertiary">{currentPage} / {totalPages}</span>
               <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => void loadRecords(currentPage + 1, selectedDate, selectedModel)}
                 disabled={currentPage >= totalPages}
                 className="px-3 py-1 text-xs rounded-[var(--radius-btn)] border border-line text-text-secondary hover:bg-accent/10 cursor-pointer bg-transparent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
@@ -512,76 +462,13 @@ export function OverviewPage() {
             </div>
           )}
         </>
-      ) : viewMode === "models" ? (
+      ) : (
         <DataTable
           columns={modelColumns}
           data={filteredModels}
           rowKey={(r) => r.logicalModel}
           emptyText={t("overview.noRecords")}
         />
-      ) : (
-        /* Ledger view */
-        <div className="space-y-1">
-          {ledgerLoading ? (
-            <div className="text-center py-8 text-text-tertiary text-xs">{t("common.loading")}</div>
-          ) : ledgerData.length === 0 ? (
-            <div className="text-center py-8 text-text-tertiary text-xs">{t("overview.noRecords")}</div>
-          ) : (
-            <>
-              <div className="grid grid-cols-[1fr_auto_auto_1fr] gap-x-3 px-3 py-1.5 text-[10px] text-text-tertiary uppercase tracking-wider">
-                <span>{t("ledger.time")}</span>
-                <span>{t("ledger.type")}</span>
-                <span className="text-right">{t("ledger.amount")}</span>
-                <span>{t("ledger.note")}</span>
-              </div>
-              {ledgerData.map((entry: any) => {
-                const isCredit = entry.direction === "credit";
-                const typeKey = `ledger.type.${entry.entryType}` as any;
-                const typeLabel = t(typeKey) !== typeKey ? t(typeKey) : entry.entryType;
-                const displayNote = entry.note
-                  || (entry.logicalModel ? `${entry.logicalModel}${entry.providerLabel ? ` (${entry.providerLabel})` : ""}` : "—");
-                return (
-                  <div
-                    key={entry.id}
-                    className="grid grid-cols-[1fr_auto_auto_1fr] gap-x-3 items-center px-3 py-2 rounded-lg hover:bg-bg-2/50 text-xs border border-transparent hover:border-line/30"
-                  >
-                    <span className="text-text-secondary text-[11px]">
-                      {new Date(entry.createdAt).toLocaleString()}
-                    </span>
-                    <span className="text-text-secondary text-[11px]">{typeLabel}</span>
-                    <span className={`text-right font-mono text-[11px] ${isCredit ? "text-emerald-400" : "text-amber-400"}`}>
-                      {isCredit ? "+" : "−"}{formatTokens(Number(entry.amount))}
-                    </span>
-                    <span className="text-text-tertiary text-[11px] truncate" title={displayNote}>
-                      {displayNote}
-                    </span>
-                  </div>
-                );
-              })}
-              {ledgerTotal > 50 && (
-                <div className="flex justify-center gap-2 pt-2">
-                  <button
-                    disabled={ledgerPage <= 1}
-                    onClick={() => void loadLedger(ledgerPage - 1)}
-                    className="px-2 py-1 text-[11px] rounded border border-line text-text-secondary disabled:opacity-30 hover:bg-bg-2"
-                  >
-                    ←
-                  </button>
-                  <span className="text-[11px] text-text-tertiary py-1">
-                    {ledgerPage} / {Math.ceil(ledgerTotal / 50)}
-                  </span>
-                  <button
-                    disabled={ledgerPage >= Math.ceil(ledgerTotal / 50)}
-                    onClick={() => void loadLedger(ledgerPage + 1)}
-                    className="px-2 py-1 text-[11px] rounded border border-line text-text-secondary disabled:opacity-30 hover:bg-bg-2"
-                  >
-                    →
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
       )}
     </div>
   );

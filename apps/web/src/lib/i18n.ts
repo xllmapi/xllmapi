@@ -503,6 +503,9 @@ const messages: Record<string, Record<string, string>> = {
     "admin.users.confirmAdjust": "请输入 {name} 的余额调整金额（正数增加，负数减少）：",
     "admin.users.adjustNote": "备注（可选）",
     "admin.users.adjustNotePlaceholder": "调整原因",
+    "admin.users.currentBalance": "当前余额",
+    "admin.users.adjustAmount": "调整金额",
+    "admin.users.newBalance": "调整后余额",
 
     "ledger.title": "资金流水",
     "ledger.type.initial_credit": "注册赠送",
@@ -1425,6 +1428,9 @@ const messages: Record<string, Record<string, string>> = {
     "admin.users.confirmAdjust": "Enter balance adjustment for {name} (positive to add, negative to deduct):",
     "admin.users.adjustNote": "Note (optional)",
     "admin.users.adjustNotePlaceholder": "Reason for adjustment",
+    "admin.users.currentBalance": "Current Balance",
+    "admin.users.adjustAmount": "Adjustment",
+    "admin.users.newBalance": "New Balance",
 
     "ledger.title": "Token Activity",
     "ledger.type.initial_credit": "Signup Bonus",

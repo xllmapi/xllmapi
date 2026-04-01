@@ -24,6 +24,8 @@ interface ConfirmDialogProps {
     placeholder?: string;
     type?: string;
   }>;
+  /** Render dynamic content below inputs, receives current input values */
+  renderExtra?: (inputValues: Record<string, string>) => React.ReactNode;
 }
 
 export function ConfirmDialog({
@@ -38,31 +40,39 @@ export function ConfirmDialog({
   cooldownSeconds = 5,
   input,
   inputs,
+  renderExtra,
 }: ConfirmDialogProps) {
   const { t } = useLocale();
-  const [countdown, setCountdown] = useState(cooldownSeconds);
+  const [countdown, setCountdown] = useState(-1); // -1 = not started
   const [inputValue, setInputValue] = useState("");
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
-  // Reset countdown and input when dialog opens
+  // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setCountdown(cooldownSeconds);
+      setCountdown(-1);
       setInputValue("");
       setInputValues({});
-      timerRef.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [open, cooldownSeconds]);
+  }, [open]);
+
+  // Start cooldown timer
+  const startCooldown = () => {
+    setCountdown(cooldownSeconds);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   // Escape key
   const handleKeyDown = useCallback(
@@ -80,7 +90,8 @@ export function ConfirmDialog({
 
   if (!open) return null;
 
-  const isReady = countdown === 0;
+  const cooldownNotStarted = countdown === -1;
+  const cooldownActive = countdown > 0;
   const variantColor =
     variant === "danger" ? "text-danger" : "text-orange-400";
   const variantBg =
@@ -89,9 +100,11 @@ export function ConfirmDialog({
     variant === "danger" ? "border-danger/30" : "border-orange-400/30";
 
   const resolvedConfirmLabel = confirmLabel ?? t("common.confirm");
-  const buttonLabel = isReady
+  const buttonLabel = cooldownNotStarted
     ? resolvedConfirmLabel
-    : `${resolvedConfirmLabel} (${countdown}s)`;
+    : cooldownActive
+      ? `${resolvedConfirmLabel} (${countdown}s)`
+      : resolvedConfirmLabel;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -143,6 +156,8 @@ export function ConfirmDialog({
             ))}
           </div>
         )}
+        {/* Extra content */}
+        {renderExtra && <div className="mb-4">{renderExtra(inputs ? inputValues : {})}</div>}
         {/* Buttons */}
         <div className="flex justify-end gap-3">
           <FormButton variant="ghost" onClick={onClose}>
@@ -151,15 +166,23 @@ export function ConfirmDialog({
           <FormButton
             variant="primary"
             disabled={
-              !isReady ||
+              cooldownActive ||
               (!!input && !inputs && !inputValue.trim()) ||
               (!!inputs && inputs.length > 0 && !(inputValues[inputs[0]!.key] ?? "").trim())
             }
-            onClick={() =>
-              inputs
-                ? onConfirm(undefined, inputValues)
-                : onConfirm(input ? inputValue : undefined)
-            }
+            onClick={() => {
+              if (cooldownNotStarted) {
+                // First click: start cooldown
+                startCooldown();
+                return;
+              }
+              // Second click (after cooldown): confirm
+              if (inputs) {
+                onConfirm(undefined, inputValues);
+              } else {
+                onConfirm(input ? inputValue : undefined);
+              }
+            }}
             className={
               variant === "danger"
                 ? "!bg-danger hover:!bg-danger/80 disabled:!bg-danger/30"

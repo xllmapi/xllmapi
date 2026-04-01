@@ -37,6 +37,8 @@ export interface LedgerHistoryParams {
   limit?: number;
   offset?: number;
   entryType?: string;
+  date?: string;    // YYYY-MM-DD filter
+  model?: string;   // logicalModel filter
 }
 
 export interface LedgerEntry {
@@ -120,7 +122,7 @@ export const ledgerService = {
         direction: params.amount >= 0 ? "credit" : "debit",
         amount: Math.abs(params.amount),
         entryType: "admin_adjust",
-        note: params.note || "管理员调整",
+        note: params.note || "平台调整",
         actorId: params.actorUserId,
         client,
       });
@@ -141,7 +143,6 @@ export const ledgerService = {
   async creditReferral(params: {
     userId: string;
     amount: number;
-    invitedEmail: string;
     invitationId: string;
     client: PoolClient;
   }): Promise<void> {
@@ -150,7 +151,7 @@ export const ledgerService = {
       direction: "credit",
       amount: params.amount,
       entryType: "referral_reward",
-      note: `邀请 ${params.invitedEmail} 注册奖励`,
+      note: "邀请注册奖励",
       relatedId: params.invitationId,
       actorId: "system",
       client: params.client,
@@ -171,10 +172,24 @@ export const ledgerService = {
       values.push(params.entryType);
       idx++;
     }
+    if (params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) {
+      conditions.push(`le.created_at::date = $${idx}`);
+      values.push(params.date);
+      idx++;
+    }
+    if (params.model) {
+      conditions.push(`ar.logical_model = $${idx}`);
+      values.push(params.model);
+      idx++;
+    }
 
     const where = conditions.join(" AND ");
     const limit = Math.min(params.limit ?? 50, 200);
     const offset = params.offset ?? 0;
+
+    const countWhere = params.model
+      ? `${where.replace("ar.logical_model", "ar2.logical_model")}`.replace("ar.", "ar2.")
+      : where;
 
     const [dataResult, countResult] = await Promise.all([
       pool.query(`
@@ -190,7 +205,11 @@ export const ledgerService = {
           le.created_at::text AS "createdAt",
           ar.logical_model AS "logicalModel",
           ar.provider,
-          ar.provider_label AS "providerLabel"
+          ar.provider_label AS "providerLabel",
+          ar.input_tokens AS "inputTokens",
+          ar.output_tokens AS "outputTokens",
+          ar.total_tokens AS "totalTokens",
+          ar.real_model AS "realModel"
         FROM ledger_entries le
         LEFT JOIN api_requests ar ON ar.id = le.request_id
         WHERE ${where}
@@ -198,7 +217,10 @@ export const ledgerService = {
         LIMIT $${idx} OFFSET $${idx + 1}
       `, [...values, limit, offset]),
       pool.query(`
-        SELECT COUNT(*)::text AS total FROM ledger_entries le WHERE ${where}
+        SELECT COUNT(*)::text AS total
+        FROM ledger_entries le
+        ${params.model ? "LEFT JOIN api_requests ar ON ar.id = le.request_id" : ""}
+        WHERE ${where}
       `, values),
     ]);
 
