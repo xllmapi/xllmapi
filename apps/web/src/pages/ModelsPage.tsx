@@ -379,7 +379,7 @@ export function ModelsPage() {
                 ))}
               </div>
               <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("models.searchSupplier")}
-                className="rounded-[var(--radius-input)] border border-line px-3 py-1.5 text-sm text-text-primary w-52 focus:outline-none focus:border-accent transition-colors font-mono"
+                className="rounded-[var(--radius-input)] border border-line px-3 py-1.5 text-sm text-text-primary w-full sm:w-52 focus:outline-none focus:border-accent transition-colors font-mono"
                 style={{ backgroundColor: "rgba(16,21,34,0.6)" }} />
             </div>
           </div>
@@ -394,10 +394,10 @@ export function ModelsPage() {
 
       {/* Section 3: Platform Models */}
       <section className="mx-auto max-w-[var(--spacing-content)] px-6 pb-10 w-full">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
           <h2 className="text-lg font-semibold text-text-primary">{t("models.platformModels")}</h2>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap">
               {(["popular", "requests", "tokens", "price", "newest"] as SortKey[]).map((key) => (
                 <button key={key} onClick={() => setSortBy(key)}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${sortBy === key ? "border-accent/40 bg-accent/10 text-accent" : "border-line text-text-tertiary hover:text-text-secondary"}`}>

@@ -135,3 +135,12 @@
   80%, 98% { transform: translateY(-400%); }
   100% { transform: translateY(-500%); }
 }
+
+/* Mobile utilities */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}

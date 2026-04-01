@@ -287,12 +287,14 @@ export function OverviewPage() {
       key: "inputTokens",
       header: "Input",
       align: "right",
+      className: "hidden md:table-cell",
       render: (r) => <span className="text-text-tertiary">{formatTokens(r.inputTokens)}</span>,
     },
     {
       key: "outputTokens",
       header: "Output",
       align: "right",
+      className: "hidden md:table-cell",
       render: (r) => <span className="text-text-tertiary">{formatTokens(r.outputTokens)}</span>,
     },
     {
@@ -389,7 +391,7 @@ export function OverviewPage() {
       </div>
 
       {/* Detail section header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold text-text-secondary">{t("overview.details")}</h2>
 
