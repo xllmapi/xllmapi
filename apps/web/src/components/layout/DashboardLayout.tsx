@@ -9,10 +9,12 @@ function SidebarLink({
   to,
   label,
   end,
+  highlight,
 }: {
   to: string;
   label: string;
   end?: boolean;
+  highlight?: boolean;
 }) {
   return (
     <NavLink
@@ -23,11 +25,16 @@ function SidebarLink({
           "block whitespace-nowrap shrink-0 rounded-[var(--radius-input)] px-3 py-2 text-sm no-underline transition-colors",
           isActive
             ? "bg-accent/10 text-accent font-medium"
-            : "text-text-secondary hover:text-text-primary hover:bg-accent-bg",
+            : highlight
+              ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
+              : "text-text-secondary hover:text-text-primary hover:bg-accent-bg",
         )
       }
     >
-      {label}
+      <span className="flex items-center gap-1.5">
+        {label}
+        {highlight && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+      </span>
     </NavLink>
   );
 }
@@ -35,11 +42,13 @@ function SidebarLink({
 export function DashboardLayout() {
   const { t } = useLocale();
   const [invitationsEnabled, setInvitationsEnabled] = useState<boolean | null>(null);
+  const [referralReward, setReferralReward] = useState(0);
 
   useEffect(() => {
-    apiJson<{ data: { enabled: boolean; unlimited: boolean } }>("/v1/me/invitation-stats")
+    apiJson<{ data: { enabled: boolean; unlimited: boolean; referralReward?: number } }>("/v1/me/invitation-stats")
       .then((res) => {
         setInvitationsEnabled(res.data.unlimited ? true : res.data.enabled);
+        setReferralReward(Number(res.data.referralReward ?? 0));
       })
       .catch(() => setInvitationsEnabled(true));
   }, []);
@@ -51,7 +60,7 @@ export function DashboardLayout() {
         <SidebarLink to="/app" label={t("sidebar.overview")} end />
         <SidebarLink to="/app/models/connected" label={t("sidebar.connected")} />
         <SidebarLink to="/app/models/provided" label={t("sidebar.provided")} />
-        {invitationsEnabled && <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />}
+        {invitationsEnabled && <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} highlight={referralReward > 0} />}
         <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
         <SidebarLink to="/app/security" label={t("sidebar.security")} />
         <SidebarLink to="/app/api-keys" label={t("sidebar.apiKeys")} />
@@ -78,7 +87,7 @@ export function DashboardLayout() {
             <SidebarLink to="/app/profile" label={t("sidebar.profile")} />
             <SidebarLink to="/app/security" label={t("sidebar.security")} />
             <SidebarLink to="/app/api-keys" label={t("sidebar.apiKeys")} />
-            {invitationsEnabled && <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} />}
+            {invitationsEnabled && <SidebarLink to="/app/invitations" label={t("sidebar.invitations")} highlight={referralReward > 0} />}
           </nav>
         </aside>
         <main className="flex-1 min-w-0">

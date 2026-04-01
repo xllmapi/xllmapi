@@ -1171,19 +1171,21 @@ export const postgresPlatformRepository: PlatformRepository = {
   async getInvitationStats(userId) {
     await ensureDevSeed();
     const currentPool = getPool();
-    const [userResult, usedResult, quotaResult, enabledResult] = await Promise.all([
+    const [userResult, usedResult, quotaResult, enabledResult, rewardResult] = await Promise.all([
       currentPool.query<{ role: string }>("SELECT role FROM users WHERE id = $1 LIMIT 1", [userId]),
       currentPool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM invitations WHERE inviter_user_id = $1 AND status != 'revoked'", [userId]),
       currentPool.query<{ value: string }>("SELECT value FROM platform_config WHERE key = 'default_invitation_quota' LIMIT 1"),
-      currentPool.query<{ value: string }>("SELECT value FROM platform_config WHERE key = 'invitation_enabled' LIMIT 1")
+      currentPool.query<{ value: string }>("SELECT value FROM platform_config WHERE key = 'invitation_enabled' LIMIT 1"),
+      currentPool.query<{ value: string }>("SELECT value FROM platform_config WHERE key = 'referral_reward_amount' LIMIT 1")
     ]);
     const used = Number(usedResult.rows[0]?.count ?? 0);
     const enabled = enabledResult.rows[0]?.value !== "false";
+    const referralReward = Number(rewardResult.rows[0]?.value ?? 0);
     if (userResult.rows[0]?.role === "admin") {
-      return { limit: null, used, remaining: null, unlimited: true, enabled } satisfies InvitationStats;
+      return { limit: null, used, remaining: null, unlimited: true, enabled, referralReward } satisfies InvitationStats;
     }
     const limit = Number(quotaResult.rows[0]?.value ?? 10);
-    return { limit, used, remaining: Math.max(0, limit - used), unlimited: false, enabled } satisfies InvitationStats;
+    return { limit, used, remaining: Math.max(0, limit - used), unlimited: false, enabled, referralReward } satisfies InvitationStats;
   },
 
   async createInvitation(params) {

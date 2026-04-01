@@ -1365,7 +1365,8 @@ export const get_invitation_stats = (userId: string): InvitationStats => {
       used: used.count,
       remaining: null,
       unlimited: true,
-      enabled: true
+      enabled: true,
+      referralReward: 0
     };
   }
 
@@ -1374,7 +1375,8 @@ export const get_invitation_stats = (userId: string): InvitationStats => {
     used: used.count,
     remaining: Math.max(0, 10 - used.count),
     unlimited: false,
-    enabled: true
+    enabled: true,
+    referralReward: 0
   };
 };
 
