@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
-  <!-- Lines: accent cyan — bright so visible even at tiny sizes -->
-  <line x1="15" y1="13" x2="22" y2="22" stroke="#8be3da" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-  <line x1="47" y1="11" x2="38" y2="24" stroke="#8be3da" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-  <line x1="38" y1="38" x2="49" y2="49" stroke="#8be3da" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
-  <line x1="22" y1="38" x2="13" y2="47" stroke="#8be3da" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
-  <!-- Far nodes: secondary blue-gray -->
-  <circle cx="10" cy="8" r="4.2" fill="#98a4c2" opacity="0.6"/>
-  <circle cx="52" cy="6" r="4.8" fill="#98a4c2" opacity="0.7"/>
-  <!-- Near nodes: white/primary text -->
-  <circle cx="8" cy="52" r="6" fill="#f3f6ff" opacity="0.8"/>
-  <circle cx="56" cy="56" r="8.4" fill="#f3f6ff"/>
-  <!-- Center hub: white with dark hole -->
-  <circle cx="30" cy="30" r="10.2" fill="#f3f6ff"/>
+  <!-- Lines: bright orange-red for visibility at small sizes -->
+  <line x1="15" y1="13" x2="22" y2="22" stroke="#ff6b3d" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="47" y1="11" x2="38" y2="24" stroke="#ff6b3d" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="38" y1="38" x2="49" y2="49" stroke="#ff6b3d" stroke-width="3" stroke-linecap="round"/>
+  <line x1="22" y1="38" x2="13" y2="47" stroke="#ff6b3d" stroke-width="2.8" stroke-linecap="round"/>
+  <!-- Far nodes: accent cyan -->
+  <circle cx="10" cy="8" r="4.2" fill="#8be3da"/>
+  <circle cx="52" cy="6" r="4.8" fill="#8be3da"/>
+  <!-- Near nodes: accent cyan -->
+  <circle cx="8" cy="52" r="6" fill="#8be3da"/>
+  <circle cx="56" cy="56" r="8.4" fill="#8be3da"/>
+  <!-- Center hub: accent cyan with dark hole -->
+  <circle cx="30" cy="30" r="10.2" fill="#8be3da"/>
   <circle cx="30" cy="30" r="4.8" fill="#0a0d14"/>
 </svg>
