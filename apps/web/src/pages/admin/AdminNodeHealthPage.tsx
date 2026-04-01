@@ -575,14 +575,11 @@ export function AdminNodeHealthPage() {
         />
       </div>
 
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <>
-          <div className="text-xs text-text-tertiary mb-2">
+      <div className="text-xs text-text-tertiary mb-2">
             {filtered.length} {t("admin.nodeHealth.items")}
           </div>
           <DataTable
+            loading={loading}
             columns={columns}
             data={paginated}
             rowKey={(o) => o.offeringId}
@@ -629,8 +626,6 @@ export function AdminNodeHealthPage() {
               </FormButton>
             </div>
           )}
-        </>
-      )}
 
       {/* Confirm dialog */}
       <ConfirmDialog

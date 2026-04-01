@@ -7,7 +7,7 @@ type BannerType = "info" | "warning" | "error";
 
 export function AdminBannerPage() {
   const { t } = useLocale();
-  const { data: raw, loading, refetch } = useCachedFetch<{ data: { key: string; value: string }[] }>("/v1/admin/config");
+  const { data: raw, refetch } = useCachedFetch<{ data: { key: string; value: string }[] }>("/v1/admin/config");
   const [enabled, setEnabled] = useState(false);
   const [content, setContent] = useState("");
   const [type, setType] = useState<BannerType>("info");
@@ -58,10 +58,6 @@ export function AdminBannerPage() {
     warning: "bg-yellow-500/10 border-yellow-500/30 text-yellow-600",
     error: "bg-danger/10 border-danger/30 text-danger",
   };
-
-  if (loading) {
-    return <div className="text-text-tertiary text-sm py-8">{t("common.loading")}</div>;
-  }
 
   return (
     <div>

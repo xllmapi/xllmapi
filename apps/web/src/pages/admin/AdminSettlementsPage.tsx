@@ -121,15 +121,11 @@ export function AdminSettlementsPage() {
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <StatCard label={t("admin.settlements.totalRevenue")} value={formatNumber(summary.totalConsumerCost)} />
-            <StatCard label={t("admin.settlements.supplierPayout")} value={formatNumber(summary.totalSupplierReward)} />
-            <StatCard label={t("admin.settlements.platformProfit")} value={formatNumber(summary.totalPlatformMargin)} />
-            <StatCard label={t("admin.settlements.count")} value={formatNumber(summary.count)} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <StatCard label={t("admin.settlements.totalRevenue")} value={formatNumber(summary.totalConsumerCost)} loading={loading} />
+            <StatCard label={t("admin.settlements.supplierPayout")} value={formatNumber(summary.totalSupplierReward)} loading={loading} />
+            <StatCard label={t("admin.settlements.platformProfit")} value={formatNumber(summary.totalPlatformMargin)} loading={loading} />
+            <StatCard label={t("admin.settlements.count")} value={formatNumber(summary.count)} loading={loading} />
           </div>
 
           <DataTable
@@ -137,6 +133,7 @@ export function AdminSettlementsPage() {
             data={data}
             rowKey={(r) => r.id}
             emptyText={t("common.empty")}
+            loading={loading}
           />
 
           {totalPages > 1 && (
@@ -162,8 +159,6 @@ export function AdminSettlementsPage() {
               </FormButton>
             </div>
           )}
-        </>
-      )}
     </div>
   );
 }

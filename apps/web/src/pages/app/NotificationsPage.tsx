@@ -14,7 +14,7 @@ interface Notification {
 
 export function NotificationsPage() {
   const { t } = useLocale();
-  const { data: notifData, loading } = useCachedFetch<{ data: Notification[] }>("/v1/notifications");
+  const { data: notifData } = useCachedFetch<{ data: Notification[] }>("/v1/notifications");
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Sync fetched data into local state for optimistic updates
@@ -27,8 +27,6 @@ export function NotificationsPage() {
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
     window.dispatchEvent(new Event("notifications-changed"));
   };
-
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 
   return (
     <div>

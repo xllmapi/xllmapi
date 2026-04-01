@@ -187,10 +187,6 @@ export function OverviewPage() {
     return true;
   });
 
-  if (loading) {
-    return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
-  }
-
   const isApiEntry = (r: LedgerRecord) => r.entryType === "consumer_cost" || r.entryType === "supplier_reward";
 
   const requestColumns: Column<LedgerRecord>[] = [
@@ -322,18 +318,22 @@ export function OverviewPage() {
         <StatCard
           label={t("overview.balance")}
           value={`${formatTokens(wallet)} xtokens`}
+          loading={loading}
         />
         <StatCard
           label={t("overview.supply")}
           value={`${formatTokens(supplyUsage?.supplierReward ?? 0)} xtokens`}
+          loading={loading}
         />
         <StatCard
           label={t("overview.consumed")}
           value={`${formatTokens(consumptionUsage?.consumerCost ?? 0)} xtokens`}
+          loading={loading}
         />
         <StatCard
           label={t("overview.offerings")}
           value={String(offeringCount)}
+          loading={loading}
         />
       </div>
 

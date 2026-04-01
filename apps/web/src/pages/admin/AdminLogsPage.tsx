@@ -95,10 +95,7 @@ export function AdminLogsPage() {
         />
       </div>
 
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <div className="rounded-[var(--radius-card)] border border-line bg-panel overflow-hidden">
+      <div className="rounded-[var(--radius-card)] border border-line bg-panel overflow-hidden">
           <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
             <table className="w-full text-[11px] font-mono">
               <thead className="sticky top-0 bg-[rgba(16,21,34,0.95)]">
@@ -109,7 +106,13 @@ export function AdminLogsPage() {
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log, i) => (
+                {loading ? Array.from({ length: 8 }, (_, i) => (
+                  <tr key={i} className="border-b border-line/30">
+                    <td className="px-3 py-1.5"><div className="h-3 w-24 rounded bg-line/30 animate-pulse" /></td>
+                    <td className="px-3 py-1.5"><div className="h-3 w-10 rounded bg-line/30 animate-pulse" /></td>
+                    <td className="px-3 py-1.5"><div className="h-3 rounded bg-line/30 animate-pulse" style={{ width: `${50 + (i * 13) % 40}%` }} /></td>
+                  </tr>
+                )) : logs.map((log, i) => (
                   <tr key={i} className={`border-b border-line/30 ${log.level === "error" || log.level === "fatal" ? "bg-red-500/5" : log.level === "warn" ? "bg-amber-500/5" : ""}`}>
                     <td className="px-3 py-1.5 text-text-tertiary whitespace-nowrap align-top">
                       {log.timestamp ? new Date(log.timestamp).toLocaleString() : ""}
@@ -125,12 +128,11 @@ export function AdminLogsPage() {
                 ))}
               </tbody>
             </table>
-            {logs.length === 0 && (
+            {!loading && logs.length === 0 && (
               <p className="text-text-tertiary text-sm text-center py-8">{t("common.empty")}</p>
             )}
           </div>
         </div>
-      )}
     </div>
   );
 }

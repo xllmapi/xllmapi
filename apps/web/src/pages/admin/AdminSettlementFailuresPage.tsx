@@ -138,11 +138,7 @@ export function AdminSettlementFailuresPage() {
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="rounded-[var(--radius-card)] border border-line bg-panel px-4 py-4">
               <p className="text-xs text-text-tertiary mb-1">{t("admin.settlementFailures.total")}</p>
               <p className="text-xl font-semibold">{formatNumber(total)}</p>
@@ -166,6 +162,7 @@ export function AdminSettlementFailuresPage() {
             data={rows}
             rowKey={(row) => row.id}
             emptyText={t("common.empty")}
+            loading={loading}
             rowClassName={(row) => row.resolvedAt ? "" : "bg-danger/3"}
           />
 
@@ -192,8 +189,6 @@ export function AdminSettlementFailuresPage() {
               </FormButton>
             </div>
           )}
-        </>
-      )}
     </div>
   );
 }

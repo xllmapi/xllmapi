@@ -263,8 +263,6 @@ export function UsersPage() {
     setConfirmDialog(null);
   };
 
-  if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
-
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const filtered = users.filter((u) => {
     const matchSearch =
@@ -338,6 +336,7 @@ export function UsersPage() {
         data={filtered}
         rowKey={(u) => u.id}
         emptyText={t("admin.users.noUsers")}
+        loading={loading}
         onRowClick={(u) => setExpandedId(expandedId === u.id ? null : u.id)}
         activeRowKey={expandedId}
         renderExpanded={(u) =>

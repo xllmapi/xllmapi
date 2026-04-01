@@ -65,16 +65,13 @@ export function AdminAuditPage() {
     <div>
       <h1 className="text-2xl font-bold tracking-tight mb-6">{t("admin.audit.title")}</h1>
 
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <DataTable
+      <DataTable
           columns={columns}
           data={data}
           rowKey={(r) => r.id ?? `${r.created_at}-${r.action}`}
           emptyText={t("common.empty")}
+          loading={loading}
         />
-      )}
     </div>
   );
 }

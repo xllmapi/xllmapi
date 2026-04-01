@@ -320,11 +320,7 @@ export function AdminRequestsPage() {
         />
       </div>
 
-      {loading ? (
-        <p className="text-text-secondary py-8">{t("common.loading")}</p>
-      ) : (
-        <>
-          <div className="text-xs text-text-tertiary mb-2">
+      <div className="text-xs text-text-tertiary mb-2">
             {t("admin.requests.totalCount")}: {formatNumber(total)}
           </div>
           <DataTable
@@ -332,6 +328,7 @@ export function AdminRequestsPage() {
             data={data}
             rowKey={(r) => r.id}
             emptyText={t("common.empty")}
+            loading={loading}
             onRowClick={(r) => setExpandedId(expandedId === r.id ? null : r.id)}
             activeRowKey={expandedId}
             renderExpanded={(r) =>
@@ -363,8 +360,6 @@ export function AdminRequestsPage() {
               </FormButton>
             </div>
           )}
-        </>
-      )}
     </div>
   );
 }
