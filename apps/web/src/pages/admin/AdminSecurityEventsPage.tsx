@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { apiJson } from "@/lib/api";
+import { useMemo } from "react";
 import { useLocale } from "@/hooks/useLocale";
+import { useAdminData } from "@/hooks/useAdminData";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 
 type SecurityEventRow = {
@@ -15,13 +15,8 @@ type SecurityEventRow = {
 
 export function AdminSecurityEventsPage() {
   const { t } = useLocale();
-  const [rows, setRows] = useState<SecurityEventRow[]>([]);
-
-  useEffect(() => {
-    void apiJson<{ data: SecurityEventRow[] }>("/v1/admin/security-events?limit=100")
-      .then((result) => setRows(result.data ?? []))
-      .catch(() => setRows([]));
-  }, []);
+  const { data: raw } = useAdminData<{ data: SecurityEventRow[] }>("/v1/admin/security-events?limit=100");
+  const rows = raw?.data ?? [];
 
   const columns = useMemo<Column<SecurityEventRow>[]>(() => [
     { key: "createdAt", header: t("admin.securityEvents.time") },

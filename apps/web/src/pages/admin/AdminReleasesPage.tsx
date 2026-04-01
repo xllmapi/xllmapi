@@ -1,6 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { apiJson } from "@/lib/api";
 import { useLocale } from "@/hooks/useLocale";
+import { useAdminData } from "@/hooks/useAdminData";
 import { Badge } from "@/components/ui/Badge";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 
@@ -14,18 +13,8 @@ interface ReleaseRecord {
 
 export function AdminReleasesPage() {
   const { t } = useLocale();
-  const [data, setData] = useState<ReleaseRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    apiJson<{ data: ReleaseRecord[] }>("/v1/admin/releases")
-      .then((r) => setData(r.data ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  const { data: raw, loading } = useAdminData<{ data: ReleaseRecord[] }>("/v1/admin/releases");
+  const data = raw?.data ?? [];
 
   const columns: Column<ReleaseRecord>[] = [
     {

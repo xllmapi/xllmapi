@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
+import { adminPageImports } from "@/App";
 import { ScrollableTabBar } from "./ScrollableTabBar";
 
 function SidebarLink({
@@ -32,6 +34,19 @@ function SidebarLink({
 
 export function AdminLayout() {
   const { t } = useLocale();
+
+  useEffect(() => {
+    const prefetch = () => {
+      adminPageImports.forEach((load) => load());
+    };
+    if ("requestIdleCallback" in window) {
+      const id = requestIdleCallback(prefetch);
+      return () => cancelIdleCallback(id);
+    } else {
+      const id = setTimeout(prefetch, 200);
+      return () => clearTimeout(id);
+    }
+  }, []);
 
   return (
     <div className="mx-auto max-w-[var(--spacing-content)] px-4 md:px-6 pt-[72px] pb-12 min-h-screen">

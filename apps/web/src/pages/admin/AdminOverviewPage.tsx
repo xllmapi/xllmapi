@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiJson } from "@/lib/api";
 import { formatNumber, formatTokens, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
+import { useAdminData } from "@/hooks/useAdminData";
 import { StatCard } from "@/components/ui/StatCard";
 import { DataTable, type Column } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/Badge";
@@ -27,6 +26,7 @@ interface ProviderInfo {
 }
 
 interface AdminStats {
+  userCount: number;
   activeUsers: number;
   openSettlementFailures: number;
 }
@@ -41,41 +41,25 @@ interface SettlementFailurePreview {
 }
 export function AdminOverviewPage() {
   const { t } = useLocale();
-  const [loading, setLoading] = useState(true);
-  const [userCount, setUserCount] = useState(0);
-  const [activeUsers, setActiveUsers] = useState(0);
-  const [totalRequests, setTotalRequests] = useState(0);
-  const [modelCount, setModelCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [openSettlementFailures, setOpenSettlementFailures] = useState(0);
-  const [settlementFailures, setSettlementFailures] = useState<SettlementFailurePreview[]>([]);
-  const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([]);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
 
-  useEffect(() => {
-    Promise.all([
-      apiJson<{ data: unknown[] }>("/v1/admin/users"),
-      apiJson<{ data: AdminStats }>("/v1/admin/stats"),
-      apiJson<{ data: { summary: { totalRequests: number; offeringCount: number } } }>("/v1/admin/usage"),
-      apiJson<{ data: unknown[] }>("/v1/admin/offerings/pending"),
-      apiJson<{ data: RecentRequest[] }>("/v1/admin/usage/recent?limit=15"),
-      apiJson<{ data: ProviderInfo[] }>("/v1/admin/providers"),
-      apiJson<{ data: SettlementFailurePreview[] }>("/v1/admin/settlement-failures?status=open&limit=5"),
-    ])
-      .then(([users, stats, usage, pending, recent, provs, failures]) => {
-        setUserCount(users.data?.length ?? 0);
-        setActiveUsers(stats.data?.activeUsers ?? 0);
-        setOpenSettlementFailures(stats.data?.openSettlementFailures ?? 0);
-        setTotalRequests(usage.data?.summary?.totalRequests ?? 0);
-        setModelCount(usage.data?.summary?.offeringCount ?? 0);
-        setPendingCount(pending.data?.length ?? 0);
-        setRecentRequests(recent.data ?? []);
-        setProviders(provs.data ?? []);
-        setSettlementFailures(failures.data ?? []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const stats = useAdminData<{ data: AdminStats }>("/v1/admin/stats");
+  const usage = useAdminData<{ data: { summary: { totalRequests: number; offeringCount: number } } }>("/v1/admin/usage");
+  const pending = useAdminData<{ data: unknown[] }>("/v1/admin/offerings/pending");
+  const recent = useAdminData<{ data: RecentRequest[] }>("/v1/admin/usage/recent?limit=15");
+  const provs = useAdminData<{ data: ProviderInfo[] }>("/v1/admin/providers");
+  const failures = useAdminData<{ data: SettlementFailurePreview[] }>("/v1/admin/settlement-failures?status=open&limit=5");
+
+  const loading = stats.loading || usage.loading || pending.loading || recent.loading || provs.loading || failures.loading;
+
+  const userCount = stats.data?.data?.userCount ?? 0;
+  const activeUsers = stats.data?.data?.activeUsers ?? 0;
+  const openSettlementFailures = stats.data?.data?.openSettlementFailures ?? 0;
+  const totalRequests = usage.data?.data?.summary?.totalRequests ?? 0;
+  const modelCount = usage.data?.data?.summary?.offeringCount ?? 0;
+  const pendingCount = pending.data?.data?.length ?? 0;
+  const recentRequests = recent.data?.data ?? [];
+  const providers = provs.data?.data ?? [];
+  const settlementFailures = failures.data?.data ?? [];
 
   if (loading) return <p className="text-text-secondary py-8">{t("common.loading")}</p>;
 

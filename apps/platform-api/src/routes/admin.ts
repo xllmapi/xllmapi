@@ -19,6 +19,17 @@ import { config } from "../config.js";
 import { platformService } from "../services/platform-service.js";
 import { platformRepository } from "../repositories/index.js";
 
+// ── lightweight admin read-cache ──────────────────────────
+const adminCache = new Map<string, { data: unknown; expiresAt: number }>();
+
+function cachedAdminRead<T>(key: string, ttlMs: number, fn: () => Promise<T> | T): Promise<T> {
+  const hit = adminCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.data as T);
+  const result = Promise.resolve(fn());
+  result.then((data) => adminCache.set(key, { data, expiresAt: Date.now() + ttlMs }));
+  return result;
+}
+
 export async function handleAdminRoutes(
   req: IncomingMessage,
   res: ServerResponse,
@@ -167,7 +178,8 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const response = json(200, { requestId, data: await platformService.getAdminStats() });
+    const data = await cachedAdminRead("admin:stats", 5 * 60_000, () => platformService.getAdminStats());
+    const response = json(200, { requestId, data });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
@@ -200,7 +212,8 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const response = json(200, { requestId, data: await platformService.getAdminProviders() });
+    const data = await cachedAdminRead("admin:providers", 10 * 60_000, () => platformService.getAdminProviders());
+    const response = json(200, { requestId, data });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
@@ -214,7 +227,8 @@ export async function handleAdminRoutes(
       res.end(response.payload);
       return true;
     }
-    const response = json(200, { requestId, data: await platformService.getAdminConfig() });
+    const data = await cachedAdminRead("admin:config", 30 * 60_000, () => platformService.getAdminConfig());
+    const response = json(200, { requestId, data });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return true;
@@ -236,6 +250,7 @@ export async function handleAdminRoutes(
       return true;
     }
     const result = await platformService.updateAdminConfig(body.key, body.value, auth.userId);
+    adminCache.delete("admin:config");
     const response = json(200, { requestId, data: result });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);

@@ -363,7 +363,7 @@ export const sqlitePlatformRepository: PlatformRepository = {
 
   getAdminStats() {
     const openFailures = list_admin_settlement_failures({ page: 1, limit: 1000, status: "open" }).total;
-    return { activeUsers: 0, openSettlementFailures: openFailures };
+    return { userCount: 0, activeUsers: 0, openSettlementFailures: openFailures };
   },
 
   updateAdminUser(_userId: string, _updates: { role?: string; status?: string; walletAdjust?: number; walletAdjustNote?: string }, _actorUserId?: string) {

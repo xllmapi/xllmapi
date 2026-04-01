@@ -78,6 +78,28 @@ const NodeDetailPage = lazy(() => import("@/pages/NodeDetailPage").then((m) => (
 const MarketDetailPage = lazy(() => import("@/pages/MarketDetailPage").then((m) => ({ default: m.MarketDetailPage })));
 const UserProfilePage = lazy(() => import("@/pages/UserProfilePage").then((m) => ({ default: m.UserProfilePage })));
 
+// Prefetch helpers — called by AdminLayout to warm chunk cache
+export const adminPageImports = [
+  () => import("@/pages/admin/AdminOverviewPage"),
+  () => import("@/pages/admin/UsersPage"),
+  () => import("@/pages/admin/AdminInvitationsPage"),
+  () => import("@/pages/admin/ReviewsPage"),
+  () => import("@/pages/admin/UsagePage"),
+  () => import("@/pages/admin/SettingsPage"),
+  () => import("@/pages/admin/ProvidersPage"),
+  () => import("@/pages/admin/AdminNotificationsPage"),
+  () => import("@/pages/admin/AdminEmailDeliveriesPage"),
+  () => import("@/pages/admin/AdminSecurityEventsPage"),
+  () => import("@/pages/admin/AdminRequestsPage"),
+  () => import("@/pages/admin/AdminSettlementsPage"),
+  () => import("@/pages/admin/AdminSettlementFailuresPage"),
+  () => import("@/pages/admin/AdminNodeHealthPage"),
+  () => import("@/pages/admin/AdminLogsPage"),
+  () => import("@/pages/admin/AdminReleasesPage"),
+  () => import("@/pages/admin/AdminAuditPage"),
+  () => import("@/pages/admin/AdminBannerPage"),
+];
+
 function PageLoader() {
   return <div className="flex items-center justify-center min-h-[200px] text-text-tertiary text-sm">Loading…</div>;
 }

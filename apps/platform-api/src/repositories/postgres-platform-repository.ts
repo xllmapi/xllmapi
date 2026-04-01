@@ -1291,6 +1291,26 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     const result = await currentPool.query(`
+      WITH user_request_stats AS (
+        SELECT
+          requester_user_id,
+          COUNT(*)::int AS "totalRequests",
+          COALESCE(SUM(total_tokens), 0) AS "totalTokens",
+          SUM(CASE WHEN created_at >= CURRENT_DATE THEN 1 ELSE 0 END)::int AS "todayRequests",
+          COALESCE(SUM(CASE WHEN created_at >= CURRENT_DATE THEN total_tokens ELSE 0 END), 0) AS "todayTokens"
+        FROM api_requests
+        GROUP BY requester_user_id
+      ),
+      user_offerings AS (
+        SELECT owner_user_id, COUNT(*)::int AS "offeringCount"
+        FROM offerings WHERE review_status = 'approved'
+        GROUP BY owner_user_id
+      ),
+      last_login_ip AS (
+        SELECT DISTINCT ON (user_id) user_id, ip_address
+        FROM security_events
+        ORDER BY user_id, created_at DESC
+      )
       SELECT
         u.id,
         u.display_name AS "displayName",
@@ -1301,15 +1321,18 @@ export const postgresPlatformRepository: PlatformRepository = {
         COALESCE(w.available_token_credit, 0) AS "balance",
         u.created_at AS "createdAt",
         u.last_login_at AS "lastLoginAt",
-        (SELECT se.ip_address FROM security_events se WHERE se.user_id = u.id ORDER BY se.created_at DESC LIMIT 1) AS "lastLoginIp",
-        (SELECT COUNT(*) FROM offerings WHERE owner_user_id = u.id AND review_status = 'approved')::int AS "offeringCount",
-        (SELECT COUNT(*) FROM api_requests WHERE requester_user_id = u.id)::int AS "totalRequests",
-        (SELECT COALESCE(SUM(total_tokens), 0) FROM api_requests WHERE requester_user_id = u.id) AS "totalTokens",
-        (SELECT COUNT(*) FROM api_requests WHERE requester_user_id = u.id AND created_at >= CURRENT_DATE)::int AS "todayRequests",
-        (SELECT COALESCE(SUM(total_tokens), 0) FROM api_requests WHERE requester_user_id = u.id AND created_at >= CURRENT_DATE) AS "todayTokens"
+        lip.ip_address AS "lastLoginIp",
+        COALESCE(uo."offeringCount", 0) AS "offeringCount",
+        COALESCE(urs."totalRequests", 0) AS "totalRequests",
+        COALESCE(urs."totalTokens", 0) AS "totalTokens",
+        COALESCE(urs."todayRequests", 0) AS "todayRequests",
+        COALESCE(urs."todayTokens", 0) AS "todayTokens"
       FROM users u
       LEFT JOIN user_identities i ON i.user_id = u.id
       LEFT JOIN wallets w ON w.user_id = u.id
+      LEFT JOIN user_request_stats urs ON urs.requester_user_id = u.id
+      LEFT JOIN user_offerings uo ON uo.owner_user_id = u.id
+      LEFT JOIN last_login_ip lip ON lip.user_id = u.id
       ORDER BY u.created_at DESC
     `);
     return result.rows;
@@ -2927,6 +2950,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     const currentPool = getPool();
     const result = await currentPool.query(`
       SELECT
+        (SELECT COUNT(*) FROM users) AS "userCount",
         (
           SELECT COUNT(DISTINCT requester_user_id)
           FROM api_requests
@@ -2939,6 +2963,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         ) AS "openSettlementFailures"
     `);
     return {
+      userCount: Number(result.rows[0]?.userCount ?? 0),
       activeUsers: Number(result.rows[0]?.activeUsers ?? 0),
       openSettlementFailures: Number(result.rows[0]?.openSettlementFailures ?? 0)
     };
