@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { apiJson } from "@/lib/api";
+import { KeepAliveOutlet } from "./KeepAliveOutlet";
 import { ScrollableTabBar } from "./ScrollableTabBar";
 
 function SidebarLink({
@@ -91,7 +92,7 @@ export function DashboardLayout() {
           </nav>
         </aside>
         <main className="flex-1 min-w-0">
-          <Outlet />
+          <KeepAliveOutlet />
         </main>
       </div>
     </div>
