@@ -18,6 +18,7 @@ export default defineConfig(({ command }) => {
   define: {
     __XLLMAPI_API_BASE__: JSON.stringify(apiBase),
     __XLLMAPI_DOCS_URL__: JSON.stringify(docsUrl),
+    __DEV__: JSON.stringify(command === "serve"),
   },
   plugins: [react(), tailwindcss()],
   resolve: {
