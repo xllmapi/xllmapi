@@ -35,9 +35,10 @@ interface DialogState {
   variant: "warning" | "danger";
   userId: string;
   actionType: "setRole" | "toggleStatus" | "adjustBalance";
-  actionArgs: { role?: string; status?: string };
+  actionArgs: { role?: string; status?: string; currentBalance?: number };
   input?: { label: string; placeholder?: string; type?: string };
   inputs?: Array<{ key: string; label: string; placeholder?: string; type?: string }>;
+  renderExtra?: (inputValues: Record<string, string>) => React.ReactNode;
 }
 
 function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
@@ -219,15 +220,40 @@ export function UsersPage() {
     setConfirmDialog({
       open: true,
       title: t("admin.users.confirmAdjustTitle"),
-      description: t("admin.users.confirmAdjust").replace("{name}", user.displayName || user.email),
+      description: `${t("admin.users.confirmAdjust").replace("{name}", user.displayName || user.email)}\n${t("admin.users.currentBalance")}: ${formatTokens(user.balance)} xtokens`,
       variant: "warning",
       userId: user.id,
       actionType: "adjustBalance",
-      actionArgs: {},
+      actionArgs: { currentBalance: user.balance },
       inputs: [
         { key: "amount", label: t("admin.users.adjustPrompt"), placeholder: "100000", type: "number" },
         { key: "note", label: t("admin.users.adjustNote"), placeholder: t("admin.users.adjustNotePlaceholder"), type: "text" },
       ],
+      renderExtra: (inputValues) => {
+        const amt = Number(inputValues.amount || 0);
+        if (!amt || isNaN(amt)) return null;
+        const newBalance = Number(user.balance) + amt;
+        return (
+          <div className="rounded-lg border border-line bg-bg-2/50 p-3 text-xs">
+            <div className="flex justify-between text-text-tertiary">
+              <span>{t("admin.users.currentBalance")}</span>
+              <span className="font-mono">{formatTokens(user.balance)} xtokens</span>
+            </div>
+            <div className="flex justify-between text-text-tertiary mt-1">
+              <span>{t("admin.users.adjustAmount")}</span>
+              <span className={`font-mono ${amt >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                {amt >= 0 ? "+" : ""}{formatTokens(amt)}
+              </span>
+            </div>
+            <div className="border-t border-line mt-2 pt-2 flex justify-between font-medium text-text-primary">
+              <span>{t("admin.users.newBalance")}</span>
+              <span className={`font-mono ${newBalance < 0 ? "text-danger" : ""}`}>
+                {formatTokens(newBalance)} xtokens
+              </span>
+            </div>
+          </div>
+        );
+      },
     });
   };
 
@@ -353,6 +379,7 @@ export function UsersPage() {
           variant={confirmDialog.variant}
           input={confirmDialog.input}
           inputs={confirmDialog.inputs}
+          renderExtra={confirmDialog.renderExtra}
         />
       )}
     </div>
