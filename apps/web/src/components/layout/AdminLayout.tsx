@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
+import { ScrollableTabBar } from "./ScrollableTabBar";
 
 function SidebarLink({
   to,
@@ -17,7 +18,7 @@ function SidebarLink({
       end={end}
       className={({ isActive }) =>
         cn(
-          "block rounded-[var(--radius-input)] px-3 py-2 text-sm no-underline transition-colors whitespace-nowrap",
+          "block shrink-0 whitespace-nowrap rounded-[var(--radius-input)] px-3 py-2 text-sm no-underline transition-colors",
           isActive
             ? "bg-accent/10 text-accent font-medium"
             : "text-text-secondary hover:text-text-primary hover:bg-accent-bg",
@@ -35,33 +36,30 @@ export function AdminLayout() {
   return (
     <div className="mx-auto max-w-[var(--spacing-content)] px-4 md:px-6 pt-[72px] pb-12 min-h-screen">
       {/* Mobile tab bar */}
-      <div className="md:hidden relative">
-        <nav className="flex gap-1 overflow-x-auto pb-4 scrollbar-hidden -mx-2 px-2">
-          {/* Management */}
-          <SidebarLink to="/admin" label={t("admin.sidebar.overview")} end />
-          <SidebarLink to="/admin/users" label={t("admin.sidebar.users")} />
-          <SidebarLink to="/admin/invitations" label={t("admin.sidebar.invitations")} />
-          <SidebarLink to="/admin/usage" label={t("admin.sidebar.usage")} />
-          <SidebarLink to="/admin/requests" label={t("admin.sidebar.requests")} />
-          <SidebarLink to="/admin/settlements" label={t("admin.sidebar.settlements")} />
-          <SidebarLink to="/admin/settlement-failures" label={t("admin.sidebar.settlementFailures")} />
-          <span className="inline-block w-px h-4 bg-line/40 shrink-0 mx-1" />
-          {/* Model Nodes */}
-          <SidebarLink to="/admin/reviews" label={t("admin.sidebar.reviews")} />
-          <SidebarLink to="/admin/node-health" label={t("admin.sidebar.nodeHealth")} />
-          <span className="inline-block w-px h-4 bg-line/40 shrink-0 mx-1" />
-          {/* System */}
-          <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
-          <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
-          <SidebarLink to="/admin/releases" label={t("admin.sidebar.releases")} />
-          <SidebarLink to="/admin/banner" label={t("admin.sidebar.banner")} />
-          <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
-          <SidebarLink to="/admin/email-deliveries" label={t("admin.sidebar.emailDeliveries")} />
-          <SidebarLink to="/admin/security-events" label={t("admin.sidebar.securityEvents")} />
-          <SidebarLink to="/admin/audit" label={t("admin.sidebar.audit")} />
-        </nav>
-        <div className="absolute right-0 top-0 bottom-4 w-8 pointer-events-none bg-gradient-to-l from-bg-0 to-transparent" />
-      </div>
+      <ScrollableTabBar>
+        {/* Management */}
+        <SidebarLink to="/admin" label={t("admin.sidebar.overview")} end />
+        <SidebarLink to="/admin/users" label={t("admin.sidebar.users")} />
+        <SidebarLink to="/admin/invitations" label={t("admin.sidebar.invitations")} />
+        <SidebarLink to="/admin/usage" label={t("admin.sidebar.usage")} />
+        <SidebarLink to="/admin/requests" label={t("admin.sidebar.requests")} />
+        <SidebarLink to="/admin/settlements" label={t("admin.sidebar.settlements")} />
+        <SidebarLink to="/admin/settlement-failures" label={t("admin.sidebar.settlementFailures")} />
+        <span className="inline-block w-px h-4 bg-line/40 shrink-0 mx-1 self-center" />
+        {/* Model Nodes */}
+        <SidebarLink to="/admin/reviews" label={t("admin.sidebar.reviews")} />
+        <SidebarLink to="/admin/node-health" label={t("admin.sidebar.nodeHealth")} />
+        <span className="inline-block w-px h-4 bg-line/40 shrink-0 mx-1 self-center" />
+        {/* System */}
+        <SidebarLink to="/admin/providers" label={t("admin.sidebar.providers")} />
+        <SidebarLink to="/admin/settings" label={t("admin.sidebar.settings")} />
+        <SidebarLink to="/admin/releases" label={t("admin.sidebar.releases")} />
+        <SidebarLink to="/admin/banner" label={t("admin.sidebar.banner")} />
+        <SidebarLink to="/admin/notifications" label={t("admin.sidebar.notifications")} />
+        <SidebarLink to="/admin/email-deliveries" label={t("admin.sidebar.emailDeliveries")} />
+        <SidebarLink to="/admin/security-events" label={t("admin.sidebar.securityEvents")} />
+        <SidebarLink to="/admin/audit" label={t("admin.sidebar.audit")} />
+      </ScrollableTabBar>
 
       <div className="flex gap-6">
         {/* Desktop sidebar */}
