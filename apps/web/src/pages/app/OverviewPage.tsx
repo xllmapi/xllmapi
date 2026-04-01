@@ -44,7 +44,7 @@ interface DailyData {
   requestCount: number;
 }
 
-type ViewMode = "requests" | "models";
+type ViewMode = "requests" | "models" | "ledger";
 
 interface MergedRecord {
   id: string;
@@ -87,6 +87,12 @@ export function OverviewPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   // supply always included in merged list
+
+  // Ledger
+  const [ledgerData, setLedgerData] = useState<any[]>([]);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
 
   const availableYears = Array.from(
     { length: currentYear - 2024 + 1 },
@@ -140,6 +146,29 @@ export function OverviewPage() {
       setHeatmapData(map);
     }).catch(() => {});
   }, [selectedYear]);
+
+  // Ledger fetch
+  const loadLedger = useCallback(async (page = 1) => {
+    setLedgerLoading(true);
+    try {
+      const limit = 50;
+      const offset = (page - 1) * limit;
+      const res = await apiJson<{ data: any[]; total: number }>(`/v1/ledger?limit=${limit}&offset=${offset}`);
+      setLedgerData(res.data ?? []);
+      setLedgerTotal(res.total ?? 0);
+      setLedgerPage(page);
+    } catch {
+      // ignore
+    } finally {
+      setLedgerLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (viewMode === "ledger") {
+      void loadLedger(1);
+    }
+  }, [viewMode, loadLedger]);
 
   // Handle date click on heatmap
   const handleDateClick = useCallback((date: string) => {
@@ -417,6 +446,16 @@ export function OverviewPage() {
             >
               按模型
             </button>
+            <button
+              onClick={() => setViewMode("ledger")}
+              className={`px-2.5 py-1 text-[11px] rounded transition-colors ${
+                viewMode === "ledger"
+                  ? "bg-bg-1 text-text-primary shadow-sm"
+                  : "text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              {t("ledger.title")}
+            </button>
           </div>
 
           {/* Color legend */}
@@ -440,7 +479,7 @@ export function OverviewPage() {
         </div>
 
         <span className="text-[11px] text-text-tertiary">
-          {viewMode === "requests" ? `${filteredRequests.length} records · ${currentPage}/${totalPages}` : `${filteredModels.length} models`}
+          {viewMode === "requests" ? `${filteredRequests.length} records · ${currentPage}/${totalPages}` : viewMode === "models" ? `${filteredModels.length} models` : `${ledgerTotal} records · ${ledgerPage}/${Math.max(1, Math.ceil(ledgerTotal / 50))}`}
         </span>
       </div>
 
@@ -473,13 +512,76 @@ export function OverviewPage() {
             </div>
           )}
         </>
-      ) : (
+      ) : viewMode === "models" ? (
         <DataTable
           columns={modelColumns}
           data={filteredModels}
           rowKey={(r) => r.logicalModel}
           emptyText={t("overview.noRecords")}
         />
+      ) : (
+        /* Ledger view */
+        <div className="space-y-1">
+          {ledgerLoading ? (
+            <div className="text-center py-8 text-text-tertiary text-xs">{t("common.loading")}</div>
+          ) : ledgerData.length === 0 ? (
+            <div className="text-center py-8 text-text-tertiary text-xs">{t("overview.noRecords")}</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-[1fr_auto_auto_1fr] gap-x-3 px-3 py-1.5 text-[10px] text-text-tertiary uppercase tracking-wider">
+                <span>{t("ledger.time")}</span>
+                <span>{t("ledger.type")}</span>
+                <span className="text-right">{t("ledger.amount")}</span>
+                <span>{t("ledger.note")}</span>
+              </div>
+              {ledgerData.map((entry: any) => {
+                const isCredit = entry.direction === "credit";
+                const typeKey = `ledger.type.${entry.entryType}` as any;
+                const typeLabel = t(typeKey) !== typeKey ? t(typeKey) : entry.entryType;
+                const displayNote = entry.note
+                  || (entry.logicalModel ? `${entry.logicalModel}${entry.providerLabel ? ` (${entry.providerLabel})` : ""}` : "—");
+                return (
+                  <div
+                    key={entry.id}
+                    className="grid grid-cols-[1fr_auto_auto_1fr] gap-x-3 items-center px-3 py-2 rounded-lg hover:bg-bg-2/50 text-xs border border-transparent hover:border-line/30"
+                  >
+                    <span className="text-text-secondary text-[11px]">
+                      {new Date(entry.createdAt).toLocaleString()}
+                    </span>
+                    <span className="text-text-secondary text-[11px]">{typeLabel}</span>
+                    <span className={`text-right font-mono text-[11px] ${isCredit ? "text-emerald-400" : "text-amber-400"}`}>
+                      {isCredit ? "+" : "−"}{formatTokens(Number(entry.amount))}
+                    </span>
+                    <span className="text-text-tertiary text-[11px] truncate" title={displayNote}>
+                      {displayNote}
+                    </span>
+                  </div>
+                );
+              })}
+              {ledgerTotal > 50 && (
+                <div className="flex justify-center gap-2 pt-2">
+                  <button
+                    disabled={ledgerPage <= 1}
+                    onClick={() => void loadLedger(ledgerPage - 1)}
+                    className="px-2 py-1 text-[11px] rounded border border-line text-text-secondary disabled:opacity-30 hover:bg-bg-2"
+                  >
+                    ←
+                  </button>
+                  <span className="text-[11px] text-text-tertiary py-1">
+                    {ledgerPage} / {Math.ceil(ledgerTotal / 50)}
+                  </span>
+                  <button
+                    disabled={ledgerPage >= Math.ceil(ledgerTotal / 50)}
+                    onClick={() => void loadLedger(ledgerPage + 1)}
+                    className="px-2 py-1 text-[11px] rounded border border-line text-text-secondary disabled:opacity-30 hover:bg-bg-2"
+                  >
+                    →
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   );

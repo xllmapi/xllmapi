@@ -330,7 +330,7 @@ export type PlatformRepository = {
   getAvgSettlementPrice7d?(): MaybePromise<{ avgInput: number; avgOutput: number } | null>;
   getAdminUsageRecent(limit: number): MaybePromise<any[]>;
   getAdminStats(): MaybePromise<any>;
-  updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number }): MaybePromise<any>;
+  updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number; walletAdjustNote?: string }, actorUserId?: string): MaybePromise<any>;
   getAdminProviders(): MaybePromise<any[]>;
   getAdminConfig(): MaybePromise<any[]>;
   getConfigValue(key: string): MaybePromise<string | null>;
@@ -472,6 +472,24 @@ export type PlatformRepository = {
   // --- User Profile ---
   getPublicUserProfile(handle: string): MaybePromise<any | null>;
   listUserOfferings(handle: string): MaybePromise<any[]>;
+
+  // --- Ledger ---
+  recordLedgerEntry(params: {
+    userId: string;
+    direction: 'credit' | 'debit';
+    amount: number;
+    entryType: string;
+    requestId?: string | null;
+    note?: string | null;
+    relatedId?: string | null;
+    actorId?: string | null;
+  }): MaybePromise<void>;
+  getLedgerHistory(params: {
+    userId: string;
+    limit?: number;
+    offset?: number;
+    entryType?: string;
+  }): MaybePromise<{ data: any[]; total: number }>;
 
   devUserApiKey: string;
   devAdminApiKey: string;

@@ -523,6 +523,8 @@ const ensureDevSeed = (() => {
   };
 })();
 
+export { getPool };
+
 export async function closePool(): Promise<void> {
   if (pool) {
     await pool.end();
@@ -695,8 +697,8 @@ export const postgresPlatformRepository: PlatformRepository = {
       let initialApiKey: string | null = null;
 
       if (!userId) {
-        const invitation = await client.query<{ id: string }>(
-          "SELECT id FROM invitations WHERE invited_email = $1 AND status = 'pending' AND expires_at > NOW() LIMIT 1",
+        const invitation = await client.query<{ id: string; inviter_user_id: string }>(
+          "SELECT id, inviter_user_id FROM invitations WHERE invited_email = $1 AND status = 'pending' AND expires_at > NOW() LIMIT 1",
           [normalizedEmail]
         );
         if (!invitation.rows[0]) {
@@ -721,6 +723,9 @@ export const postgresPlatformRepository: PlatformRepository = {
           VALUES ($1, $2)
           ON CONFLICT (user_id) DO NOTHING
         `, [userId, initialCredit]);
+        // Record initial credit in ledger
+        const { ledgerService } = await import("../services/ledger-service.js");
+        await ledgerService.creditInitial({ userId, amount: initialCredit, client });
         const rawKey = `xllm_${randomUUID().replaceAll("-", "")}`;
         await client.query(`
           INSERT INTO platform_api_keys (id, user_id, label, hashed_key, status)
@@ -732,6 +737,25 @@ export const postgresPlatformRepository: PlatformRepository = {
           SET status = 'accepted', accepted_user_id = $1, accepted_at = NOW()
           WHERE id = $2
         `, [userId, invitation.rows[0].id]);
+        // Referral reward (gated by platform_config)
+        const rewardRow = await client.query(
+          "SELECT value FROM platform_config WHERE key = 'referral_reward_amount' LIMIT 1"
+        );
+        const referralReward = Number(rewardRow.rows[0]?.value ?? 0);
+        if (referralReward > 0) {
+          await client.query(
+            "UPDATE wallets SET available_token_credit = available_token_credit + $2 WHERE user_id = $1",
+            [invitation.rows[0].inviter_user_id, referralReward]
+          );
+          const { ledgerService: ls } = await import("../services/ledger-service.js");
+          await ls.creditReferral({
+            userId: invitation.rows[0].inviter_user_id,
+            amount: referralReward,
+            invitedEmail: normalizedEmail,
+            invitationId: invitation.rows[0].id,
+            client,
+          });
+        }
         // Auto-add all approved offerings to the new user's usage list
         await client.query(`
           INSERT INTO offering_favorites (user_id, offering_id, created_at)
@@ -2919,7 +2943,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     };
   },
 
-  async updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number }) {
+  async updateAdminUser(userId: string, updates: { role?: string; status?: string; walletAdjust?: number; walletAdjustNote?: string }, actorUserId?: string) {
     await ensureDevSeed();
     const currentPool = getPool();
     if (updates.role) {
@@ -2929,10 +2953,13 @@ export const postgresPlatformRepository: PlatformRepository = {
       await currentPool.query("UPDATE users SET status = $2 WHERE id = $1", [userId, updates.status]);
     }
     if (updates.walletAdjust != null) {
-      await currentPool.query(
-        "UPDATE wallets SET available_token_credit = available_token_credit + $2 WHERE user_id = $1",
-        [userId, updates.walletAdjust]
-      );
+      const { ledgerService } = await import("../services/ledger-service.js");
+      await ledgerService.adminAdjust({
+        userId,
+        amount: updates.walletAdjust,
+        note: updates.walletAdjustNote,
+        actorUserId: actorUserId ?? "system",
+      });
     }
     return { ok: true };
   },
@@ -4422,6 +4449,48 @@ export const postgresPlatformRepository: PlatformRepository = {
     const pool = getPool();
     const result = await pool.query("DELETE FROM provider_presets WHERE id = $1", [id]);
     return (result.rowCount ?? 0) > 0;
+  },
+
+  // --- Ledger ---
+
+  async recordLedgerEntry(params: { userId: string; direction: 'credit' | 'debit'; amount: number; entryType: string; requestId?: string | null; note?: string | null; relatedId?: string | null; actorId?: string | null }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    await currentPool.query(`
+      INSERT INTO ledger_entries (request_id, user_id, direction, amount, entry_type, note, related_id, actor_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [params.requestId ?? null, params.userId, params.direction, params.amount, params.entryType, params.note ?? null, params.relatedId ?? null, params.actorId ?? null]);
+  },
+
+  async getLedgerHistory(params: { userId: string; limit?: number; offset?: number; entryType?: string }) {
+    await ensureDevSeed();
+    const currentPool = getPool();
+    const conditions: string[] = ['le.user_id = $1'];
+    const values: (string | number)[] = [params.userId];
+    let idx = 2;
+    if (params.entryType) {
+      conditions.push(`le.entry_type = $${idx}`);
+      values.push(params.entryType);
+      idx++;
+    }
+    const where = conditions.join(' AND ');
+    const limit = Math.min(params.limit ?? 50, 200);
+    const offset = params.offset ?? 0;
+    const [dataResult, countResult] = await Promise.all([
+      currentPool.query(`
+        SELECT le.id, le.request_id AS "requestId", le.direction, le.amount::text AS "amount",
+               le.entry_type AS "entryType", le.note, le.related_id AS "relatedId",
+               le.actor_id AS "actorId", le.created_at::text AS "createdAt",
+               ar.logical_model AS "logicalModel", ar.provider, ar.provider_label AS "providerLabel"
+        FROM ledger_entries le
+        LEFT JOIN api_requests ar ON ar.id = le.request_id
+        WHERE ${where}
+        ORDER BY le.created_at DESC
+        LIMIT $${idx} OFFSET $${idx + 1}
+      `, [...values, limit, offset]),
+      currentPool.query(`SELECT COUNT(*)::text AS total FROM ledger_entries le WHERE ${where}`, values),
+    ]);
+    return { data: dataResult.rows, total: Number(countResult.rows[0]?.total ?? 0) };
   },
 
   devUserApiKey: DEV_USER_API_KEY,

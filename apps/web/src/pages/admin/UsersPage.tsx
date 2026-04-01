@@ -37,6 +37,7 @@ interface DialogState {
   actionType: "setRole" | "toggleStatus" | "adjustBalance";
   actionArgs: { role?: string; status?: string };
   input?: { label: string; placeholder?: string; type?: string };
+  inputs?: Array<{ key: string; label: string; placeholder?: string; type?: string }>;
 }
 
 function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
@@ -167,12 +168,12 @@ export function UsersPage() {
     }
   };
 
-  const handleAdjustBalance = async (id: string, amount: number) => {
+  const handleAdjustBalance = async (id: string, amount: number, note?: string) => {
     setActing(id);
     try {
       await apiJson(`/v1/admin/users/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ walletAdjust: amount }),
+        body: JSON.stringify({ walletAdjust: amount, ...(note ? { walletAdjustNote: note } : {}) }),
       });
       await loadData();
     } catch {
@@ -223,21 +224,28 @@ export function UsersPage() {
       userId: user.id,
       actionType: "adjustBalance",
       actionArgs: {},
-      input: { label: t("admin.users.adjustPrompt"), placeholder: "100000", type: "number" },
+      inputs: [
+        { key: "amount", label: t("admin.users.adjustPrompt"), placeholder: "100000", type: "number" },
+        { key: "note", label: t("admin.users.adjustNote"), placeholder: t("admin.users.adjustNotePlaceholder"), type: "text" },
+      ],
     });
   };
 
-  const handleConfirmAction = (inputValue?: string) => {
+  const handleConfirmAction = (inputValue?: string, inputValues?: Record<string, string>) => {
     if (!confirmDialog) return;
     const { userId, actionType, actionArgs } = confirmDialog;
     if (actionType === "setRole") {
       void handleSetRole(userId, actionArgs.role!);
     } else if (actionType === "toggleStatus") {
       void handleToggleStatus(userId, actionArgs.status!);
-    } else if (actionType === "adjustBalance" && inputValue) {
-      const num = Number(inputValue);
-      if (!isNaN(num)) {
-        void handleAdjustBalance(userId, num);
+    } else if (actionType === "adjustBalance") {
+      // Support both single input (backward compat) and multi-input
+      const amountStr = inputValues?.amount ?? inputValue;
+      if (amountStr) {
+        const num = Number(amountStr);
+        if (!isNaN(num)) {
+          void handleAdjustBalance(userId, num, inputValues?.note || undefined);
+        }
       }
     }
     setConfirmDialog(null);
@@ -344,6 +352,7 @@ export function UsersPage() {
           description={confirmDialog.description}
           variant={confirmDialog.variant}
           input={confirmDialog.input}
+          inputs={confirmDialog.inputs}
         />
       )}
     </div>
