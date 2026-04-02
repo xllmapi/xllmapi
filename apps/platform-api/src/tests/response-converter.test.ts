@@ -461,6 +461,58 @@ test("OpenAI→Anthropic converter handles reasoning_content only (no regular co
   assert.ok(joined.includes("message_stop"), "should have stopped the stream");
 });
 
+// ── input_tokens in OpenAI→Anthropic message_delta ─────────────
+
+test("OpenAI→Anthropic converter includes input_tokens in message_delta", () => {
+  const converter = createStreamConverter("openai", "anthropic");
+
+  // First chunk: content (triggers message_start with input_tokens: 0)
+  const chunk1 = 'data: {"id":"c1","model":"deepseek-chat","choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"},"finish_reason":null}]}\n\n';
+  const out1 = converter.transform(chunk1);
+  const joined1 = out1.join("");
+  assert.ok(joined1.includes("message_start"), "should emit message_start");
+  // message_start still has input_tokens: 0 (not yet available)
+  assert.ok(joined1.includes('"input_tokens":0'), "message_start should have input_tokens: 0");
+
+  // Final chunk: finish_reason + usage with prompt_tokens
+  const chunk2 = 'data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":42,"completion_tokens":7}}\n\n';
+  const out2 = converter.transform(chunk2);
+  const joined2 = out2.join("");
+
+  // message_delta should now contain input_tokens from the final usage
+  assert.ok(joined2.includes("message_delta"), "should emit message_delta");
+  assert.ok(joined2.includes('"input_tokens":42'), "message_delta should contain input_tokens from upstream usage");
+  assert.ok(joined2.includes('"output_tokens":7'), "message_delta should contain output_tokens");
+});
+
+test("OpenAI→Anthropic converter handles usage arriving only in [DONE]-preceding chunk", () => {
+  const converter = createStreamConverter("openai", "anthropic");
+
+  // Content chunks
+  const chunks = [
+    'data: {"id":"c1","model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}\n\n',
+    'data: {"id":"c1","choices":[{"index":0,"delta":{"content":" world"},"finish_reason":null}]}\n\n',
+    // Usage in a separate chunk before finish
+    'data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":15,"completion_tokens":3}}\n\n',
+    'data: [DONE]\n\n',
+  ];
+
+  const allOutput: string[] = [];
+  for (const chunk of chunks) {
+    allOutput.push(...converter.transform(chunk));
+  }
+  allOutput.push(...converter.flush());
+
+  const joined = allOutput.join("");
+
+  // Extract the message_delta event data
+  const deltaMatch = joined.match(/event: message_delta\ndata: ({.*?})\n\n/s);
+  assert.ok(deltaMatch, "should have message_delta event");
+  const deltaData = JSON.parse(deltaMatch![1]);
+  assert.equal(deltaData.usage.input_tokens, 15, "message_delta.usage.input_tokens should be 15");
+  assert.equal(deltaData.usage.output_tokens, 3, "message_delta.usage.output_tokens should be 3");
+});
+
 // ── thinking_delta in Anthropic→OpenAI ─────────────────────────
 
 test("Anthropic→OpenAI converter maps thinking_delta to reasoning_content", () => {
