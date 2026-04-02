@@ -57,6 +57,7 @@ export function ApiKeysPage() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; message: string }>>({});
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [revokeConfirmId, setRevokeConfirmId] = useState<string | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,8 +78,7 @@ export function ApiKeysPage() {
     }
   };
 
-  const handleRevoke = async (keyId: string) => {
-    if (!confirm(t("apiKeys.revokeConfirm"))) return;
+  const executeRevoke = async (keyId: string) => {
     try {
       await apiJson(`/v1/me/api-keys/${keyId}`, { method: "DELETE" });
       void refetchKeys();
@@ -232,7 +232,7 @@ export function ApiKeysPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
-                      onClick={() => handleRevoke(k.id)}
+                      onClick={() => setRevokeConfirmId(k.id)}
                       className="text-xs text-danger hover:text-danger/80 transition-colors"
                     >
                       {t("apiKeys.revoke")}
@@ -360,6 +360,18 @@ export function ApiKeysPage() {
           </table>
         )}
       </div>
+
+      <ConfirmDialog
+        open={revokeConfirmId !== null}
+        onClose={() => setRevokeConfirmId(null)}
+        onConfirm={() => {
+          if (revokeConfirmId) void executeRevoke(revokeConfirmId);
+          setRevokeConfirmId(null);
+        }}
+        title={t("apiKeys.deleteKeyTitle")}
+        description={t("apiKeys.revokeConfirm")}
+        cooldownSeconds={5}
+      />
 
       <ConfirmDialog
         open={deleteConfirmId !== null}
