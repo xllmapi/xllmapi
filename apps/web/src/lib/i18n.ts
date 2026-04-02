@@ -66,6 +66,8 @@ const messages: Record<string, Record<string, string>> = {
     "auth.passwordResetDone": "密码已重置，正在返回登录页。",
     "auth.backToSignIn": "返回登录",
     "auth.inviteOnly": "仅限邀请注册。请联系已有成员获取邀请。",
+    "auth.joinGroup": "内测群(Q)",
+    "auth.clickToCopy": "点击复制群号",
 
     // Dashboard sidebar
     "sidebar.platform": "平台",
@@ -993,6 +995,8 @@ const messages: Record<string, Record<string, string>> = {
     "auth.passwordResetDone": "Password reset complete. Redirecting to sign in.",
     "auth.backToSignIn": "Back to sign in",
     "auth.inviteOnly": "Invite-only access. Contact an existing member for an invitation.",
+    "auth.joinGroup": "Beta group (QQ)",
+    "auth.clickToCopy": "Click to copy group number",
 
     // Dashboard sidebar
     "sidebar.platform": "Platform",
