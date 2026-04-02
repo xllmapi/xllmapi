@@ -229,6 +229,17 @@ export function AuthPage() {
         <p className="text-text-tertiary text-xs text-center mt-8">
           {t("auth.inviteOnly")}
         </p>
+        <p className="text-xs text-center mt-2">
+          <span className="text-text-tertiary">{t("auth.joinGroup")}</span>
+          {" "}
+          <span
+            className="inline-block font-mono font-semibold text-accent bg-accent/10 border border-accent/20 rounded px-1.5 py-0.5 cursor-pointer hover:bg-accent/20 transition-colors select-all"
+            title={t("auth.clickToCopy")}
+            onClick={() => { void navigator.clipboard.writeText("1092372680"); }}
+          >
+            1092372680
+          </span>
+        </p>
       </div>
     </div>
   );

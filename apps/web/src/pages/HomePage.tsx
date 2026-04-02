@@ -280,7 +280,7 @@ export function HomePage() {
         </p>
         <div className="flex gap-4 items-center mb-10">
           <Link
-            to="/auth"
+            to={isLoggedIn ? "/app" : "/auth"}
             className="rounded-[var(--radius-btn)] bg-accent px-7 py-3 text-sm font-semibold text-[#081018] no-underline hover:no-underline hover:opacity-90 shadow-[var(--shadow-cta)] transition-opacity"
           >
             {t("home.cta.getStarted")}
