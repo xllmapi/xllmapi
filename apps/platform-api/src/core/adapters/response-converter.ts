@@ -116,6 +116,7 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
   let buffer = "";
   let messageId = `msg_${Date.now()}`;
   let model = "unknown";
+  let inputTokens = 0;
   let outputTokens = 0;
 
   function formatEvent(eventType: string, data: Record<string, unknown>): string {
@@ -148,6 +149,9 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
 
     // Extract usage if present
     const usageObj = parsed.usage as Record<string, number> | undefined;
+    if (usageObj?.prompt_tokens) {
+      inputTokens = usageObj.prompt_tokens;
+    }
     if (usageObj?.completion_tokens) {
       outputTokens = usageObj.completion_tokens;
     }
@@ -225,7 +229,7 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
     results.push(formatEvent("message_delta", {
       type: "message_delta",
       delta: { stop_reason: mapStopReasonToAnthropic(finishReason ?? "stop") },
-      usage: { output_tokens: outputTokens },
+      usage: { input_tokens: inputTokens, output_tokens: outputTokens },
     }));
     results.push(formatEvent("message_stop", {
       type: "message_stop",
