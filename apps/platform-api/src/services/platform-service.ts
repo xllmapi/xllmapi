@@ -1393,7 +1393,7 @@ export const platformService = {
         return result;
       }
 
-      // 2. Streaming — check message_start.input_tokens
+      // 2. Streaming — check input_tokens from message_start or message_delta
       try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeout);
@@ -1405,7 +1405,8 @@ export const platformService = {
         if (!resp.ok) { result.error = `Streaming: HTTP ${resp.status}`; return result; }
         result.streaming = true;
         const text = await resp.text();
-        // Parse message_start to check if input_tokens > 0
+        // Parse message_start and message_delta to check if input_tokens > 0
+        // Anthropic protocol allows input_tokens in either event
         for (const line of text.split("\n")) {
           const trimmed = line.trim();
           if (!trimmed.startsWith("data:")) continue;
@@ -1413,6 +1414,10 @@ export const platformService = {
             const parsed = JSON.parse(trimmed.slice(5).trim());
             if (parsed.type === "message_start" && parsed.message?.usage) {
               const inputTokens = parsed.message.usage.input_tokens ?? 0;
+              if (inputTokens > 0) result.streamUsageStandard = true;
+            }
+            if (parsed.type === "message_delta" && parsed.usage) {
+              const inputTokens = parsed.usage.input_tokens ?? 0;
               if (inputTokens > 0) result.streamUsageStandard = true;
             }
           } catch { /* skip */ }
