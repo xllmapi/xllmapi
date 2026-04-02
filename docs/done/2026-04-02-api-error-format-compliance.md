@@ -23,8 +23,12 @@
 
 ## 本地模拟测试
 
-- [ ] formatApiError OpenAI 格式正确
-- [ ] formatApiError Anthropic 格式正确
-- [ ] xllmapi 扩展字段正确携带
-- [ ] HTTP 状态码到错误类型映射正确
-- [ ] 全量单元测试通过
+- [x] formatApiError OpenAI 格式正确
+- [x] formatApiError Anthropic 格式正确
+- [x] xllmapi 扩展字段正确携带
+- [x] HTTP 状态码到错误类型映射正确
+- [x] 全量单元测试通过 (174/174)
+
+## 状态: ✅ 已完成
+
+PR: https://github.com/Sunrisepeak/xllmapi/pull/70 (已合入 main)
