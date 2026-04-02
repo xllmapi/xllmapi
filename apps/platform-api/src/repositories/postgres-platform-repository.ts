@@ -2848,18 +2848,20 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const pool = getPool();
 
-    // Per-model stats from api_requests (last 30 days)
+    // Per-model stats from api_requests + settlement_records (last 30 days)
     const statsResult = await pool.query(`
       SELECT
         ar.logical_model AS "logicalModel",
         COALESCE(pp.id, '__unknown__') AS "presetId",
         COUNT(*) AS "totalRequests",
         SUM(ar.total_tokens) AS "totalTokens",
+        COALESCE(SUM(sr.consumer_cost), 0) AS "totalXtokens",
         SUM(ar.input_tokens) AS "totalInputTokens",
         SUM(ar.output_tokens) AS "totalOutputTokens",
         COUNT(DISTINCT ar.requester_user_id) AS "uniqueUsers"
       FROM api_requests ar
       JOIN offerings o ON o.id = ar.chosen_offering_id
+      LEFT JOIN settlement_records sr ON sr.request_id = ar.id
       LEFT JOIN provider_credentials c ON c.id = o.credential_id
       LEFT JOIN LATERAL (
         SELECT ppp.id FROM provider_presets ppp

@@ -27,6 +27,7 @@ interface ModelStats {
   logicalModel: string;
   totalRequests: number;
   totalTokens: number;
+  totalXtokens?: number;
   last7dTrend: number[];
   presetId?: string;
 }
@@ -299,7 +300,7 @@ export function ModelsPage() {
   const statsMap = new Map(stats.map((s) => [s.presetId ? `${s.logicalModel}::${s.presetId}` : s.logicalModel, s]));
   const totalNodes = models.reduce((sum, m) => sum + (m.ownerCount ?? 0), 0);
   const totalSuppliers = new Set(models.flatMap((m) => (m.featuredSuppliers ?? []).map((s) => s.handle))).size;
-  const totalTokens = stats.reduce((sum, s) => sum + s.totalTokens, 0);
+  const totalXtokens = stats.reduce((sum, s) => sum + (s.totalXtokens ?? s.totalTokens ?? 0), 0);
   const maxRequests = Math.max(...stats.map((s) => s.totalRequests), 1);
 
   const filtered = models.filter((m) => {
@@ -340,7 +341,7 @@ export function ModelsPage() {
             { value: models.length + new Set(distributedOfferings.map((o) => o.logicalModel)).size, label: t("models.stat.models") },
             { value: totalNodes + distributedOfferings.length, label: t("models.stat.nodes") },
             { value: totalSuppliers + new Set(distributedOfferings.map((o) => o.ownerHandle).filter(Boolean)).size, label: t("models.stat.suppliers") },
-            { value: formatTokens(totalTokens), label: t("models.stat.tokens") },
+            { value: formatTokens(totalXtokens), label: t("models.stat.tokens") },
           ].map((s, i) => (
             <div key={i} className="text-center">
               <div className="text-2xl font-bold text-accent">{s.value}</div>
