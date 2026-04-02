@@ -1297,5 +1297,155 @@ export const platformService = {
   },
   async upsertUserModelConfig(userId: string, logicalModel: string, maxInputPrice: number | null, maxOutputPrice: number | null) {
     return platformRepository.upsertUserModelConfig({ userId, logicalModel, maxInputPrice, maxOutputPrice });
-  }
+  },
+
+  async validateApiCompliance(params: {
+    baseUrl: string;
+    anthropicBaseUrl: string;
+    apiKey: string;
+    testModel?: string;
+  }) {
+    const timeout = 12000;
+    const testMsg = [{ role: "user", content: "Say hi" }];
+
+    const checkOpenai = async (baseUrl: string) => {
+      const base = baseUrl.replace(/\/+$/, "");
+      const chatUrl = base.endsWith("/v1") ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+      const headers = { Authorization: `Bearer ${params.apiKey}`, "content-type": "application/json" };
+      const model = params.testModel || "gpt-5.4";
+      const result: { available: boolean; streaming: boolean; streamUsage: boolean; nonStreamUsage: boolean; model: string; error?: string } = {
+        available: false, streaming: false, streamUsage: false, nonStreamUsage: false, model,
+      };
+
+      // 1. Non-streaming
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeout);
+        const resp = await fetch(chatUrl, {
+          method: "POST", headers, signal: ctrl.signal,
+          body: JSON.stringify({ model, messages: testMsg, max_tokens: 8 }),
+        });
+        clearTimeout(timer);
+        if (!resp.ok) { result.error = `Non-streaming: HTTP ${resp.status}`; return result; }
+        result.available = true;
+        const body = await resp.json() as Record<string, unknown>;
+        const usage = body.usage as Record<string, number> | undefined;
+        if (usage && ((usage.prompt_tokens ?? usage.input_tokens ?? 0) > 0)) {
+          result.nonStreamUsage = true;
+        }
+        if (body.model) result.model = String(body.model);
+      } catch (e) {
+        result.error = `Non-streaming: ${e instanceof Error ? e.message : String(e)}`;
+        return result;
+      }
+
+      // 2. Streaming with stream_options
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeout);
+        const resp = await fetch(chatUrl, {
+          method: "POST", headers, signal: ctrl.signal,
+          body: JSON.stringify({ model: result.model, messages: testMsg, max_tokens: 8, stream: true, stream_options: { include_usage: true } }),
+        });
+        clearTimeout(timer);
+        if (!resp.ok) { result.error = `Streaming: HTTP ${resp.status}`; return result; }
+        result.streaming = true;
+        const text = await resp.text();
+        // Check if any chunk contains usage
+        if (text.includes('"usage"') && (text.includes('"prompt_tokens"') || text.includes('"input_tokens"'))) {
+          result.streamUsage = true;
+        }
+      } catch (e) {
+        result.error = `Streaming: ${e instanceof Error ? e.message : String(e)}`;
+      }
+
+      return result;
+    };
+
+    const checkAnthropic = async (baseUrl: string) => {
+      const base = baseUrl.replace(/\/+$/, "");
+      const msgUrl = base.endsWith("/v1") ? `${base}/messages` : `${base}/v1/messages`;
+      const headers: Record<string, string> = { "x-api-key": params.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" };
+      const model = params.testModel || "gpt-5.4";
+      const result: { available: boolean; streaming: boolean; streamUsageStandard: boolean; nonStreamUsage: boolean; model: string; error?: string } = {
+        available: false, streaming: false, streamUsageStandard: false, nonStreamUsage: false, model,
+      };
+
+      // 1. Non-streaming
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeout);
+        const resp = await fetch(msgUrl, {
+          method: "POST", headers, signal: ctrl.signal,
+          body: JSON.stringify({ model, messages: testMsg, max_tokens: 8 }),
+        });
+        clearTimeout(timer);
+        if (!resp.ok) { result.error = `Non-streaming: HTTP ${resp.status}`; return result; }
+        result.available = true;
+        const body = await resp.json() as Record<string, unknown>;
+        const usage = body.usage as Record<string, number> | undefined;
+        if (usage && (usage.input_tokens ?? 0) > 0) {
+          result.nonStreamUsage = true;
+        }
+        if (body.model) result.model = String(body.model);
+      } catch (e) {
+        result.error = `Non-streaming: ${e instanceof Error ? e.message : String(e)}`;
+        return result;
+      }
+
+      // 2. Streaming — check message_start.input_tokens
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeout);
+        const resp = await fetch(msgUrl, {
+          method: "POST", headers, signal: ctrl.signal,
+          body: JSON.stringify({ model: result.model, messages: testMsg, max_tokens: 8, stream: true }),
+        });
+        clearTimeout(timer);
+        if (!resp.ok) { result.error = `Streaming: HTTP ${resp.status}`; return result; }
+        result.streaming = true;
+        const text = await resp.text();
+        // Parse message_start to check if input_tokens > 0
+        for (const line of text.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          try {
+            const parsed = JSON.parse(trimmed.slice(5).trim());
+            if (parsed.type === "message_start" && parsed.message?.usage) {
+              const inputTokens = parsed.message.usage.input_tokens ?? 0;
+              if (inputTokens > 0) result.streamUsageStandard = true;
+            }
+          } catch { /* skip */ }
+        }
+      } catch (e) {
+        result.error = `Streaming: ${e instanceof Error ? e.message : String(e)}`;
+      }
+
+      return result;
+    };
+
+    // Run checks in parallel for configured endpoints
+    const [openaiResult, anthropicResult] = await Promise.all([
+      params.baseUrl ? checkOpenai(params.baseUrl) : Promise.resolve(null),
+      params.anthropicBaseUrl ? checkAnthropic(params.anthropicBaseUrl) : Promise.resolve(null),
+    ]);
+
+    // Build recommendation
+    let recommendation = "";
+    if (openaiResult && anthropicResult) {
+      if (openaiResult.streamUsage && !anthropicResult.streamUsageStandard) {
+        recommendation = "Anthropic 端点流式 token 报告不规范，建议仅使用 OpenAI 端点，清空 Anthropic URL";
+      } else if (openaiResult.streamUsage && anthropicResult.streamUsageStandard) {
+        recommendation = "两个端点均符合规范，可以同时使用";
+      } else if (!openaiResult.streamUsage) {
+        recommendation = "OpenAI 端点流式不返回 usage，请确认供应商支持 stream_options";
+      }
+    } else if (openaiResult) {
+      recommendation = openaiResult.streamUsage ? "OpenAI 端点符合规范" : "OpenAI 端点流式不返回 usage，请确认供应商支持 stream_options";
+    } else if (anthropicResult) {
+      recommendation = anthropicResult.streamUsageStandard ? "Anthropic 端点符合规范" : "Anthropic 端点流式 token 报告不规范 (message_start.input_tokens=0)";
+    }
+
+    return { openai: openaiResult, anthropic: anthropicResult, recommendation };
+  },
 };

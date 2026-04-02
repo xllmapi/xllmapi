@@ -897,6 +897,40 @@ export async function handleAdminRoutes(
     return true;
   }
 
+  // POST /v1/admin/provider-presets/validate-api
+  if (req.method === "POST" && url.pathname === "/v1/admin/provider-presets/validate-api") {
+    const auth = await authenticate_session_only_(req);
+    if (!auth || auth.role !== "admin") {
+      const response = !auth ? unauthorized_(requestId) : forbidden_(requestId);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const body = await read_json<{ baseUrl?: string; anthropicBaseUrl?: string; apiKey: string; testModel?: string }>(req);
+    if (!body.apiKey) {
+      const response = json(400, { error: { code: "invalid_request", message: "apiKey is required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    if (!body.baseUrl && !body.anthropicBaseUrl) {
+      const response = json(400, { error: { code: "invalid_request", message: "at least one URL is required", requestId } });
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
+    const result = await platformService.validateApiCompliance({
+      baseUrl: body.baseUrl ?? "",
+      anthropicBaseUrl: body.anthropicBaseUrl ?? "",
+      apiKey: body.apiKey,
+      testModel: body.testModel,
+    });
+    const response = json(200, { ok: true, data: result, requestId });
+    res.writeHead(response.statusCode, response.headers);
+    res.end(response.payload);
+    return true;
+  }
+
   // PUT /v1/admin/provider-presets/:id  &  DELETE /v1/admin/provider-presets/:id
   const presetMatch = url.pathname.match(/^\/v1\/admin\/provider-presets\/([^/]+)$/);
 

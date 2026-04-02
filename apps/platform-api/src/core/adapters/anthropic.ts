@@ -38,8 +38,12 @@ export const anthropicAdapter: ProviderAdapter = {
           inputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
         }
         // message_delta event: { type: "message_delta", usage: { output_tokens } }
+        // Some providers (MiMo, hanbbq) also report input_tokens in message_delta
+        // instead of message_start — take the larger value to handle both behaviors.
         if (parsed.type === "message_delta" && parsed.usage) {
           outputTokens = parsed.usage.output_tokens ?? 0;
+          const deltaInput = parsed.usage.input_tokens || ((parsed.usage.cache_read_input_tokens ?? 0) + (parsed.usage.cache_creation_input_tokens ?? 0)) || 0;
+          if (deltaInput > inputTokens) inputTokens = deltaInput;
         }
       } catch { /* skip */ }
     }

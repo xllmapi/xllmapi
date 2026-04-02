@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 import { apiJson } from "@/lib/api";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatNumber, formatProviderType } from "@/lib/utils";
@@ -58,6 +58,19 @@ const EMPTY_PRESET: ProviderPreset = {
   thirdPartyNotice: null,
 };
 
+function CheckItem({ ok, label, error, warn }: { ok: boolean; label: string; error?: string; warn?: string }) {
+  return (
+    <div className="flex items-start gap-1.5">
+      <span className={ok ? "text-emerald-400" : "text-amber-400"}>{ok ? "✓" : "✗"}</span>
+      <div>
+        <span className={ok ? "text-text-secondary" : "text-amber-400"}>{label}</span>
+        {error && <p className="text-danger text-[10px] mt-0.5">{error}</p>}
+        {warn && <p className="text-amber-400/80 text-[10px] mt-0.5">{warn}</p>}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Presets Tab ---------- */
 
 function PresetsTab() {
@@ -71,12 +84,48 @@ function PresetsTab() {
   const [modelsText, setModelsText] = useState("");
   const [customHeadersText, setCustomHeadersText] = useState("");
 
+  // API compliance validation
+  const [validateKey, setValidateKey] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [validateOpen, setValidateOpen] = useState(false);
+  const [validateResult, setValidateResult] = useState<{
+    openai: { available: boolean; streaming: boolean; streamUsage: boolean; nonStreamUsage: boolean; model: string; error?: string } | null;
+    anthropic: { available: boolean; streaming: boolean; streamUsageStandard: boolean; nonStreamUsage: boolean; model: string; error?: string } | null;
+    recommendation: string;
+  } | null>(null);
+
+  const handleValidate = useCallback(async () => {
+    if (!validateKey || (!editing?.baseUrl && !editing?.anthropicBaseUrl)) return;
+    setValidating(true);
+    setValidateResult(null);
+    try {
+      const res = await apiJson<{ data: typeof validateResult }>("/v1/admin/provider-presets/validate-api", {
+        method: "POST",
+        body: JSON.stringify({
+          baseUrl: editing?.baseUrl || undefined,
+          anthropicBaseUrl: editing?.anthropicBaseUrl || undefined,
+          apiKey: validateKey,
+          testModel: editing?.models?.[0]?.realModel || undefined,
+        }),
+      });
+      setValidateResult(res.data);
+    } catch {
+      setValidateResult(null);
+      setMessage({ type: "error", text: "API 校验请求失败" });
+    } finally {
+      setValidating(false);
+    }
+  }, [validateKey, editing]);
+
+  const resetValidation = () => { setValidateKey(""); setValidateResult(null); setValidateOpen(false); };
+
   const openCreate = () => {
     setEditing({ ...EMPTY_PRESET });
     setModelsText("[]");
     setCustomHeadersText("");
     setIsNew(true);
     setMessage(null);
+    resetValidation();
   };
 
   const openEdit = (preset: ProviderPreset) => {
@@ -85,11 +134,13 @@ function PresetsTab() {
     setCustomHeadersText(preset.customHeaders ? JSON.stringify(preset.customHeaders, null, 2) : "");
     setIsNew(false);
     setMessage(null);
+    resetValidation();
   };
 
   const closeForm = () => {
     setEditing(null);
     setIsNew(false);
+    resetValidation();
   };
 
   const handleSave = async () => {
@@ -207,6 +258,84 @@ function PresetsTab() {
               setEditing({ ...editing, anthropicBaseUrl: e.target.value || null })
             }
           />
+        </div>
+
+        {/* API compliance validation */}
+        <div className="border border-line rounded-[var(--radius-card)] mb-4">
+          <button
+            type="button"
+            onClick={() => { setValidateOpen(v => !v); if (!validateOpen) setValidateResult(null); }}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer transition-colors"
+          >
+            <span>{t("admin.providers.validateTitle")}</span>
+            <span className={`transition-transform ${validateOpen ? "rotate-180" : ""}`}>▾</span>
+          </button>
+          {validateOpen && (
+            <div className="px-4 pb-4 border-t border-line">
+              <div className="flex items-end gap-2 mt-3 mb-3">
+                <div className="flex-1">
+                  <FormInput
+                    placeholder={t("admin.providers.validateKeyHint")}
+                    type="password"
+                    value={validateKey}
+                    onChange={e => setValidateKey(e.target.value)}
+                  />
+                </div>
+                <FormButton
+                  onClick={() => void handleValidate()}
+                  disabled={validating || !validateKey || (!editing?.baseUrl && !editing?.anthropicBaseUrl)}
+                  className="shrink-0"
+                >
+                  {validating ? t("common.loading") : t("admin.providers.validateBtn")}
+                </FormButton>
+              </div>
+
+              {validateResult && (
+                <div className="flex flex-col gap-3 text-xs">
+                  {/* OpenAI results */}
+                  {validateResult.openai && (
+                    <div>
+                      <p className="font-medium text-text-primary mb-1.5">OpenAI ({editing?.baseUrl})</p>
+                      <div className="flex flex-col gap-1 pl-2">
+                        <CheckItem ok={validateResult.openai.available} label={t("admin.providers.validateConnect")} error={validateResult.openai.error} />
+                        {validateResult.openai.available && (
+                          <>
+                            <CheckItem ok={validateResult.openai.nonStreamUsage} label={t("admin.providers.validateNonStreamUsage")} />
+                            <CheckItem ok={validateResult.openai.streamUsage} label={t("admin.providers.validateStreamUsage")} warn={!validateResult.openai.streamUsage ? t("admin.providers.validateStreamUsageWarn") : undefined} />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* Anthropic results */}
+                  {validateResult.anthropic && (
+                    <div>
+                      <p className="font-medium text-text-primary mb-1.5">Anthropic ({editing?.anthropicBaseUrl})</p>
+                      <div className="flex flex-col gap-1 pl-2">
+                        <CheckItem ok={validateResult.anthropic.available} label={t("admin.providers.validateConnect")} error={validateResult.anthropic.error} />
+                        {validateResult.anthropic.available && (
+                          <>
+                            <CheckItem ok={validateResult.anthropic.nonStreamUsage} label={t("admin.providers.validateNonStreamUsage")} />
+                            <CheckItem
+                              ok={validateResult.anthropic.streamUsageStandard}
+                              label={validateResult.anthropic.streamUsageStandard ? t("admin.providers.validateStreamStandard") : t("admin.providers.validateStreamNonStandard")}
+                              warn={!validateResult.anthropic.streamUsageStandard ? t("admin.providers.validateAnthropicWarn") : undefined}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* Recommendation */}
+                  {validateResult.recommendation && (
+                    <div className="mt-1 px-3 py-2 rounded bg-accent/5 border border-accent/20 text-accent">
+                      💡 {validateResult.recommendation}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* enabled toggle */}
