@@ -2,7 +2,6 @@ import { Component, type ReactNode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthContext, useAuthProvider } from "@/hooks/useAuth";
 import { Header } from "@/components/layout/Header";
-import { SiteBanner } from "@/components/layout/SiteBanner";
 import { ProtectedRoute } from "@/components/shared/ProtectedRoute";
 import { AdminRoute } from "@/components/shared/AdminRoute";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -113,7 +112,6 @@ export function App() {
       <ChatProvider>
       <BrowserRouter>
         <Header />
-        <SiteBanner />
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<HomePage />} />

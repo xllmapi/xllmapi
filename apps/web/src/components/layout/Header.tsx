@@ -2,11 +2,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocale } from "@/hooks/useLocale";
+import { useSiteBanner } from "@/hooks/useSiteBanner";
 import { apiJson } from "@/lib/api";
 import { LogOut, LayoutDashboard, Bell, ChevronDown, MessageSquare, Globe, Users, Sparkles, Menu, X } from "lucide-react";
 
 declare const __XLLMAPI_DOCS_URL__: string;
 declare const __DEV__: boolean;
+
+const HEADER_HEIGHT = 56;
+const BANNER_HEIGHT = 28;
+
+const bannerTypeStyles: Record<string, string> = {
+  info: "bg-accent/10 border-accent/30 text-accent",
+  warning: "bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-400",
+  error: "bg-danger/10 border-danger/30 text-danger",
+};
 
 const ECOSYSTEM_LINKS = [
   ...(__DEV__ ? [{ key: "nav.ecosystem.brand", href: "/brand", icon: Sparkles, internal: true }] : []),
@@ -28,6 +38,14 @@ export function Header() {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
   const { locale, setLocale, t } = useLocale();
   const navigate = useNavigate();
+  const { banner, visible: bannerVisible, dismiss: dismissBanner } = useSiteBanner();
+
+  // Set CSS variable so all downstream components can reference --header-height
+  useEffect(() => {
+    const h = bannerVisible ? HEADER_HEIGHT + BANNER_HEIGHT : HEADER_HEIGHT;
+    document.documentElement.style.setProperty("--header-height", `${h}px`);
+    return () => { document.documentElement.style.removeProperty("--header-height"); };
+  }, [bannerVisible]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [ecoOpen, setEcoOpen] = useState(false);
   const [qqCopied, setQqCopied] = useState(false);
@@ -82,8 +100,8 @@ export function Header() {
 
   return (
     <>
-    <header className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-line bg-panel-strong">
-      <div className="mx-auto flex h-full max-w-[var(--spacing-content)] items-center justify-between px-6">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-line bg-panel-strong">
+      <div className="mx-auto flex h-14 max-w-[var(--spacing-content)] items-center justify-between px-6">
         <Link
           to="/"
           className="flex items-center gap-1.5 font-heading text-lg font-bold no-underline hover:no-underline tracking-tight"
@@ -258,10 +276,27 @@ export function Header() {
           </button>
         </nav>
       </div>
+
+      {/* Site-wide banner — rendered inside header so it doesn't overlap content */}
+      {bannerVisible && banner && (
+        <div
+          className={`border-t px-4 flex items-center justify-between gap-2 text-xs ${bannerTypeStyles[banner.type] ?? bannerTypeStyles.info}`}
+          style={{ height: `${BANNER_HEIGHT}px` }}
+        >
+          <span className="flex-1 text-center truncate">{banner.content}</span>
+          <button
+            onClick={dismissBanner}
+            className="shrink-0 opacity-60 hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer text-current text-sm leading-none"
+            aria-label="Dismiss"
+          >
+            &times;
+          </button>
+        </div>
+      )}
     </header>
 
     {mobileMenuOpen && (
-      <div className="md:hidden fixed top-14 left-0 right-0 z-[49] border-b border-line bg-panel-strong/95 py-3 px-6" style={{ backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+      <div className="md:hidden fixed left-0 right-0 z-[49] border-b border-line bg-panel-strong/95 py-3 px-6" style={{ top: "var(--header-height, 56px)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
         <nav className="flex flex-col gap-1">
           {/* All nav links as vertical list */}
           <Link to="/mnetwork" onClick={() => setMobileMenuOpen(false)} className="py-2.5 text-sm text-text-secondary hover:text-text-primary no-underline transition-colors">{t("nav.models")}</Link>
