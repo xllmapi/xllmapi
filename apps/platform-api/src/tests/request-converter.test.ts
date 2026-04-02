@@ -281,3 +281,160 @@ test("thinking field not included when absent", () => {
   const anthToOai = convertRequestBody("anthropic", "openai", body) as any;
   assert.ok(!("thinking" in anthToOai));
 });
+
+// ── Tools conversion ──
+
+test("openai→anthropic: tools array converted (function → input_schema)", () => {
+  const body = {
+    model: "gpt-4",
+    messages: [{ role: "user", content: "weather?" }],
+    tools: [{
+      type: "function",
+      function: { name: "get_weather", description: "Get weather", parameters: { type: "object", properties: { city: { type: "string" } } } },
+    }],
+    tool_choice: "auto",
+  };
+
+  const result = convertRequestBody("openai", "anthropic", body) as any;
+  assert.equal(result.tools.length, 1);
+  assert.equal(result.tools[0].name, "get_weather");
+  assert.ok(result.tools[0].input_schema, "should have input_schema");
+  assert.equal(result.tools[0].input_schema.type, "object");
+  assert.deepEqual(result.tool_choice, { type: "auto" });
+});
+
+test("anthropic→openai: tools array converted (input_schema → function)", () => {
+  const body = {
+    model: "claude-3",
+    messages: [{ role: "user", content: "weather?" }],
+    tools: [{
+      name: "get_weather",
+      description: "Get weather",
+      input_schema: { type: "object", properties: { city: { type: "string" } } },
+    }],
+    tool_choice: { type: "auto" },
+  };
+
+  const result = convertRequestBody("anthropic", "openai", body) as any;
+  assert.equal(result.tools.length, 1);
+  assert.equal(result.tools[0].type, "function");
+  assert.equal(result.tools[0].function.name, "get_weather");
+  assert.ok(result.tools[0].function.parameters);
+  assert.equal(result.tool_choice, "auto");
+});
+
+test("openai→anthropic: tool message → tool_result user message", () => {
+  const body = {
+    model: "gpt-4",
+    messages: [
+      { role: "user", content: "weather?" },
+      { role: "assistant", content: "Let me check." },
+      { role: "tool", content: "Sunny, 25°C", tool_call_id: "call_123" },
+    ],
+  };
+
+  const result = convertRequestBody("openai", "anthropic", body) as any;
+  // tool message should become user message with tool_result content
+  const toolMsg = result.messages[2];
+  assert.equal(toolMsg.role, "user");
+  assert.equal(toolMsg.content[0].type, "tool_result");
+  assert.equal(toolMsg.content[0].tool_use_id, "call_123");
+  assert.equal(toolMsg.content[0].content, "Sunny, 25°C");
+});
+
+test("anthropic→openai: tool_use content blocks → tool_calls on assistant", () => {
+  const body = {
+    model: "claude-3",
+    messages: [{
+      role: "assistant",
+      content: [
+        { type: "text", text: "Let me check." },
+        { type: "tool_use", id: "toolu_1", name: "get_weather", input: { city: "Tokyo" } },
+      ],
+    }],
+  };
+
+  const result = convertRequestBody("anthropic", "openai", body) as any;
+  const msg = result.messages[0];
+  assert.equal(msg.role, "assistant");
+  assert.ok(msg.tool_calls, "should have tool_calls");
+  assert.equal(msg.tool_calls[0].function.name, "get_weather");
+  assert.equal(JSON.parse(msg.tool_calls[0].function.arguments).city, "Tokyo");
+});
+
+test("anthropic→openai: tool_result content block → tool role message", () => {
+  const body = {
+    model: "claude-3",
+    messages: [{
+      role: "user",
+      content: [
+        { type: "tool_result", tool_use_id: "toolu_1", content: "Sunny, 25°C" },
+      ],
+    }],
+  };
+
+  const result = convertRequestBody("anthropic", "openai", body) as any;
+  const msg = result.messages[0];
+  assert.equal(msg.role, "tool");
+  assert.equal(msg.tool_call_id, "toolu_1");
+  assert.equal(msg.content, "Sunny, 25°C");
+});
+
+// ── Image conversion ──
+
+test("openai→anthropic: image_url data URI → Anthropic base64 image", () => {
+  const body = {
+    model: "gpt-4o",
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: "What is this?" },
+        { type: "image_url", image_url: { url: "data:image/png;base64,iVBORw0KGgo=" } },
+      ],
+    }],
+  };
+
+  const result = convertRequestBody("openai", "anthropic", body) as any;
+  const imgBlock = result.messages[0].content[1];
+  assert.equal(imgBlock.type, "image");
+  assert.equal(imgBlock.source.type, "base64");
+  assert.equal(imgBlock.source.media_type, "image/png");
+  assert.equal(imgBlock.source.data, "iVBORw0KGgo=");
+});
+
+test("openai→anthropic: image_url regular URL → Anthropic url image", () => {
+  const body = {
+    model: "gpt-4o",
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: "https://example.com/photo.jpg" } },
+      ],
+    }],
+  };
+
+  const result = convertRequestBody("openai", "anthropic", body) as any;
+  const imgBlock = result.messages[0].content[0];
+  assert.equal(imgBlock.type, "image");
+  assert.equal(imgBlock.source.type, "url");
+  assert.equal(imgBlock.source.url, "https://example.com/photo.jpg");
+});
+
+// ── Additional parameter preservation ──
+
+test("anthropic→openai: preserves presence_penalty, frequency_penalty, seed, response_format", () => {
+  const body = {
+    model: "claude-3",
+    messages: [{ role: "user", content: "Hi" }],
+    presence_penalty: 0.5,
+    frequency_penalty: 0.3,
+    seed: 42,
+    response_format: { type: "json_object" },
+  };
+
+  const result = convertRequestBody("anthropic", "openai", body) as any;
+  assert.equal(result.presence_penalty, 0.5);
+  assert.equal(result.frequency_penalty, 0.3);
+  assert.equal(result.seed, 42);
+  assert.deepEqual(result.response_format, { type: "json_object" });
+});

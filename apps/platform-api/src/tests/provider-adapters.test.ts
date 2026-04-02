@@ -45,10 +45,10 @@ test("openai prepareBody: replaces model with realModel", () => {
   assert.equal(prepared.model, "gpt-4o");
 });
 
-test("openai prepareBody: caps max_tokens at 8192", () => {
+test("openai prepareBody: passes max_tokens through to upstream", () => {
   const body = { model: "gpt-4o", max_tokens: 100_000 };
   const prepared = openaiAdapter.prepareBody(body, "gpt-4o");
-  assert.equal(prepared.max_tokens, 8192);
+  assert.equal(prepared.max_tokens, 100_000, "should not cap max_tokens — upstream enforces limits");
 
   const bodySmall = { model: "gpt-4o", max_tokens: 512 };
   const preparedSmall = openaiAdapter.prepareBody(bodySmall, "gpt-4o");

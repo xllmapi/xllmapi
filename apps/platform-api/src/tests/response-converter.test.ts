@@ -564,3 +564,91 @@ test("Anthropic→OpenAI converter handles thinking_delta only (no text)", () =>
   assert.ok(joined.includes("Deep reasoning..."), "should contain thinking text");
   assert.ok(joined.includes("[DONE]"), "should end with [DONE]");
 });
+
+// ── Non-streaming tool_calls ↔ tool_use ─────────────────────────
+
+test("convertJsonResponse: OpenAI tool_calls → Anthropic tool_use content blocks", () => {
+  const openaiResp = {
+    id: "chatcmpl-tc1",
+    object: "chat.completion",
+    model: "gpt-4",
+    choices: [{
+      index: 0,
+      message: {
+        role: "assistant",
+        content: null,
+        tool_calls: [{
+          id: "call_abc",
+          type: "function",
+          function: { name: "get_weather", arguments: '{"city":"Tokyo"}' },
+        }],
+      },
+      finish_reason: "tool_calls",
+    }],
+    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+  };
+
+  const result = convertJsonResponse("openai", "anthropic", openaiResp) as any;
+  assert.equal(result.type, "message");
+  // Should have tool_use content block
+  const toolBlock = result.content.find((b: any) => b.type === "tool_use");
+  assert.ok(toolBlock, "should have tool_use content block");
+  assert.equal(toolBlock.name, "get_weather");
+  assert.deepEqual(toolBlock.input, { city: "Tokyo" });
+  assert.equal(toolBlock.id, "call_abc");
+  assert.equal(result.stop_reason, "tool_use");
+});
+
+test("convertJsonResponse: Anthropic tool_use → OpenAI tool_calls", () => {
+  const anthropicResp = {
+    id: "msg_tc1",
+    type: "message",
+    role: "assistant",
+    model: "claude-3",
+    content: [
+      { type: "text", text: "Let me check." },
+      { type: "tool_use", id: "toolu_1", name: "get_weather", input: { city: "Tokyo" } },
+    ],
+    stop_reason: "tool_use",
+    usage: { input_tokens: 10, output_tokens: 5 },
+  };
+
+  const result = convertJsonResponse("anthropic", "openai", anthropicResp) as any;
+  assert.equal(result.choices[0].finish_reason, "tool_calls");
+  assert.ok(result.choices[0].message.tool_calls, "should have tool_calls");
+  assert.equal(result.choices[0].message.tool_calls[0].function.name, "get_weather");
+  assert.equal(result.choices[0].message.content, "Let me check.");
+});
+
+// ── Streaming reasoning_content → thinking block ─────────────────
+
+test("OpenAI→Anthropic streaming: reasoning_content emits thinking block (not text)", () => {
+  const converter = createStreamConverter("openai", "anthropic");
+
+  // First chunk: reasoning_content
+  const chunk1 = 'data: {"id":"c1","model":"deepseek","choices":[{"index":0,"delta":{"reasoning_content":"Thinking..."},"finish_reason":null}]}\n\n';
+  const out1 = converter.transform(chunk1);
+  const joined1 = out1.join("");
+  assert.ok(joined1.includes("message_start"), "should have message_start");
+  // Should use thinking block, not text
+  assert.ok(joined1.includes('"type":"thinking"'), "content_block_start should be thinking type");
+  assert.ok(joined1.includes("thinking_delta"), "should use thinking_delta, not text_delta");
+  assert.ok(joined1.includes("Thinking..."), "should contain thinking text");
+
+  // Second chunk: regular content (should switch to text block)
+  const chunk2 = 'data: {"id":"c1","choices":[{"index":0,"delta":{"content":"Answer: 42"},"finish_reason":null}]}\n\n';
+  const out2 = converter.transform(chunk2);
+  const joined2 = out2.join("");
+  // Should close thinking block and start text block
+  assert.ok(joined2.includes("content_block_stop"), "should close thinking block");
+  assert.ok(joined2.includes('"type":"text"'), "should start text content block");
+  assert.ok(joined2.includes("text_delta"), "should use text_delta for content");
+  assert.ok(joined2.includes("Answer: 42"), "should contain answer text");
+
+  // Finish
+  const chunk3 = 'data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+  const out3 = converter.transform(chunk3);
+  const flush = converter.flush();
+  const joinedEnd = [...out3, ...flush].join("");
+  assert.ok(joinedEnd.includes("message_stop"), "should have message_stop");
+});

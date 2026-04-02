@@ -34,20 +34,46 @@ function mapStopReasonToOpenai(stopReason: string | null | undefined): string | 
 
 function openaiJsonToAnthropic(body: Record<string, unknown>): Record<string, unknown> {
   const choices = (body.choices ?? []) as Array<{
-    message?: { role?: string; content?: string };
+    message?: { role?: string; content?: string; tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }> };
     finish_reason?: string;
   }>;
   const choice = choices[0];
-  const content = choice?.message?.content ?? "";
+  const msg = choice?.message;
   const usage = (body.usage ?? {}) as Record<string, number>;
+
+  // Build content blocks
+  const contentBlocks: Array<Record<string, unknown>> = [];
+  if (msg?.content) {
+    contentBlocks.push({ type: "text", text: msg.content });
+  }
+  // Convert tool_calls → tool_use content blocks
+  if (msg?.tool_calls && msg.tool_calls.length > 0) {
+    for (const tc of msg.tool_calls) {
+      let input: unknown = {};
+      try { input = JSON.parse(tc.function?.arguments ?? "{}"); } catch { input = tc.function?.arguments ?? ""; }
+      contentBlocks.push({
+        type: "tool_use",
+        id: tc.id ?? `toolu_${Date.now()}`,
+        name: tc.function?.name ?? "",
+        input,
+      });
+    }
+  }
+  if (contentBlocks.length === 0) {
+    contentBlocks.push({ type: "text", text: "" });
+  }
+
+  // Map stop reason: tool_calls → "tool_use" in Anthropic
+  let stopReason = mapStopReasonToAnthropic(choice?.finish_reason);
+  if (choice?.finish_reason === "tool_calls") stopReason = "tool_use";
 
   return {
     id: body.id ?? `msg_${Date.now()}`,
     type: "message",
     role: "assistant",
     model: body.model ?? "unknown",
-    content: [{ type: "text", text: content }],
-    stop_reason: mapStopReasonToAnthropic(choice?.finish_reason),
+    content: contentBlocks,
+    stop_reason: stopReason,
     stop_sequence: null,
     usage: {
       input_tokens: usage.prompt_tokens ?? 0,
@@ -57,7 +83,7 @@ function openaiJsonToAnthropic(body: Record<string, unknown>): Record<string, un
 }
 
 function anthropicJsonToOpenai(body: Record<string, unknown>): Record<string, unknown> {
-  const contentBlocks = (body.content ?? []) as Array<{ type?: string; text?: string }>;
+  const contentBlocks = (body.content ?? []) as Array<{ type?: string; text?: string; id?: string; name?: string; input?: unknown }>;
   const textContent = contentBlocks
     .filter(b => b.type === "text")
     .map(b => b.text ?? "")
@@ -66,6 +92,31 @@ function anthropicJsonToOpenai(body: Record<string, unknown>): Record<string, un
   const inputTokens = usage.input_tokens ?? 0;
   const outputTokens = usage.output_tokens ?? 0;
 
+  // Build message object
+  const message: Record<string, unknown> = {
+    role: (body.role as string) ?? "assistant",
+    content: textContent || null,
+  };
+
+  // Convert tool_use blocks → tool_calls
+  const toolUseBlocks = contentBlocks.filter(b => b.type === "tool_use");
+  if (toolUseBlocks.length > 0) {
+    message.tool_calls = toolUseBlocks.map(b => ({
+      id: b.id ?? `call_${Date.now()}`,
+      type: "function",
+      function: {
+        name: b.name ?? "",
+        arguments: typeof b.input === "string" ? b.input : JSON.stringify(b.input ?? {}),
+      },
+    }));
+    // When tool_use present, content can be null if no text
+    if (!textContent) message.content = null;
+  }
+
+  // Map stop_reason: "tool_use" → "tool_calls" in OpenAI
+  let finishReason = mapStopReasonToOpenai(body.stop_reason as string | null);
+  if (body.stop_reason === "tool_use") finishReason = "tool_calls";
+
   return {
     id: body.id ?? `chatcmpl-${Date.now()}`,
     object: "chat.completion",
@@ -73,11 +124,8 @@ function anthropicJsonToOpenai(body: Record<string, unknown>): Record<string, un
     model: body.model ?? "unknown",
     choices: [{
       index: 0,
-      message: {
-        role: (body.role as string) ?? "assistant",
-        content: textContent,
-      },
-      finish_reason: mapStopReasonToOpenai(body.stop_reason as string | null),
+      message,
+      finish_reason: finishReason,
     }],
     usage: {
       prompt_tokens: inputTokens,
@@ -118,9 +166,34 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
   let model = "unknown";
   let inputTokens = 0;
   let outputTokens = 0;
+  // Track current block type and index for thinking vs text separation
+  let currentBlockType: "thinking" | "text" | null = null;
+  let blockIndex = 0;
 
   function formatEvent(eventType: string, data: Record<string, unknown>): string {
     return `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+  }
+
+  function startBlock(type: "thinking" | "text", results: string[]): void {
+    if (currentBlockType !== null) {
+      // Close previous block
+      results.push(formatEvent("content_block_stop", { type: "content_block_stop", index: blockIndex }));
+      blockIndex++;
+    }
+    currentBlockType = type;
+    if (type === "thinking") {
+      results.push(formatEvent("content_block_start", {
+        type: "content_block_start",
+        index: blockIndex,
+        content_block: { type: "thinking", thinking: "" },
+      }));
+    } else {
+      results.push(formatEvent("content_block_start", {
+        type: "content_block_start",
+        index: blockIndex,
+        content_block: { type: "text", text: "" },
+      }));
+    }
   }
 
   function processLine(line: string): string[] {
@@ -170,7 +243,7 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
     const reasoningContent = delta.reasoning_content as string | undefined;
 
     if (state === "init" && (content !== undefined || role !== undefined || reasoningContent !== undefined)) {
-      // Emit message_start + content_block_start
+      // Emit message_start
       results.push(formatEvent("message_start", {
         type: "message_start",
         message: {
@@ -184,28 +257,35 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
           usage: { input_tokens: 0, output_tokens: 0 },
         },
       }));
-      results.push(formatEvent("content_block_start", {
-        type: "content_block_start",
-        index: 0,
-        content_block: { type: "text", text: "" },
-      }));
+      // Start first content block based on what we received
+      if (reasoningContent !== undefined) {
+        startBlock("thinking", results);
+      } else {
+        startBlock("text", results);
+      }
       state = "streaming";
     }
 
     if (state === "streaming") {
-      // Handle reasoning_content (thinking/reasoning models like DeepSeek, Kimi)
+      // Handle reasoning_content → thinking block
       if (reasoningContent) {
+        if (currentBlockType !== "thinking") {
+          startBlock("thinking", results);
+        }
         results.push(formatEvent("content_block_delta", {
           type: "content_block_delta",
-          index: 0,
-          delta: { type: "text_delta", text: reasoningContent },
+          index: blockIndex,
+          delta: { type: "thinking_delta", thinking: reasoningContent },
         }));
       }
-      // Handle regular content
+      // Handle regular content → text block
       if (content) {
+        if (currentBlockType !== "text") {
+          startBlock("text", results);
+        }
         results.push(formatEvent("content_block_delta", {
           type: "content_block_delta",
-          index: 0,
+          index: blockIndex,
           delta: { type: "text_delta", text: content },
         }));
       }
@@ -222,10 +302,12 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
     state = "done";
     const results: string[] = [];
 
-    results.push(formatEvent("content_block_stop", {
-      type: "content_block_stop",
-      index: 0,
-    }));
+    if (currentBlockType !== null) {
+      results.push(formatEvent("content_block_stop", {
+        type: "content_block_stop",
+        index: blockIndex,
+      }));
+    }
     results.push(formatEvent("message_delta", {
       type: "message_delta",
       delta: { stop_reason: mapStopReasonToAnthropic(finishReason ?? "stop") },
