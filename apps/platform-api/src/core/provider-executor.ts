@@ -316,7 +316,7 @@ export async function proxyApiRequest(params: {
       let usage: ProxyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
       const needsConversion = params.clientFormat !== targetFormat;
       if (needsConversion) {
-        respHeaders["x-xllmapi-format-converted"] = `${targetFormat}→${params.clientFormat}`;
+        respHeaders["x-xllmapi-format-converted"] = `${targetFormat}->${params.clientFormat}`;
       }
 
       if (isStreaming && resp.body) {
