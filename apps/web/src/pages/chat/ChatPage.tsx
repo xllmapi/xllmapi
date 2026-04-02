@@ -68,12 +68,12 @@ export function ChatPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="fixed inset-0 top-[56px] flex overflow-hidden">
+    <div className="fixed inset-0 flex overflow-hidden" style={{ top: "var(--header-height, 56px)" }}>
       {/* Sidebar toggle (shown when collapsed on desktop) */}
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="hidden md:flex fixed left-3 top-[72px] z-[40] w-8 h-8 items-center justify-center rounded-[var(--radius-btn)] bg-panel border border-line text-text-tertiary hover:text-text-secondary cursor-pointer transition-colors"
+          className="hidden md:flex fixed left-3 top-[calc(var(--header-height,56px)+16px)] z-[40] w-8 h-8 items-center justify-center rounded-[var(--radius-btn)] bg-panel border border-line text-text-tertiary hover:text-text-secondary cursor-pointer transition-colors"
         >
           <PanelLeftOpen className="w-4 h-4" />
         </button>
@@ -83,7 +83,7 @@ export function ChatPage() {
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="md:hidden fixed left-3 top-[72px] z-[40] w-8 h-8 flex items-center justify-center rounded-[var(--radius-btn)] bg-panel border border-line text-text-tertiary hover:text-text-secondary cursor-pointer transition-colors"
+          className="md:hidden fixed left-3 top-[calc(var(--header-height,56px)+16px)] z-[40] w-8 h-8 flex items-center justify-center rounded-[var(--radius-btn)] bg-panel border border-line text-text-tertiary hover:text-text-secondary cursor-pointer transition-colors"
         >
           <PanelLeftOpen className="w-4 h-4" />
         </button>

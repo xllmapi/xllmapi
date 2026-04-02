@@ -50,7 +50,7 @@ export function AdminLayout() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-[var(--spacing-content)] px-4 md:px-6 pt-[72px] pb-12 min-h-screen">
+    <div className="mx-auto max-w-[var(--spacing-content)] px-4 md:px-6 pt-[calc(var(--header-height,56px)+16px)] pb-12 min-h-screen">
       {/* Mobile tab bar */}
       <ScrollableTabBar>
         {/* Management */}
@@ -80,7 +80,7 @@ export function AdminLayout() {
       <div className="flex gap-6">
         {/* Desktop sidebar */}
         <aside className="hidden md:block w-[180px] shrink-0">
-          <nav className="sticky top-[72px] flex flex-col gap-0.5">
+          <nav className="sticky top-[calc(var(--header-height,56px)+16px)] flex flex-col gap-0.5">
             <p className="text-text-tertiary text-[10px] font-semibold uppercase tracking-wider px-3 py-2">
               {t("admin.sidebar.management")}
             </p>

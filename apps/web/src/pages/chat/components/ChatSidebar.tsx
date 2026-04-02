@@ -125,7 +125,7 @@ export function ChatSidebar({
             className="md:hidden fixed inset-0 bg-black/40 z-[69]"
             onClick={onClose}
           />
-          <aside className="md:hidden fixed left-0 top-[56px] bottom-0 w-[260px] z-[70]">
+          <aside className="md:hidden fixed left-0 bottom-0 w-[260px] z-[70]" style={{ top: "var(--header-height, 56px)" }}>
             {content}
           </aside>
         </>
