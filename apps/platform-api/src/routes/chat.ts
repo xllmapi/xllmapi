@@ -8,6 +8,7 @@ import type {
 import { stripThinking, trimToContextWindow } from "@xllmapi/core";
 import { cacheService } from "../cache.js";
 import { config } from "../config.js";
+import { formatApiError } from "../lib/errors.js";
 import { executeStreamingRequest } from "../core/provider-executor.js";
 import { routeRequest, recordRouteResult } from "../core/router.js";
 import {
@@ -44,7 +45,7 @@ export async function handleChatRoutes(
     }
     const logicalModel = url.searchParams.get("model")?.trim() || "";
     if (logicalModel && has_legacy_model_prefix_(logicalModel)) {
-      const response = json(400, { error: { code: "invalid_model_name", message: "legacy model prefix xllm/ is no longer supported", requestId } });
+      const response = json(400, formatApiError("openai", 400, "legacy model prefix xllm/ is no longer supported", { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -74,13 +75,13 @@ export async function handleChatRoutes(
     }
     const body = await read_json<CreateConversationBody>(req);
     if (!body.model) {
-      const response = json(400, { error: { message: "model is required", requestId } });
+      const response = json(400, formatApiError("openai", 400, "model is required", { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
     }
     if (has_legacy_model_prefix_(body.model)) {
-      const response = json(400, { error: { code: "invalid_model_name", message: "legacy model prefix xllm/ is no longer supported", requestId } });
+      const response = json(400, formatApiError("openai", 400, "legacy model prefix xllm/ is no longer supported", { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -133,7 +134,7 @@ export async function handleChatRoutes(
     const conversationId = decodeURIComponent(patchConversationMatch[1]);
     const body = await read_json<{ title: string }>(req);
     if (!body.title?.trim()) {
-      const response = json(400, { error: { message: "title is required", requestId } });
+      const response = json(400, formatApiError("openai", 400, "title is required", { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -193,21 +194,21 @@ export async function handleChatRoutes(
       conversationId
     });
     if (!conversation) {
-      const response = json(404, { error: { message: "conversation not found", requestId } });
+      const response = json(404, formatApiError("openai", 404, "conversation not found", { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
     }
     const body = await read_json<StreamConversationBody>(req);
     if (!body.content?.trim()) {
-      const response = json(400, { error: { message: "content is required", requestId } });
+      const response = json(400, formatApiError("openai", 400, "content is required", { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
     }
     const logicalModel = String(conversation.logicalModel ?? "");
     if (has_legacy_model_prefix_(logicalModel)) {
-      const response = json(400, { error: { code: "invalid_model_name", message: "legacy model prefix xllm/ is no longer supported", requestId } });
+      const response = json(400, formatApiError("openai", 400, "legacy model prefix xllm/ is no longer supported", { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -223,13 +224,10 @@ export async function handleChatRoutes(
     });
     if (!rateLimit.ok) {
       metricsService.increment("rateLimitHits");
-      const response = json(429, {
-        error: {
-          message: "chat rate limit exceeded",
-          requestId,
-          resetAt: new Date(rateLimit.resetAt).toISOString()
-        }
-      });
+      const response = json(429, formatApiError("openai", 429, "chat rate limit exceeded", {
+        requestId,
+        resetAt: new Date(rateLimit.resetAt).toISOString(),
+      }));
       res.writeHead(response.statusCode, {
         ...response.headers,
         "x-ratelimit-limit": String(chatRateLimit),
@@ -242,7 +240,7 @@ export async function handleChatRoutes(
 
     const walletBalance = await platformService.getWallet(auth.userId);
     if (walletBalance <= 0) {
-      const response = json(402, { error: { message: "insufficient token credit", requestId } });
+      const response = json(402, formatApiError("openai", 402, "insufficient token credit", { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -319,7 +317,7 @@ export async function handleChatRoutes(
           clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
         });
       } catch { /* best-effort */ }
-      const response = json(404, { error: { message: `no offering available for ${logicalModel}`, requestId } });
+      const response = json(404, formatApiError("openai", 404, `no offering available for ${logicalModel}`, { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -441,7 +439,9 @@ export async function handleChatRoutes(
           providerLabel: route.offering.providerLabel,
         });
       } catch { /* best-effort */ }
-      res.write(`event: error\ndata: ${JSON.stringify({ error: errorMsg })}\n\n`);
+      // Emit OpenAI-compatible error chunk so clients can parse it
+      const errBody = formatApiError("openai", 502, errorMsg, { requestId });
+      res.write(`data: ${JSON.stringify(errBody)}\n\n`);
     } finally {
       route.release();
     }

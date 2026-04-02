@@ -24,6 +24,7 @@ import {
   unauthorized_,
   get_request_ip_,
 } from "../lib/http.js";
+import { formatApiError } from "../lib/errors.js";
 import { metricsService } from "../metrics.js";
 import { platformService } from "../services/platform-service.js";
 
@@ -35,12 +36,14 @@ async function validateApiRequest(
   req: IncomingMessage,
   res: ServerResponse,
   requestId: string,
-  model: string
+  model: string,
+  clientFormat: ApiFormatId,
 ): Promise<{ userId: string; offerings: CandidateOffering[]; apiKeyId?: string } | null> {
   const auth = await authenticate_request_(req);
   if (!auth) {
     metricsService.increment("authFailures");
-    const response = unauthorized_(requestId);
+    const errBody = formatApiError(clientFormat, 401, "unauthorized", { requestId });
+    const response = json(401, errBody);
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return null;
@@ -57,9 +60,11 @@ async function validateApiRequest(
   });
   if (!rateLimit.ok) {
     metricsService.increment("rateLimitHits");
-    const response = json(429, {
-      error: { message: "chat rate limit exceeded", requestId, resetAt: new Date(rateLimit.resetAt).toISOString() },
+    const errBody = formatApiError(clientFormat, 429, "chat rate limit exceeded", {
+      requestId,
+      resetAt: new Date(rateLimit.resetAt).toISOString(),
     });
+    const response = json(429, errBody);
     res.writeHead(response.statusCode, {
       ...response.headers,
       "x-ratelimit-limit": String(chatRateLimit),
@@ -72,7 +77,8 @@ async function validateApiRequest(
 
   const walletBalance = await platformService.getWallet(auth.userId);
   if (walletBalance <= 0) {
-    const response = json(402, { error: { message: "insufficient token credit", requestId } });
+    const errBody = formatApiError(clientFormat, 402, "insufficient token credit", { requestId });
+    const response = json(402, errBody);
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return null;
@@ -90,7 +96,8 @@ async function validateApiRequest(
         clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
       });
     } catch { /* best-effort */ }
-    const response = json(404, { error: { message: `no offering available for ${model}`, requestId } });
+    const errBody = formatApiError(clientFormat, 404, `no offering available for ${model}`, { requestId });
+    const response = json(404, errBody);
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);
     return null;
@@ -109,7 +116,7 @@ async function handleProxyRequest(
   model: string,
   clientFormat: ApiFormatId,
 ): Promise<void> {
-  const validated = await validateApiRequest(req, res, requestId, model);
+  const validated = await validateApiRequest(req, res, requestId, model, clientFormat);
   if (!validated) return;
 
   try {
@@ -188,7 +195,8 @@ async function handleProxyRequest(
       });
     } catch { /* best-effort */ }
     if (!res.headersSent) {
-      const response = json(502, { error: { message: errorMsg, requestId } });
+      const errBody = formatApiError(clientFormat, 502, errorMsg, { requestId });
+      const response = json(502, errBody);
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
     }
@@ -229,7 +237,8 @@ export async function handleApiProxyRoutes(
     const body = await read_json<Record<string, unknown>>(req);
     const model = body.model as string | undefined;
     if (!model || !Array.isArray(body.messages) || (body.messages as unknown[]).length === 0) {
-      const response = json(400, { error: { message: "model and messages are required", requestId } });
+      const errBody = formatApiError("openai", 400, "model and messages are required", { requestId });
+      const response = json(400, errBody);
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -245,7 +254,8 @@ export async function handleApiProxyRoutes(
     const body = await read_json<Record<string, unknown>>(req);
     const model = body.model as string | undefined;
     if (!model || !Array.isArray(body.messages) || (body.messages as unknown[]).length === 0) {
-      const response = json(400, { error: { message: "model and messages are required", requestId } });
+      const errBody = formatApiError("anthropic", 400, "model and messages are required", { requestId });
+      const response = json(400, errBody);
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
       return true;
@@ -265,17 +275,18 @@ export async function handleApiProxyRoutes(
   )) {
     const body = await read_json<Record<string, unknown>>(req);
     const model = body.model as string | undefined;
-    if (!model || !Array.isArray(body.messages) || (body.messages as unknown[]).length === 0) {
-      const response = json(400, { error: { message: "model and messages are required", requestId } });
-      res.writeHead(response.statusCode, response.headers);
-      res.end(response.payload);
-      return true;
-    }
-
     const formatHint = typeof req.headers["x-api-format"] === "string"
       ? req.headers["x-api-format"]
       : url.pathname.endsWith("/messages") ? "anthropic" : undefined;
     const clientFormat = detectApiFormat(body, formatHint);
+
+    if (!model || !Array.isArray(body.messages) || (body.messages as unknown[]).length === 0) {
+      const errBody = formatApiError(clientFormat, 400, "model and messages are required", { requestId });
+      const response = json(400, errBody);
+      res.writeHead(response.statusCode, response.headers);
+      res.end(response.payload);
+      return true;
+    }
 
     await handleProxyRequest(req, res, requestId, body, model, clientFormat);
     return true;
