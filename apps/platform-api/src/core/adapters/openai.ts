@@ -21,6 +21,10 @@ export const openaiAdapter: ProviderAdapter = {
     if (typeof prepared.max_tokens === "number") {
       prepared.max_tokens = Math.min(prepared.max_tokens as number, 8192);
     }
+    // Ensure streaming responses include token usage for billing
+    if (prepared.stream === true && !prepared.stream_options) {
+      prepared.stream_options = { include_usage: true };
+    }
     return prepared;
   },
 
