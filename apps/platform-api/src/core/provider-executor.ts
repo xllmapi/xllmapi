@@ -1,5 +1,6 @@
 import type { CandidateOffering, ChatMessage, CustomHeadersConfig } from "@xllmapi/shared-types";
 import { decryptSecret } from "../crypto-utils.js";
+import { formatApiError } from "../lib/errors.js";
 import {
   isAvailable,
   recordSuccess,
@@ -308,9 +309,15 @@ export async function proxyApiRequest(params: {
       if (resp.headers.get("cache-control")) {
         respHeaders["cache-control"] = resp.headers.get("cache-control")!;
       }
+      if (resp.headers.get("retry-after")) {
+        respHeaders["retry-after"] = resp.headers.get("retry-after")!;
+      }
 
       let usage: ProxyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
       const needsConversion = params.clientFormat !== targetFormat;
+      if (needsConversion) {
+        respHeaders["x-xllmapi-format-converted"] = `${targetFormat}→${params.clientFormat}`;
+      }
 
       if (isStreaming && resp.body) {
         if (needsConversion && params.clientFormat === "anthropic") {

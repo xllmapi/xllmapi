@@ -18,9 +18,7 @@ export const openaiAdapter: ProviderAdapter = {
 
   prepareBody(body: Record<string, unknown>, realModel: string): Record<string, unknown> {
     const prepared: Record<string, unknown> = { ...body, model: realModel };
-    if (typeof prepared.max_tokens === "number") {
-      prepared.max_tokens = Math.min(prepared.max_tokens as number, 8192);
-    }
+    // No longer cap max_tokens — let upstream providers enforce their own limits
     // Ensure streaming responses include token usage for billing
     if (prepared.stream === true && !prepared.stream_options) {
       prepared.stream_options = { include_usage: true };

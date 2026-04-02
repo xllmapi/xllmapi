@@ -2960,12 +2960,24 @@ export const postgresPlatformRepository: PlatformRepository = {
           SELECT COUNT(*)
           FROM settlement_failures
           WHERE resolved_at IS NULL
-        ) AS "openSettlementFailures"
+        ) AS "openSettlementFailures",
+        (
+          SELECT COUNT(*)
+          FROM api_requests
+          WHERE format_converted = true AND created_at > NOW() - INTERVAL '7 days'
+        ) AS "formatConvertedRequests7d",
+        (
+          SELECT COUNT(*)
+          FROM api_requests
+          WHERE created_at > NOW() - INTERVAL '7 days'
+        ) AS "totalRequests7d"
     `);
     return {
       userCount: Number(result.rows[0]?.userCount ?? 0),
       activeUsers: Number(result.rows[0]?.activeUsers ?? 0),
-      openSettlementFailures: Number(result.rows[0]?.openSettlementFailures ?? 0)
+      openSettlementFailures: Number(result.rows[0]?.openSettlementFailures ?? 0),
+      formatConvertedRequests7d: Number(result.rows[0]?.formatConvertedRequests7d ?? 0),
+      totalRequests7d: Number(result.rows[0]?.totalRequests7d ?? 0),
     };
   },
 
