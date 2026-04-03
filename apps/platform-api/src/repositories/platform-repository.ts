@@ -203,6 +203,7 @@ export type PlatformRepository = {
     pricingMode: CandidateOffering["pricingMode"];
     fixedPricePer1kInput: number;
     fixedPricePer1kOutput: number;
+    cacheReadDiscount?: number;
     maxConcurrency?: number;
     dailyTokenLimit?: number;
   }): MaybePromise<any>;
@@ -212,6 +213,7 @@ export type PlatformRepository = {
     pricingMode?: CandidateOffering["pricingMode"];
     fixedPricePer1kInput?: number;
     fixedPricePer1kOutput?: number;
+    cacheReadDiscount?: number;
     enabled?: boolean;
     dailyTokenLimit?: number;
     maxConcurrency?: number;
@@ -247,8 +249,11 @@ export type PlatformRepository = {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
     fixedPricePer1kInput: number;
     fixedPricePer1kOutput: number;
+    cacheReadDiscount?: number;
     responseBody?: unknown;
     clientIp?: string;
     clientUserAgent?: string;
@@ -402,7 +407,7 @@ export type PlatformRepository = {
   upsertNodePreferences(params: { userId: string; allowDistributedNodes: boolean; trustMode: string; trustedSupplierIds: string[]; trustedOfferingIds: string[] }): MaybePromise<void>;
 
   // --- Node Offerings ---
-  createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; description?: string; maxConcurrency?: number }): MaybePromise<void>;
+  createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; cacheReadDiscount?: number; description?: string; maxConcurrency?: number }): MaybePromise<void>;
   listNodeOfferings(nodeId: string): MaybePromise<any[]>;
   findOfferingsForModelWithNodes(params: { logicalModel: string; userId?: string }): MaybePromise<any[]>;
   setNodeOfferingsAvailability(params: { nodeId: string; available: boolean }): MaybePromise<void>;

@@ -25,6 +25,7 @@ export interface CandidateOffering {
   pricingMode: PricingMode;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number; // 1-100, default 50 (% of input price for cache hits)
   qpsLimit?: number;
   maxContextTokens?: number;
   successRate1h: number;

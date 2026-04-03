@@ -14,6 +14,7 @@ interface NetworkModel {
   providers?: string[];
   minInputPrice?: number | null;
   minOutputPrice?: number | null;
+  avgCacheReadDiscount?: number;
   contextLength?: number;
   featuredSuppliers?: { handle: string; displayName: string }[];
   thirdParty?: boolean;
@@ -49,6 +50,7 @@ interface DistributedOffering {
   downvotes?: number;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number;
   uptimeSeconds?: number;
   publicNodeId?: string;
   contextLength?: number;
@@ -479,6 +481,9 @@ export function ModelsPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-text-tertiary">{t("models.avgPrice7d")}</span>
                         <span className="text-accent font-medium">{formatTokens(m.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(m.minOutputPrice ?? 0)}</span>
+                        {m.avgCacheReadDiscount != null && m.avgCacheReadDiscount < 100 && (
+                          <span className="text-green-500 text-[10px]" title={t("models.cacheDiscount")}>cache {m.avgCacheReadDiscount}%</span>
+                        )}
                       </div>
                     ) : (
                       <span className="text-text-tertiary">{t("models.noPrice")}</span>
@@ -549,6 +554,9 @@ export function ModelsPage() {
                   <div className="flex items-center justify-between text-xs mb-2">
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono text-accent font-medium">{formatTokens(o.fixedPricePer1kInput ?? 0)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(o.fixedPricePer1kOutput ?? 0)}</span>
+                      {o.cacheReadDiscount != null && o.cacheReadDiscount < 100 && (
+                        <span className="text-green-500 text-[10px]" title={t("models.cacheDiscount")}>cache {o.cacheReadDiscount}%</span>
+                      )}
                       {o.contextLength != null && o.contextLength > 0 && (
                         <><span className="text-text-tertiary/30">·</span><span className="text-text-tertiary">{formatContextLength(o.contextLength)}</span></>
                       )}

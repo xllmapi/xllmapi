@@ -209,9 +209,14 @@ export const ledgerService = {
           ar.input_tokens AS "inputTokens",
           ar.output_tokens AS "outputTokens",
           ar.total_tokens AS "totalTokens",
-          ar.real_model AS "realModel"
+          ar.cache_read_tokens AS "cacheReadTokens",
+          ar.real_model AS "realModel",
+          o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+          o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+          o.cache_read_discount AS "cacheReadDiscount"
         FROM ledger_entries le
         LEFT JOIN api_requests ar ON ar.id = le.request_id
+        LEFT JOIN offerings o ON o.id = ar.chosen_offering_id
         WHERE ${where}
         ORDER BY le.created_at DESC
         LIMIT $${idx} OFFSET $${idx + 1}

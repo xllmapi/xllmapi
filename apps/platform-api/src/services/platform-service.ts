@@ -952,6 +952,7 @@ export const platformService = {
     pricingMode: CandidateOffering["pricingMode"];
     fixedPricePer1kInput: number;
     fixedPricePer1kOutput: number;
+    cacheReadDiscount?: number;
     maxConcurrency?: number;
     dailyTokenLimit?: number;
   }) {
@@ -964,6 +965,7 @@ export const platformService = {
     pricingMode?: CandidateOffering["pricingMode"];
     fixedPricePer1kInput?: number;
     fixedPricePer1kOutput?: number;
+    cacheReadDiscount?: number;
     enabled?: boolean;
     dailyTokenLimit?: number;
     maxConcurrency?: number;
@@ -1190,7 +1192,7 @@ export const platformService = {
   async getNode(nodeId: string) {
     return platformRepository.getNode(nodeId);
   },
-  async createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number }) {
+  async createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; cacheReadDiscount?: number }) {
     return platformRepository.createNodeOffering(params);
   },
   async getNodeByPublicId(publicNodeId: string) {

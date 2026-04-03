@@ -1,10 +1,11 @@
 import type { ChatMessage } from "@xllmapi/shared-types";
 import { parseSseStream } from "./sse-parser.js";
 import { isRetryableStatus } from "../resilience/retry.js";
+import { parseRawUsage, mergeUsage, ZERO_USAGE } from "../usage-parser.js";
 
 export interface StreamResult {
   content: string;
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number };
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens: number; cacheCreationTokens: number };
   finishReason: string;
 }
 
@@ -58,7 +59,7 @@ export async function streamAnthropic(params: {
   }
 
   let content = "";
-  let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  let usage = { ...ZERO_USAGE };
   let finishReason = "end_turn";
 
   for await (const event of parseSseStream(response.body, params.signal)) {
@@ -67,9 +68,8 @@ export async function streamAnthropic(params: {
 
       switch (event.event) {
         case "message_start": {
-          // Extract input token count from message_start
-          if (payload?.message?.usage?.input_tokens) {
-            usage.inputTokens = payload.message.usage.input_tokens;
+          if (payload?.message?.usage) {
+            usage = mergeUsage(usage, parseRawUsage(payload.message.usage as Record<string, unknown>, "anthropic"));
           }
           break;
         }
@@ -82,23 +82,19 @@ export async function streamAnthropic(params: {
           break;
         }
         case "message_delta": {
-          // Extract output token count and stop reason
-          if (payload?.usage?.output_tokens) {
-            usage.outputTokens = payload.usage.output_tokens;
+          if (payload?.usage) {
+            usage = mergeUsage(usage, parseRawUsage(payload.usage as Record<string, unknown>, "anthropic"));
           }
           if (payload?.delta?.stop_reason) {
             finishReason = payload.delta.stop_reason;
           }
           break;
         }
-        // content_block_start, content_block_stop, message_stop: no action needed
       }
     } catch {
       // Non-JSON data, skip
     }
   }
-
-  usage.totalTokens = usage.inputTokens + usage.outputTokens;
   return { content, usage, finishReason };
 }
 
@@ -158,11 +154,9 @@ export async function callAnthropic(params: {
     .map((b) => b.text ?? "")
     .join("") ?? "";
   const finishReason = result.stop_reason ?? "end_turn";
-  const usage = {
-    inputTokens: result.usage?.input_tokens ?? 0,
-    outputTokens: result.usage?.output_tokens ?? 0,
-    totalTokens: (result.usage?.input_tokens ?? 0) + (result.usage?.output_tokens ?? 0)
-  };
+  const usage = result.usage
+    ? parseRawUsage(result.usage as Record<string, unknown>, "anthropic")
+    : { ...ZERO_USAGE };
 
   return { content, usage, finishReason };
 }

@@ -34,6 +34,8 @@ interface RequestDetail {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   chosenOfferingId: string;
   clientIp: string | null;
   clientUserAgent: string | null;
@@ -51,6 +53,7 @@ interface RequestDetail {
   supplierEmail: string | null;
   fixedPricePer1kInput: number | null;
   fixedPricePer1kOutput: number | null;
+  cacheReadDiscount: number | null;
   providerLabel: string | null;
   responseBody: { fallbackAttempts?: Array<{ offeringId: string; error: string; errorClass: string }> } | null;
   clientFormat: string | null;
@@ -129,19 +132,35 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
       title: "Token",
       rows: [
         { label: t("admin.requests.inTokens"), value: `${formatTokens(detail.inputTokens)} tokens` },
+        ...((detail.cacheReadTokens ?? 0) > 0 ? [{ label: "cache read", value: `${formatTokens(detail.cacheReadTokens ?? 0)} tokens` }] : []),
+        ...((detail.cacheCreationTokens ?? 0) > 0 ? [{ label: "cache creation", value: `${formatTokens(detail.cacheCreationTokens ?? 0)} tokens` }] : []),
         { label: t("admin.requests.outTokens"), value: `${formatTokens(detail.outputTokens)} tokens` },
         { label: t("admin.requests.total"), value: `${formatTokens(detail.totalTokens)} tokens` },
       ],
     },
     {
       title: t("admin.requests.detail.settlement"),
-      rows: detail.consumerCost != null ? [
-        { label: t("admin.requests.detail.consumerCost"), value: `${formatTokens(detail.consumerCost)} xt` },
-        { label: t("admin.requests.detail.supplierReward"), value: `${formatTokens(detail.supplierReward ?? 0)} xt` },
-        { label: t("admin.requests.detail.platformMargin"), value: `${formatTokens(detail.platformMargin ?? 0)} xt` },
-        { label: t("admin.requests.detail.rewardRate"), value: detail.supplierRewardRate != null ? `${(Number(detail.supplierRewardRate) * 100).toFixed(1)}%` : "-" },
-        { label: t("admin.requests.detail.settledAt"), value: detail.settledAt ? new Date(detail.settledAt).toLocaleString() : "-" },
-      ] : [{ label: t("admin.requests.detail.settlement"), value: "-" }],
+      rows: detail.consumerCost != null ? (() => {
+        const cr = detail.cacheReadTokens ?? 0;
+        const prIn = detail.fixedPricePer1kInput ?? 0;
+        const prOut = detail.fixedPricePer1kOutput ?? 0;
+        const hasCacheSaving = cr > 0 && prIn > 0;
+        const fullCost = hasCacheSaving
+          ? Math.ceil(((detail.inputTokens + cr + (detail.cacheCreationTokens ?? 0)) * prIn) / 1000) + Math.ceil((detail.outputTokens * prOut) / 1000)
+          : detail.consumerCost;
+        const saved = fullCost - detail.consumerCost;
+        return [
+          ...(hasCacheSaving && saved > 0 ? [
+            { label: "原价 (无折扣)", value: `${formatTokens(fullCost)} xt` },
+            { label: "缓存命中节省", value: `-${formatTokens(saved)} xt (${Math.round((saved / fullCost) * 100)}%)` },
+          ] : []),
+          { label: t("admin.requests.detail.consumerCost"), value: `${formatTokens(detail.consumerCost)} xt` },
+          { label: t("admin.requests.detail.supplierReward"), value: `${formatTokens(detail.supplierReward ?? 0)} xt` },
+          { label: t("admin.requests.detail.platformMargin"), value: `${formatTokens(detail.platformMargin ?? 0)} xt` },
+          { label: t("admin.requests.detail.rewardRate"), value: detail.supplierRewardRate != null ? `${(Number(detail.supplierRewardRate) * 100).toFixed(1)}%` : "-" },
+          { label: t("admin.requests.detail.settledAt"), value: detail.settledAt ? new Date(detail.settledAt).toLocaleString() : "-" },
+        ];
+      })() : [{ label: t("admin.requests.detail.settlement"), value: "-" }],
     },
     {
       title: t("admin.requests.detail.supplier"),
@@ -150,6 +169,7 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
         { label: t("admin.requests.detail.supplierUser"), value: detail.supplierEmail || detail.supplierUserId || "-" },
         { label: t("admin.requests.detail.inputPrice"), value: detail.fixedPricePer1kInput != null ? `${detail.fixedPricePer1kInput} xt/1k tokens` : "-" },
         { label: t("admin.requests.detail.outputPrice"), value: detail.fixedPricePer1kOutput != null ? `${detail.fixedPricePer1kOutput} xt/1k tokens` : "-" },
+        { label: "cache discount", value: detail.cacheReadDiscount != null ? `${detail.cacheReadDiscount}%` : "-" },
       ],
     },
     ...(detail.responseBody?.fallbackAttempts?.length ? [{
@@ -261,12 +281,9 @@ export function AdminRequestsPage() {
       header: "Tokens",
       align: "right",
       render: (r) => (
-        <span className="text-xs whitespace-nowrap" title={`${t("admin.requests.inTokens")}: ${r.inputTokens} / ${t("admin.requests.outTokens")}: ${r.outputTokens}`}>
-          <span className="text-text-tertiary">{formatTokens(r.inputTokens)}</span>
-          <span className="text-text-tertiary/50 mx-0.5">/</span>
-          <span className="text-text-secondary">{formatTokens(r.outputTokens)}</span>
-          <span className="text-text-tertiary/50 mx-0.5">=</span>
+        <span className="text-xs whitespace-nowrap" title={`in: ${r.inputTokens} / out: ${r.outputTokens} / total: ${r.totalTokens}`}>
           <span className="font-medium">{formatTokens(r.totalTokens)}</span>
+          <span className="text-text-tertiary/50 ml-1 text-[10px]">({formatTokens(r.inputTokens)}/{formatTokens(r.outputTokens)})</span>
         </span>
       ),
     },

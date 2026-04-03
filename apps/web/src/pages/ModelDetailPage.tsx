@@ -13,6 +13,7 @@ interface NetworkModel {
   providers?: string[];
   minInputPrice?: number | null;
   minOutputPrice?: number | null;
+  avgCacheReadDiscount?: number;
   contextLength?: number;
   featuredSuppliers?: { handle: string; displayName: string }[];
   thirdParty?: boolean;
@@ -78,6 +79,7 @@ interface SupplierOffering {
   executionMode?: string;
   fixedPricePer1kInput: number;
   fixedPricePer1kOutput: number;
+  cacheReadDiscount?: number;
   createdAt?: string;
 }
 
@@ -293,7 +295,13 @@ export function ModelDetailPage() {
               <span className="text-text-tertiary text-xs">{t("models.avgPrice7d")}</span>
               <span className="font-mono text-text-primary">
                 {model.minInputPrice != null
-                  ? <>{formatTokens(model.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(model.minOutputPrice ?? 0)} <span className="text-text-tertiary text-[10px]">per 1K tokens: input xtokens / output xtokens</span></>
+                  ? <>
+                      {formatTokens(model.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(model.minOutputPrice ?? 0)}
+                      <span className="text-text-tertiary text-[10px]"> per 1K</span>
+                      {model.avgCacheReadDiscount != null && model.avgCacheReadDiscount < 100 && (
+                        <span className="text-green-500 text-[10px] ml-1.5">cache {model.avgCacheReadDiscount}%</span>
+                      )}
+                    </>
                   : "\u2014"}
               </span>
             </div>
@@ -364,6 +372,9 @@ export function ModelDetailPage() {
                   <span className="text-text-tertiary/40">&middot;</span>
                   <span className="font-mono text-text-secondary shrink-0">
                     {formatTokens(s.fixedPricePer1kInput)}/{formatTokens(s.fixedPricePer1kOutput)}
+                    {s.cacheReadDiscount != null && s.cacheReadDiscount < 100 && (
+                      <span className="text-green-500 text-[10px] ml-1">cache {s.cacheReadDiscount}%</span>
+                    )}
                   </span>
                   <span className="text-text-tertiary/40">&middot;</span>
                   <span className="text-text-tertiary shrink-0">

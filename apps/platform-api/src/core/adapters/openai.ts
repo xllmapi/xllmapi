@@ -1,4 +1,5 @@
 import type { ProviderAdapter, ProxyUsage } from "./types.js";
+import { parseRawUsage } from "./usage-parser.js";
 
 export const openaiAdapter: ProviderAdapter = {
   formatId: "openai",
@@ -35,14 +36,7 @@ export const openaiAdapter: ProviderAdapter = {
       try {
         const parsed = JSON.parse(jsonStr);
         if (parsed.usage) {
-          const u = parsed.usage;
-          const inputTokens = (u.prompt_tokens ?? u.input_tokens ?? ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))) || 0;
-          const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
-          return {
-            inputTokens,
-            outputTokens,
-            totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
-          };
+          return parseRawUsage(parsed.usage as Record<string, unknown>, "openai");
         }
       } catch { /* skip */ }
     }
@@ -51,15 +45,9 @@ export const openaiAdapter: ProviderAdapter = {
 
   extractUsageFromJson(body: unknown): ProxyUsage | undefined {
     const parsed = body as Record<string, unknown>;
-    const u = parsed?.usage as Record<string, number> | undefined;
+    const u = parsed?.usage as Record<string, unknown> | undefined;
     if (u) {
-      const inputTokens = (u.prompt_tokens ?? u.input_tokens ?? ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))) || 0;
-      const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
-      return {
-        inputTokens,
-        outputTokens,
-        totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
-      };
+      return parseRawUsage(u, "openai");
     }
     return undefined;
   },

@@ -7,6 +7,7 @@
  * on its OpenAI endpoint).
  */
 import type { ApiFormatId } from "./types.js";
+import { parseRawUsage } from "./usage-parser.js";
 
 /* ── Stop reason mapping ── */
 
@@ -39,7 +40,7 @@ function openaiJsonToAnthropic(body: Record<string, unknown>): Record<string, un
   }>;
   const choice = choices[0];
   const msg = choice?.message;
-  const usage = (body.usage ?? {}) as Record<string, number>;
+  const usage = (body.usage ?? {}) as Record<string, unknown>;
 
   // Build content blocks
   const contentBlocks: Array<Record<string, unknown>> = [];
@@ -76,8 +77,13 @@ function openaiJsonToAnthropic(body: Record<string, unknown>): Record<string, un
     stop_reason: stopReason,
     stop_sequence: null,
     usage: {
-      input_tokens: usage.prompt_tokens ?? 0,
-      output_tokens: usage.completion_tokens ?? 0,
+      input_tokens: Number(usage.prompt_tokens ?? 0),
+      output_tokens: Number(usage.completion_tokens ?? 0),
+      ...(usage.cache_read_input_tokens ? { cache_read_input_tokens: usage.cache_read_input_tokens } : {}),
+      ...(usage.cache_creation_input_tokens ? { cache_creation_input_tokens: usage.cache_creation_input_tokens } : {}),
+      ...((usage.prompt_tokens_details as Record<string, unknown>)?.cached_tokens ? {
+        cache_read_input_tokens: (usage.prompt_tokens_details as Record<string, unknown>).cached_tokens,
+      } : {}),
     },
   };
 }
@@ -128,9 +134,12 @@ function anthropicJsonToOpenai(body: Record<string, unknown>): Record<string, un
       finish_reason: finishReason,
     }],
     usage: {
-      prompt_tokens: inputTokens,
+      prompt_tokens: inputTokens + (usage.cache_read_input_tokens ?? 0),
       completion_tokens: outputTokens,
-      total_tokens: inputTokens + outputTokens,
+      total_tokens: inputTokens + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + outputTokens,
+      ...(usage.cache_read_input_tokens ? {
+        prompt_tokens_details: { cached_tokens: usage.cache_read_input_tokens },
+      } : {}),
     },
   };
 }
@@ -166,6 +175,8 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
   let model = "unknown";
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheCreationTokens = 0;
   // Track current block type and index for thinking vs text separation
   let currentBlockType: "thinking" | "text" | null = null;
   let blockIndex = 0;
@@ -220,13 +231,13 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
     if (parsed.id) messageId = String(parsed.id);
     if (parsed.model) model = String(parsed.model);
 
-    // Extract usage if present
-    const usageObj = parsed.usage as Record<string, number> | undefined;
-    if (usageObj?.prompt_tokens) {
-      inputTokens = usageObj.prompt_tokens;
-    }
-    if (usageObj?.completion_tokens) {
-      outputTokens = usageObj.completion_tokens;
+    // Extract usage if present (use unified parser)
+    if (parsed.usage) {
+      const u = parseRawUsage(parsed.usage as Record<string, unknown>, "openai");
+      inputTokens = u.inputTokens;
+      outputTokens = u.outputTokens;
+      cacheReadTokens = u.cacheReadTokens;
+      cacheCreationTokens = u.cacheCreationTokens;
     }
 
     const choices = (parsed.choices ?? []) as Array<{
@@ -311,7 +322,12 @@ function createOpenaiToAnthropicStreamConverter(): StreamConverter {
     results.push(formatEvent("message_delta", {
       type: "message_delta",
       delta: { stop_reason: mapStopReasonToAnthropic(finishReason ?? "stop") },
-      usage: { input_tokens: inputTokens, output_tokens: outputTokens },
+      usage: {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        ...(cacheReadTokens > 0 ? { cache_read_input_tokens: cacheReadTokens } : {}),
+        ...(cacheCreationTokens > 0 ? { cache_creation_input_tokens: cacheCreationTokens } : {}),
+      },
     }));
     results.push(formatEvent("message_stop", {
       type: "message_stop",

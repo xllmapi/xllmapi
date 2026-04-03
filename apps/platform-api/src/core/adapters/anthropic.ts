@@ -1,4 +1,5 @@
 import type { ProviderAdapter, ProxyUsage } from "./types.js";
+import { parseRawUsage, mergeUsage, ZERO_USAGE } from "./usage-parser.js";
 
 export const anthropicAdapter: ProviderAdapter = {
   formatId: "anthropic",
@@ -23,8 +24,8 @@ export const anthropicAdapter: ProviderAdapter = {
 
   extractUsageFromStream(tail: string): ProxyUsage | undefined {
     const lines = tail.split("\n");
-    let inputTokens = 0;
-    let outputTokens = 0;
+    let accumulated = { ...ZERO_USAGE };
+    let found = false;
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
@@ -32,39 +33,29 @@ export const anthropicAdapter: ProviderAdapter = {
       const jsonStr = line.startsWith("data: ") ? line.slice(6) : line.slice(5);
       try {
         const parsed = JSON.parse(jsonStr);
-        // message_start event: { type: "message_start", message: { usage: { input_tokens } } }
+        // message_start: { message: { usage: {...} } }
         if (parsed.type === "message_start" && parsed.message?.usage) {
-          const u = parsed.message.usage;
-          inputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
+          const eventUsage = parseRawUsage(parsed.message.usage as Record<string, unknown>, "anthropic");
+          accumulated = mergeUsage(accumulated, eventUsage);
+          found = true;
         }
-        // message_delta event: { type: "message_delta", usage: { output_tokens } }
-        // Some providers (MiMo, hanbbq) also report input_tokens in message_delta
-        // instead of message_start — take the larger value to handle both behaviors.
+        // message_delta: { usage: {...} } — some providers also report input here
         if (parsed.type === "message_delta" && parsed.usage) {
-          outputTokens = parsed.usage.output_tokens ?? 0;
-          const deltaInput = parsed.usage.input_tokens || ((parsed.usage.cache_read_input_tokens ?? 0) + (parsed.usage.cache_creation_input_tokens ?? 0)) || 0;
-          if (deltaInput > inputTokens) inputTokens = deltaInput;
+          const eventUsage = parseRawUsage(parsed.usage as Record<string, unknown>, "anthropic");
+          accumulated = mergeUsage(accumulated, eventUsage);
+          found = true;
         }
       } catch { /* skip */ }
     }
 
-    if (inputTokens > 0 || outputTokens > 0) {
-      return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens };
-    }
-    return undefined;
+    return found ? accumulated : undefined;
   },
 
   extractUsageFromJson(body: unknown): ProxyUsage | undefined {
     const parsed = body as Record<string, unknown>;
-    const u = parsed?.usage as Record<string, number> | undefined;
+    const u = parsed?.usage as Record<string, unknown> | undefined;
     if (u) {
-      const inputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
-      const outputTokens = u.output_tokens ?? u.completion_tokens ?? 0;
-      return {
-        inputTokens,
-        outputTokens,
-        totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
-      };
+      return parseRawUsage(u, "anthropic");
     }
     return undefined;
   },

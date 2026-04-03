@@ -43,6 +43,7 @@ interface Offering {
   executionMode?: string;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number;
   dailyTokenLimit?: number;
   maxConcurrency?: number;
   nodeId?: string;
@@ -84,6 +85,7 @@ interface NodeOffering {
   reviewStatus: string;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number;
 }
 
 interface ConnectedNode {
@@ -203,6 +205,7 @@ interface PoolModelEntry {
   offeringCount: number;
   minInputPrice: number;
   minOutputPrice: number;
+  avgCacheReadDiscount?: number;
   executionMode: string;
   enabled: boolean;
   paused: boolean;
@@ -380,6 +383,9 @@ function GroupedPoolCard({
 
         {/* Price + context */}
         <span className="font-mono text-xs text-text-tertiary shrink-0">{formatTokens(inputPrice)}/{formatTokens(outputPrice)}</span>
+        {entry.avgCacheReadDiscount != null && entry.avgCacheReadDiscount < 100 && (
+          <span className="text-green-500 text-[10px] shrink-0" title={t("models.cacheDiscount")}>cache {entry.avgCacheReadDiscount}%</span>
+        )}
         <span className="text-xs text-text-tertiary shrink-0">{formatContextLength(entry.contextLength ?? getContextLimit(entry.logicalModel))} {t("common.contextShort")}</span>
 
         {/* Stats separator + stats */}
@@ -453,6 +459,11 @@ function GroupedPoolCard({
               <div>
                 {t("modelsMgmt.runningNodes")}: {entry.offeringCount} {t("modelsMgmt.nodes")}
               </div>
+              {entry.avgCacheReadDiscount != null && entry.avgCacheReadDiscount < 100 && (
+                <div>
+                  {t("nodeConfig.cacheDiscount")}: <span className="font-mono text-green-500">{entry.avgCacheReadDiscount}%</span>
+                </div>
+              )}
               <div>
                 {t("modelsMgmt.maxPrice")}: <span className="font-mono">in {formatTokens(Math.ceil(inputPrice * 1.05))} / out {formatTokens(Math.ceil(outputPrice * 1.05))}</span> <span className="text-text-tertiary">(默认: 均价+5%)</span>
               </div>
@@ -611,11 +622,12 @@ function ConfigModal({
 }: {
   offering: Offering;
   onClose: () => void;
-  onSave: (data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; dailyTokenLimit: number; maxConcurrency: number }) => Promise<void>;
+  onSave: (data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; cacheReadDiscount: number; dailyTokenLimit: number; maxConcurrency: number }) => Promise<void>;
   t: (key: string) => string;
 }) {
   const [inputPrice, setInputPrice] = useState(String(offering.fixedPricePer1kInput ?? 0));
   const [outputPrice, setOutputPrice] = useState(String(offering.fixedPricePer1kOutput ?? 0));
+  const [cacheDiscount, setCacheDiscount] = useState(String(offering.cacheReadDiscount ?? 50));
   const [dailyLimit, setDailyLimit] = useState(String(offering.dailyTokenLimit ?? 0));
   const [maxConc, setMaxConc] = useState(String(offering.maxConcurrency ?? 0));
   const [saving, setSaving] = useState(false);
@@ -626,6 +638,7 @@ function ConfigModal({
       await onSave({
         fixedPricePer1kInput: Number(inputPrice) || 0,
         fixedPricePer1kOutput: Number(outputPrice) || 0,
+        cacheReadDiscount: Math.max(1, Math.min(100, Number(cacheDiscount) || 50)),
         dailyTokenLimit: Number(dailyLimit) || 0,
         maxConcurrency: Number(maxConc) || 0,
       });
@@ -666,6 +679,20 @@ function ConfigModal({
               style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
             />
             <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.outputPriceHint")}</p>
+          </div>
+          <div>
+            <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.cacheDiscount")}</label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={cacheDiscount}
+              onChange={(e) => setCacheDiscount(e.target.value)}
+              placeholder="50"
+              className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+              style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+            />
+            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.cacheDiscountHint")}</p>
           </div>
           <div>
             <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.dailyLimit")}</label>
@@ -1212,7 +1239,7 @@ function ProvidingTab() {
     }
   };
 
-  const handleConfigSave = async (offeringId: string, data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; dailyTokenLimit: number; maxConcurrency: number }) => {
+  const handleConfigSave = async (offeringId: string, data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; cacheReadDiscount: number; dailyTokenLimit: number; maxConcurrency: number }) => {
     try {
       await apiJson(`/v1/offerings/${encodeURIComponent(offeringId)}`, {
         method: "PATCH",
@@ -1797,6 +1824,12 @@ node dist/main.js start \\
                     <span className="ml-1 text-text-primary font-mono">{formatTokens(o.fixedPricePer1kOutput ?? 0)}</span>
                     <span className="mx-1.5 text-text-tertiary/30">&middot;</span>
                     <span className="text-text-tertiary font-mono">{formatContextLength(o.contextLength ?? getContextLimit(o.logicalModel))} {t("common.contextShort")}</span>
+                    {(o.cacheReadDiscount ?? 100) < 100 && (
+                      <>
+                        <span className="mx-1.5 text-text-tertiary/30">&middot;</span>
+                        <span className="text-green-500">cache {o.cacheReadDiscount}%</span>
+                      </>
+                    )}
                   </div>
                   {(o.dailyTokenLimit ?? 0) > 0 && (
                     <div>

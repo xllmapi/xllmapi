@@ -24,6 +24,7 @@ export interface PublicMarketModel {
   thirdPartyNotice?: string;
   presetId?: string | null;
   presetLabel?: string | null;
+  avgCacheReadDiscount?: number;
 }
 
 export interface PublicSupplierProfile {

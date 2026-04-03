@@ -2,10 +2,11 @@ import type { ChatMessage } from "@xllmapi/shared-types";
 import { parseSseStream } from "./sse-parser.js";
 import { isRetryableStatus } from "../resilience/retry.js";
 import { estimateTokens } from "../context/context-manager.js";
+import { parseRawUsage, ZERO_USAGE } from "../usage-parser.js";
 
 export interface StreamResult {
   content: string;
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number };
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens: number; cacheCreationTokens: number };
   finishReason: string;
 }
 
@@ -64,7 +65,7 @@ export async function streamOpenAI(params: {
   }
 
   let content = "";
-  let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  let usage = { ...ZERO_USAGE };
   let finishReason = "stop";
   let inThinking = false;
 
@@ -95,14 +96,7 @@ export async function streamOpenAI(params: {
 
       // Extract usage (typically in the last chunk when stream_options.include_usage is set)
       if (payload?.usage) {
-        const u = payload.usage;
-        const inputTokens = (u.prompt_tokens ?? u.input_tokens ?? ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))) || 0;
-        const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
-        usage = {
-          inputTokens,
-          outputTokens,
-          totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
-        };
+        usage = parseRawUsage(payload.usage as Record<string, unknown>, "openai");
       }
     } catch {
       // Non-JSON data line, skip
@@ -172,14 +166,9 @@ export async function callOpenAI(params: {
 
   const content = result.choices?.[0]?.message?.content ?? "";
   const finishReason = result.choices?.[0]?.finish_reason ?? "stop";
-  const u = result.usage as Record<string, number> | undefined;
-  const inputTokens = u ? ((u.prompt_tokens ?? u.input_tokens ?? ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0))) || 0) : 0;
-  const outputTokens = u ? (u.completion_tokens ?? u.output_tokens ?? 0) : 0;
-  const usage = {
-    inputTokens,
-    outputTokens,
-    totalTokens: u?.total_tokens ?? (inputTokens + outputTokens),
-  };
+  const usage = result.usage
+    ? parseRawUsage(result.usage as Record<string, unknown>, "openai")
+    : { ...ZERO_USAGE };
 
   return { content, usage, finishReason };
 }
