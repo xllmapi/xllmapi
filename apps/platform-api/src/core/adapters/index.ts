@@ -3,6 +3,7 @@ export { openaiAdapter } from "./openai.js";
 export { anthropicAdapter } from "./anthropic.js";
 export { convertRequestBody } from "./converter.js";
 export { convertJsonResponse, createStreamConverter } from "./response-converter.js";
+export { parseRawUsage, mergeUsage, ZERO_USAGE } from "./usage-parser.js";
 
 import type { ApiFormatId, ProviderAdapter, ProviderHooks } from "./types.js";
 import { openaiAdapter } from "./openai.js";

@@ -40,6 +40,18 @@ export interface ProviderHooks {
   extractUsageFromStream?: (tail: string) => ProxyUsage | undefined;
   /** Override usage extraction from JSON response */
   extractUsageFromJson?: (body: unknown) => ProxyUsage | undefined;
+  /**
+   * Override raw usage object parsing. Called by adapter after locating usage object.
+   * Use for providers with non-standard usage field semantics (e.g. Kimi puts all input in cache_read).
+   * Falls back to parseRawUsage() if not provided.
+   */
+  parseUsage?: (raw: Record<string, unknown>) => ProxyUsage;
+  /**
+   * Post-process/merge parsed usage across multiple events (e.g. message_start + message_delta).
+   * Called with (newEvent, accumulated). Return merged result.
+   * Default: mergeUsage() (take max of each field).
+   */
+  adjustUsage?: (current: ProxyUsage, previous: ProxyUsage) => ProxyUsage;
   /** Transform request body after base prepareBody */
   transformBody?: (body: Record<string, unknown>) => Record<string, unknown>;
   /** Override URL building */

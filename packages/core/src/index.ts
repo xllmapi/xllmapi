@@ -11,4 +11,6 @@ export { streamOpenAI, callOpenAI } from './providers/openai.js';
 export type { StreamResult } from './providers/openai.js';
 export { streamAnthropic, callAnthropic } from './providers/anthropic.js';
 export { stripThinking } from './context/strip-thinking.js';
+export { parseRawUsage, mergeUsage, ZERO_USAGE, detectUsageFormat } from './usage-parser.js';
+export type { ParsedUsage } from './usage-parser.js';
 export { trimToContextWindow, estimateTokens, getContextLimit, MODEL_CONTEXT_LIMITS } from './context/context-manager.js';

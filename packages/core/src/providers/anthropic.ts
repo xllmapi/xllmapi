@@ -1,6 +1,7 @@
 import type { ChatMessage } from "@xllmapi/shared-types";
 import { parseSseStream } from "./sse-parser.js";
 import { isRetryableStatus } from "../resilience/retry.js";
+import { parseRawUsage, mergeUsage, ZERO_USAGE } from "../usage-parser.js";
 
 export interface StreamResult {
   content: string;
@@ -58,7 +59,7 @@ export async function streamAnthropic(params: {
   }
 
   let content = "";
-  let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
+  let usage = { ...ZERO_USAGE };
   let finishReason = "end_turn";
 
   for await (const event of parseSseStream(response.body, params.signal)) {
@@ -68,10 +69,7 @@ export async function streamAnthropic(params: {
       switch (event.event) {
         case "message_start": {
           if (payload?.message?.usage) {
-            const u = payload.message.usage;
-            usage.inputTokens = u.input_tokens || 0;
-            usage.cacheReadTokens = u.cache_read_input_tokens ?? 0;
-            usage.cacheCreationTokens = u.cache_creation_input_tokens ?? 0;
+            usage = mergeUsage(usage, parseRawUsage(payload.message.usage as Record<string, unknown>, "anthropic"));
           }
           break;
         }
@@ -84,8 +82,8 @@ export async function streamAnthropic(params: {
           break;
         }
         case "message_delta": {
-          if (payload?.usage?.output_tokens) {
-            usage.outputTokens = payload.usage.output_tokens;
+          if (payload?.usage) {
+            usage = mergeUsage(usage, parseRawUsage(payload.usage as Record<string, unknown>, "anthropic"));
           }
           if (payload?.delta?.stop_reason) {
             finishReason = payload.delta.stop_reason;
@@ -97,8 +95,6 @@ export async function streamAnthropic(params: {
       // Non-JSON data, skip
     }
   }
-
-  usage.totalTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheCreationTokens + usage.outputTokens;
   return { content, usage, finishReason };
 }
 
@@ -158,18 +154,9 @@ export async function callAnthropic(params: {
     .map((b) => b.text ?? "")
     .join("") ?? "";
   const finishReason = result.stop_reason ?? "end_turn";
-  const u = result.usage as Record<string, number> | undefined;
-  const cacheRead = u?.cache_read_input_tokens ?? 0;
-  const cacheCreation = u?.cache_creation_input_tokens ?? 0;
-  const inputTokens = u?.input_tokens ?? 0;
-  const outputTokens = u?.output_tokens ?? 0;
-  const usage = {
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + cacheRead + cacheCreation + outputTokens,
-    cacheReadTokens: cacheRead,
-    cacheCreationTokens: cacheCreation,
-  };
+  const usage = result.usage
+    ? parseRawUsage(result.usage as Record<string, unknown>, "anthropic")
+    : { ...ZERO_USAGE };
 
   return { content, usage, finishReason };
 }

@@ -2790,6 +2790,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         ar.logical_model AS "logicalModel",
         COUNT(*)::int AS requests,
         COALESCE(SUM(ar.total_tokens), 0)::bigint AS tokens,
+        COALESCE(SUM(ar.cache_read_tokens), 0)::bigint AS "cacheReadTokens",
+        COALESCE(SUM(ar.cache_creation_tokens), 0)::bigint AS "cacheCreationTokens",
         COALESCE(SUM(sr.consumer_cost), 0)::bigint AS xtokens,
         COUNT(DISTINCT ar.requester_user_id)::int AS users,
         COALESCE(AVG(o.fixed_price_per_1k_input), 0)::int AS "avgPriceIn",

@@ -13,6 +13,9 @@ import {
   streamAnthropic,
   callAnthropic,
   type ErrorClass,
+  parseRawUsage,
+  mergeUsage,
+  ZERO_USAGE,
 } from "@xllmapi/core";
 
 const limiter = new ConcurrencyLimiter(32);
@@ -313,7 +316,7 @@ export async function proxyApiRequest(params: {
         respHeaders["retry-after"] = resp.headers.get("retry-after")!;
       }
 
-      let usage: ProxyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
+      let usage: ProxyUsage = { ...ZERO_USAGE };
       const needsConversion = params.clientFormat !== targetFormat;
       if (needsConversion) {
         respHeaders["x-xllmapi-format-converted"] = `${targetFormat}->${params.clientFormat}`;
@@ -333,17 +336,15 @@ export async function proxyApiRequest(params: {
         const TAIL_SIZE = 4096;
         let tailBuf = "";
         // Capture Anthropic message_start usage early (before tail buffer truncates it)
-        let earlyInputTokens = 0;
-        let earlyCacheRead = 0;
-        let earlyCacheCreation = 0;
+        let earlyUsage: ProxyUsage = { ...ZERO_USAGE };
 
         await new Promise<void>((resolve, reject) => {
           nodeStream.on("data", (chunk: Buffer) => {
             const str = chunk.toString();
             const lines = converter.transform(str);
             for (const line of lines) params.res.write(line);
-            // Capture input_tokens from Anthropic message_start before tail buffer overflow
-            if (earlyInputTokens === 0 && str.includes('"message_start"')) {
+            // Capture usage from Anthropic message_start before tail buffer overflow
+            if (earlyUsage.totalTokens === 0 && str.includes('"message_start"')) {
               try {
                 for (const rawLine of str.split("\n")) {
                   const trimmed = rawLine.trim();
@@ -351,10 +352,7 @@ export async function proxyApiRequest(params: {
                   const jsonStr = trimmed.startsWith("data: ") ? trimmed.slice(6) : trimmed.slice(5);
                   const parsed = JSON.parse(jsonStr);
                   if (parsed.type === "message_start" && parsed.message?.usage) {
-                    const u = parsed.message.usage;
-                    earlyInputTokens = u.input_tokens || u.prompt_tokens || 0;
-                    earlyCacheRead = u.cache_read_input_tokens ?? 0;
-                    earlyCacheCreation = u.cache_creation_input_tokens ?? 0;
+                    earlyUsage = parseRawUsage(parsed.message.usage as Record<string, unknown>);
                   }
                 }
               } catch { /* ignore parse errors */ }
@@ -372,18 +370,8 @@ export async function proxyApiRequest(params: {
         });
 
         usage = adapter.extractUsageFromStream(tailBuf) ?? usage;
-        // Merge early-captured usage if tail buffer lost message_start
-        if (usage.inputTokens === 0 && earlyInputTokens > 0) {
-          usage.inputTokens = earlyInputTokens;
-        }
-        if (usage.cacheReadTokens === 0 && earlyCacheRead > 0) {
-          usage.cacheReadTokens = earlyCacheRead;
-        }
-        if (usage.cacheCreationTokens === 0 && earlyCacheCreation > 0) {
-          usage.cacheCreationTokens = earlyCacheCreation;
-        }
-        // Recompute totalTokens to always include cache
-        usage.totalTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheCreationTokens + usage.outputTokens;
+        // Merge early-captured usage with tail-buffer extraction (take max of each field)
+        usage = mergeUsage(usage, earlyUsage);
       } else {
         const bodyText = await resp.text();
         if (needsConversion) {

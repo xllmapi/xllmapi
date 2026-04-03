@@ -2,6 +2,7 @@ import type { ChatMessage } from "@xllmapi/shared-types";
 import { parseSseStream } from "./sse-parser.js";
 import { isRetryableStatus } from "../resilience/retry.js";
 import { estimateTokens } from "../context/context-manager.js";
+import { parseRawUsage, ZERO_USAGE } from "../usage-parser.js";
 
 export interface StreamResult {
   content: string;
@@ -64,7 +65,7 @@ export async function streamOpenAI(params: {
   }
 
   let content = "";
-  let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
+  let usage = { ...ZERO_USAGE };
   let finishReason = "stop";
   let inThinking = false;
 
@@ -95,19 +96,7 @@ export async function streamOpenAI(params: {
 
       // Extract usage (typically in the last chunk when stream_options.include_usage is set)
       if (payload?.usage) {
-        const u = payload.usage;
-        const cacheRead = Number(u.cache_read_input_tokens ?? 0) || Number(u.prompt_tokens_details?.cached_tokens ?? 0);
-        const cacheCreation = Number(u.cache_creation_input_tokens ?? 0);
-        const rawInput = Number(u.prompt_tokens ?? u.input_tokens ?? 0);
-        const inputTokens = (rawInput >= cacheRead && cacheRead > 0) ? rawInput - cacheRead : rawInput || (cacheRead + cacheCreation);
-        const outputTokens = u.completion_tokens ?? u.output_tokens ?? 0;
-        usage = {
-          inputTokens,
-          outputTokens,
-          totalTokens: u.total_tokens ?? (inputTokens + cacheRead + cacheCreation + outputTokens),
-          cacheReadTokens: cacheRead,
-          cacheCreationTokens: cacheCreation,
-        };
+        usage = parseRawUsage(payload.usage as Record<string, unknown>, "openai");
       }
     } catch {
       // Non-JSON data line, skip
@@ -177,19 +166,9 @@ export async function callOpenAI(params: {
 
   const content = result.choices?.[0]?.message?.content ?? "";
   const finishReason = result.choices?.[0]?.finish_reason ?? "stop";
-  const u = result.usage as Record<string, unknown> | undefined;
-  const cacheRead = u ? (Number(u.cache_read_input_tokens ?? 0) || Number((u.prompt_tokens_details as Record<string, unknown>)?.cached_tokens ?? 0)) : 0;
-  const cacheCreation = u ? Number(u.cache_creation_input_tokens ?? 0) : 0;
-  const rawInput = u ? Number(u.prompt_tokens ?? u.input_tokens ?? 0) : 0;
-  const inputTokens = (rawInput >= cacheRead && cacheRead > 0) ? rawInput - cacheRead : rawInput || (cacheRead + cacheCreation);
-  const outputTokens = u ? Number(u.completion_tokens ?? u.output_tokens ?? 0) : 0;
-  const usage = {
-    inputTokens,
-    outputTokens,
-    totalTokens: u ? Number(u.total_tokens ?? 0) || (inputTokens + cacheRead + cacheCreation + outputTokens) : 0,
-    cacheReadTokens: cacheRead,
-    cacheCreationTokens: cacheCreation,
-  };
+  const usage = result.usage
+    ? parseRawUsage(result.usage as Record<string, unknown>, "openai")
+    : { ...ZERO_USAGE };
 
   return { content, usage, finishReason };
 }

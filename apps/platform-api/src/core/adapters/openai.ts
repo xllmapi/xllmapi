@@ -1,18 +1,5 @@
 import type { ProviderAdapter, ProxyUsage } from "./types.js";
-
-function extractCacheUsage(u: Record<string, unknown>): ProxyUsage {
-  const cacheRead = Number(u.cache_read_input_tokens ?? 0) || Number((u.prompt_tokens_details as Record<string, unknown>)?.cached_tokens ?? 0);
-  const cacheCreation = Number(u.cache_creation_input_tokens ?? 0);
-  const rawInput = Number(u.prompt_tokens ?? u.input_tokens ?? 0);
-  // inputTokens = non-cached portion; if raw already excludes cache, use as-is
-  // OpenAI: prompt_tokens includes cached; Anthropic: input_tokens excludes cached
-  // For safety: if rawInput >= cacheRead, subtract; otherwise treat rawInput as non-cached
-  const inputTokens = (rawInput >= cacheRead && cacheRead > 0) ? rawInput - cacheRead : rawInput || (cacheRead + cacheCreation);
-  const outputTokens = Number(u.completion_tokens ?? u.output_tokens ?? 0);
-  const totalTokens = Number(u.total_tokens ?? 0) || (inputTokens + cacheRead + cacheCreation + outputTokens);
-
-  return { inputTokens, outputTokens, totalTokens, cacheReadTokens: cacheRead, cacheCreationTokens: cacheCreation };
-}
+import { parseRawUsage } from "./usage-parser.js";
 
 export const openaiAdapter: ProviderAdapter = {
   formatId: "openai",
@@ -49,7 +36,7 @@ export const openaiAdapter: ProviderAdapter = {
       try {
         const parsed = JSON.parse(jsonStr);
         if (parsed.usage) {
-          return extractCacheUsage(parsed.usage as Record<string, unknown>);
+          return parseRawUsage(parsed.usage as Record<string, unknown>, "openai");
         }
       } catch { /* skip */ }
     }
@@ -60,7 +47,7 @@ export const openaiAdapter: ProviderAdapter = {
     const parsed = body as Record<string, unknown>;
     const u = parsed?.usage as Record<string, unknown> | undefined;
     if (u) {
-      return extractCacheUsage(u);
+      return parseRawUsage(u, "openai");
     }
     return undefined;
   },
