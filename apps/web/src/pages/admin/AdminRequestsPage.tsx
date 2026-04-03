@@ -54,6 +54,7 @@ interface RequestDetail {
   fixedPricePer1kInput: number | null;
   fixedPricePer1kOutput: number | null;
   cacheReadDiscount: number | null;
+  fullCostWithoutCache: number | null;
   providerLabel: string | null;
   responseBody: { fallbackAttempts?: Array<{ offeringId: string; error: string; errorClass: string }> } | null;
   clientFormat: string | null;
@@ -141,16 +142,10 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
     {
       title: t("admin.requests.detail.settlement"),
       rows: detail.consumerCost != null ? (() => {
-        const cr = detail.cacheReadTokens ?? 0;
-        const prIn = detail.fixedPricePer1kInput ?? 0;
-        const prOut = detail.fixedPricePer1kOutput ?? 0;
-        const hasCacheSaving = cr > 0 && prIn > 0;
-        const fullCost = hasCacheSaving
-          ? Math.ceil(((detail.inputTokens + cr + (detail.cacheCreationTokens ?? 0)) * prIn) / 1000) + Math.ceil((detail.outputTokens * prOut) / 1000)
-          : detail.consumerCost;
-        const saved = fullCost - detail.consumerCost;
+        const fullCost = detail.fullCostWithoutCache ? Number(detail.fullCostWithoutCache) : 0;
+        const saved = fullCost > detail.consumerCost ? fullCost - detail.consumerCost : 0;
         return [
-          ...(hasCacheSaving && saved > 0 ? [
+          ...(saved > 0 ? [
             { label: "原价 (无折扣)", value: `${formatTokens(fullCost)} xt` },
             { label: "缓存命中节省", value: `-${formatTokens(saved)} xt (${Math.round((saved / fullCost) * 100)}%)` },
           ] : []),

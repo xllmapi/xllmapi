@@ -3236,7 +3236,11 @@ export const postgresPlatformRepository: PlatformRepository = {
         si.email AS "supplierEmail",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
-        o.cache_read_discount AS "cacheReadDiscount"
+        o.cache_read_discount AS "cacheReadDiscount",
+        CASE WHEN ar.cache_read_tokens > 0 AND o.fixed_price_per_1k_input > 0 THEN
+          CEIL(((ar.input_tokens + COALESCE(ar.cache_read_tokens, 0) + COALESCE(ar.cache_creation_tokens, 0)) * o.fixed_price_per_1k_input)::numeric / 1000)
+          + CEIL((ar.output_tokens * COALESCE(o.fixed_price_per_1k_output, 0))::numeric / 1000)
+        ELSE NULL END AS "fullCostWithoutCache"
       FROM api_requests ar
       LEFT JOIN users u ON u.id = ar.requester_user_id
       LEFT JOIN user_identities i ON i.user_id = ar.requester_user_id
@@ -3413,11 +3417,10 @@ export const postgresPlatformRepository: PlatformRepository = {
           sr.supplier_reward_rate AS "supplierRewardRate",
           sr.created_at AS "createdAt",
           ar.cache_read_tokens AS "cacheReadTokens",
-          ar.input_tokens AS "inputTokens",
-          ar.output_tokens AS "outputTokens",
-          o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
-          o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
-          o.cache_read_discount AS "cacheReadDiscount"
+          CASE WHEN ar.cache_read_tokens > 0 AND o.fixed_price_per_1k_input > 0 THEN
+            CEIL(((ar.input_tokens + COALESCE(ar.cache_read_tokens, 0) + COALESCE(ar.cache_creation_tokens, 0)) * o.fixed_price_per_1k_input)::numeric / 1000)
+            + CEIL((ar.output_tokens * COALESCE(o.fixed_price_per_1k_output, 0))::numeric / 1000)
+          ELSE NULL END AS "fullCostWithoutCache"
         FROM settlement_records sr
         LEFT JOIN api_requests ar ON ar.id = sr.request_id
         LEFT JOIN offerings o ON o.id = ar.chosen_offering_id

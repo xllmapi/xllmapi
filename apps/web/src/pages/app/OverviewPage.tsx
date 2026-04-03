@@ -49,9 +49,7 @@ interface LedgerRecord {
   outputTokens: number | null;
   totalTokens: number | null;
   cacheReadTokens: number | null;
-  fixedPricePer1kInput: number | null;
-  fixedPricePer1kOutput: number | null;
-  cacheReadDiscount: number | null;
+  fullCostWithoutCache: number | null;
 }
 
 export function OverviewPage() {
@@ -228,21 +226,14 @@ export function OverviewPage() {
       render: (r) => {
         const amt = Number(r.amount);
         const isCredit = r.direction === "credit";
-        const cr = r.cacheReadTokens ?? 0;
-        const prIn = r.fixedPricePer1kInput ?? 0;
-        const prOut = r.fixedPricePer1kOutput ?? 0;
-        const hasSaving = !isCredit && cr > 0 && prIn > 0;
-        let saved = 0;
-        if (hasSaving) {
-          const fullCost = Math.ceil((((r.inputTokens ?? 0) + cr) * prIn) / 1000) + Math.ceil(((r.outputTokens ?? 0) * prOut) / 1000);
-          saved = fullCost - amt;
-        }
+        const fullCost = r.fullCostWithoutCache ? Number(r.fullCostWithoutCache) : 0;
+        const saved = fullCost > amt ? fullCost - amt : 0;
         return (
           <span className="flex flex-col items-end leading-tight">
             <span className={isCredit ? "text-emerald-400 font-medium" : "text-amber-300 font-medium"}>
               {isCredit ? "+" : "−"}{formatTokens(amt)}
             </span>
-            {saved > 0 && <span className="text-green-500 text-[10px] cursor-help" title={t("overview.cacheSavedTip")}>{t("overview.cacheSaved")}{formatTokens(saved)}</span>}
+            {!isCredit && saved > 0 && <span className="text-green-500 text-[10px] cursor-help" title={t("overview.cacheSavedTip")}>{t("overview.cacheSaved")}{formatTokens(saved)}</span>}
           </span>
         );
       },
@@ -258,7 +249,7 @@ export function OverviewPage() {
       header: "Input",
       align: "right",
       className: "hidden md:table-cell",
-      render: (r) => <span className="text-text-tertiary">{r.inputTokens != null ? formatTokens(r.inputTokens + (r.cacheReadTokens ?? 0)) : "—"}</span>,
+      render: (r) => <span className="text-text-tertiary">{r.inputTokens != null ? formatTokens(r.inputTokens) : "—"}</span>,
     },
     {
       key: "outputTokens",

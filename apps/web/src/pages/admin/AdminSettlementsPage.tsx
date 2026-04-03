@@ -19,12 +19,7 @@ interface SettlementRow {
   supplierRewardRate: number | null;
   createdAt: string;
   cacheReadTokens?: number;
-  cacheCreationTokens?: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  fixedPricePer1kInput?: number;
-  fixedPricePer1kOutput?: number;
-  cacheReadDiscount?: number;
+  fullCostWithoutCache?: number;
 }
 
 interface Summary {
@@ -96,15 +91,9 @@ export function AdminSettlementsPage() {
       header: "消费(缓存节省)",
       align: "right",
       render: (r) => {
-        const cr = r.cacheReadTokens ?? 0;
-        const prIn = r.fixedPricePer1kInput ?? 0;
-        const prOut = r.fixedPricePer1kOutput ?? 0;
-        const hasSaving = cr > 0 && prIn > 0;
-        const fullCost = hasSaving
-          ? Math.ceil((((r.inputTokens ?? 0) + cr + (r.cacheCreationTokens ?? 0)) * prIn) / 1000) + Math.ceil(((r.outputTokens ?? 0) * prOut) / 1000)
-          : r.consumerCost;
-        const saved = fullCost - r.consumerCost;
-        if (hasSaving && saved > 0) {
+        const fullCost = r.fullCostWithoutCache ? Number(r.fullCostWithoutCache) : 0;
+        const saved = fullCost > r.consumerCost ? fullCost - r.consumerCost : 0;
+        if (saved > 0) {
           return (
             <span className="text-xs">
               <span>{formatNumber(fullCost)}</span>
