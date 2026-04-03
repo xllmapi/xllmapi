@@ -4249,6 +4249,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         COUNT(DISTINCT f.offering_id)::int AS "offeringCount",
         MIN(o.fixed_price_per_1k_input)::int AS "minInputPrice",
         MIN(o.fixed_price_per_1k_output)::int AS "minOutputPrice",
+        ROUND(AVG(o.cache_read_discount))::int AS "avgCacheReadDiscount",
         MAX(o.execution_mode) AS "executionMode",
         MAX(o.context_length)::int AS "contextLength",
         bool_or(o.enabled) AS "enabled",

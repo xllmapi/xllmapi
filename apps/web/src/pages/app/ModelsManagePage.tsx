@@ -205,6 +205,7 @@ interface PoolModelEntry {
   offeringCount: number;
   minInputPrice: number;
   minOutputPrice: number;
+  avgCacheReadDiscount?: number;
   executionMode: string;
   enabled: boolean;
   paused: boolean;
@@ -382,6 +383,9 @@ function GroupedPoolCard({
 
         {/* Price + context */}
         <span className="font-mono text-xs text-text-tertiary shrink-0">{formatTokens(inputPrice)}/{formatTokens(outputPrice)}</span>
+        {entry.avgCacheReadDiscount != null && entry.avgCacheReadDiscount < 100 && (
+          <span className="text-green-500 text-[10px] shrink-0" title={t("models.cacheDiscount")}>cache {entry.avgCacheReadDiscount}%</span>
+        )}
         <span className="text-xs text-text-tertiary shrink-0">{formatContextLength(entry.contextLength ?? getContextLimit(entry.logicalModel))} {t("common.contextShort")}</span>
 
         {/* Stats separator + stats */}
@@ -455,6 +459,11 @@ function GroupedPoolCard({
               <div>
                 {t("modelsMgmt.runningNodes")}: {entry.offeringCount} {t("modelsMgmt.nodes")}
               </div>
+              {entry.avgCacheReadDiscount != null && entry.avgCacheReadDiscount < 100 && (
+                <div>
+                  {t("nodeConfig.cacheDiscount")}: <span className="font-mono text-green-500">{entry.avgCacheReadDiscount}%</span>
+                </div>
+              )}
               <div>
                 {t("modelsMgmt.maxPrice")}: <span className="font-mono">in {formatTokens(Math.ceil(inputPrice * 1.05))} / out {formatTokens(Math.ceil(outputPrice * 1.05))}</span> <span className="text-text-tertiary">(默认: 均价+5%)</span>
               </div>
