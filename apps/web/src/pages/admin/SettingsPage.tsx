@@ -75,9 +75,9 @@ export function SettingsPage() {
           body: JSON.stringify({ key, value }),
         });
       }
-      setMessage({ type: "success", text: t("admin.settings.saved") });
-      setSynced(false);
       await refetch();
+      setSynced(false);
+      setMessage({ type: "success", text: t("admin.settings.saved") });
     } catch {
       setMessage({ type: "error", text: t("common.error") });
     } finally {
