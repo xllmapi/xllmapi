@@ -106,9 +106,9 @@ export function AdminSettlementsPage() {
         const saved = fullCost - r.consumerCost;
         if (hasSaving && saved > 0) {
           return (
-            <span className="text-xs flex flex-col items-end leading-tight">
-              <span className="text-text-tertiary line-through">{formatNumber(fullCost)}</span>
-              <span className="text-green-500 text-[10px]">-{formatNumber(saved)} ({Math.round((saved / fullCost) * 100)}%)</span>
+            <span className="text-xs">
+              <span>{formatNumber(fullCost)}</span>
+              <span className="text-green-500 ml-0.5">(-{formatNumber(saved)})</span>
             </span>
           );
         }
