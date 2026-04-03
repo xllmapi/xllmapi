@@ -391,3 +391,61 @@ test("cache: detectUsageFormat with prompt_tokens_details → openai", () => {
 test("cache: detectUsageFormat ambiguous (both fields) → anthropic wins", () => {
   assert.equal(detectUsageFormat({ prompt_tokens: 100, cache_read_input_tokens: 50 }), "anthropic");
 });
+
+// ════════════════════════════════════════════════════════════════
+// 6. PROVIDER HOOKS: Kimi Code cache double-count fix
+// ════════════════════════════════════════════════════════════════
+
+import { kimiCodingAnthropicHooks } from "../core/adapters/providers/kimi-coding.js";
+
+test("cache: Kimi Code JSON — input_tokens includes cached → deduplicated", () => {
+  // Kimi returns input_tokens == prompt_tokens (both include cached)
+  const body = {
+    usage: {
+      input_tokens: 10100, cache_read_input_tokens: 9700, cache_creation_input_tokens: 0, output_tokens: 11,
+      prompt_tokens: 10100, cached_tokens: 9700, completion_tokens: 11, total_tokens: 10111,
+    },
+  };
+  const u = kimiCodingAnthropicHooks.extractUsageFromJson!(body)!;
+  assert.equal(u.inputTokens, 400, "10100 - 9700 = 400 non-cached");
+  assert.equal(u.cacheReadTokens, 9700);
+  assert.equal(u.totalTokens, 10111, "400 + 9700 + 0 + 11");
+});
+
+test("cache: Kimi Code JSON — no cache → unchanged", () => {
+  const body = {
+    usage: {
+      input_tokens: 500, cache_read_input_tokens: 0, output_tokens: 10,
+      prompt_tokens: 500, cached_tokens: 0, completion_tokens: 10, total_tokens: 510,
+    },
+  };
+  const u = kimiCodingAnthropicHooks.extractUsageFromJson!(body)!;
+  assert.equal(u.inputTokens, 500, "no cache → no deduction");
+  assert.equal(u.cacheReadTokens, 0);
+  assert.equal(u.totalTokens, 510);
+});
+
+test("cache: Kimi Code stream — message_start + delta with cached dedup", () => {
+  const tail = [
+    'data: {"type":"message_start","message":{"usage":{"input_tokens":10100,"cache_read_input_tokens":9700,"cache_creation_input_tokens":0,"prompt_tokens":10100,"cached_tokens":9700}}}',
+    'data: {"type":"message_delta","usage":{"input_tokens":10100,"cache_read_input_tokens":9700,"output_tokens":11,"prompt_tokens":10100,"completion_tokens":11,"total_tokens":10111}}',
+  ].join("\n");
+  const u = kimiCodingAnthropicHooks.extractUsageFromStream!(tail)!;
+  assert.equal(u.inputTokens, 400);
+  assert.equal(u.cacheReadTokens, 9700);
+  assert.equal(u.outputTokens, 11);
+  assert.equal(u.totalTokens, 10111);
+});
+
+test("cache: Kimi Code — standard Anthropic data (input < cache) not affected", () => {
+  // Hypothetical: Kimi fixes their API to return standard Anthropic semantics
+  const body = {
+    usage: {
+      input_tokens: 50, cache_read_input_tokens: 9700, output_tokens: 11,
+      // No prompt_tokens field, or prompt_tokens != input_tokens
+    },
+  };
+  const u = kimiCodingAnthropicHooks.extractUsageFromJson!(body)!;
+  assert.equal(u.inputTokens, 50, "standard Anthropic → not deducted");
+  assert.equal(u.cacheReadTokens, 9700);
+});
