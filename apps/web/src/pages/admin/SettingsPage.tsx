@@ -76,7 +76,9 @@ export function SettingsPage() {
         });
       }
       await refetch();
-      setSynced(false);
+      // Update original to match saved values (for next diff), but keep values as-is
+      // (user sees what they just saved, not a re-read from API that could overwrite edits)
+      setOriginal({ ...values });
       setMessage({ type: "success", text: t("admin.settings.saved") });
     } catch {
       setMessage({ type: "error", text: t("common.error") });
