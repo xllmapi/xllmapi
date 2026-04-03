@@ -180,10 +180,12 @@ function PresetsTab() {
           body: JSON.stringify(body),
         });
       }
-      setMessage({ type: "success", text: t("admin.settings.saved") });
+      // Order matters: invalidate cache → fetch new data → then update UI state
+      // Any setMessage/closeForm before refetch triggers re-render with stale data
       invalidateFetchCache("/v1/admin/provider-presets");
       await refetchPresets();
       closeForm();
+      setMessage({ type: "success", text: t("admin.settings.saved") });
     } catch {
       setMessage({ type: "error", text: t("common.error") });
     } finally {
