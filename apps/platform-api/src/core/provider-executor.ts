@@ -370,9 +370,14 @@ export async function proxyApiRequest(params: {
           nodeStream.on("error", (err: Error) => { params.res.end(); reject(err); });
         });
 
-        usage = adapter.extractUsageFromStream(tailBuf) ?? usage;
-        // Merge early-captured usage with tail-buffer extraction (take max of each field)
-        usage = mergeUsage(usage, earlyUsage);
+        const tailUsage = adapter.extractUsageFromStream(tailBuf);
+        if (tailUsage) {
+          // Adapter processed the full tail buffer (authoritative) — use it directly
+          usage = tailUsage;
+        } else {
+          // Tail buffer lost data — fallback to early-captured usage
+          usage = earlyUsage;
+        }
       } else {
         const bodyText = await resp.text();
         if (needsConversion) {

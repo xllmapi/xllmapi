@@ -36,8 +36,12 @@ function fixKimiUsage(raw: Record<string, unknown>): ProxyUsage {
 export const kimiCodingAnthropicHooks: ProviderHooks = {
   extractUsageFromStream(tail: string): ProxyUsage | undefined {
     const lines = tail.split("\n");
-    let accumulated = { ...ZERO_USAGE };
-    let found = false;
+    // Kimi reports cumulative usage in message_delta (includes message_start data).
+    // Use LAST event's fixed usage instead of mergeUsage(take-max) to avoid
+    // double-count: message_start has raw input (no cache fix yet),
+    // message_delta has full cumulative values — take delta if available.
+    let startUsage: ProxyUsage | null = null;
+    let deltaUsage: ProxyUsage | null = null;
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
@@ -46,16 +50,16 @@ export const kimiCodingAnthropicHooks: ProviderHooks = {
       try {
         const parsed = JSON.parse(jsonStr);
         if (parsed.type === "message_start" && parsed.message?.usage) {
-          accumulated = mergeUsage(accumulated, fixKimiUsage(parsed.message.usage));
-          found = true;
+          startUsage = fixKimiUsage(parsed.message.usage);
         }
         if (parsed.type === "message_delta" && parsed.usage) {
-          accumulated = mergeUsage(accumulated, fixKimiUsage(parsed.usage));
-          found = true;
+          deltaUsage = fixKimiUsage(parsed.usage);
         }
       } catch { /* skip */ }
     }
-    return found ? accumulated : undefined;
+    // Prefer message_delta (cumulative + has output_tokens)
+    // Fallback to message_start if no delta
+    return deltaUsage ?? startUsage ?? undefined;
   },
 
   extractUsageFromJson(body: unknown): ProxyUsage | undefined {

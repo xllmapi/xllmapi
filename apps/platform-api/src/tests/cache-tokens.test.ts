@@ -431,10 +431,32 @@ test("cache: Kimi Code stream — message_start + delta with cached dedup", () =
     'data: {"type":"message_delta","usage":{"input_tokens":10100,"cache_read_input_tokens":9700,"output_tokens":11,"prompt_tokens":10100,"completion_tokens":11,"total_tokens":10111}}',
   ].join("\n");
   const u = kimiCodingAnthropicHooks.extractUsageFromStream!(tail)!;
-  assert.equal(u.inputTokens, 400);
+  assert.equal(u.inputTokens, 400, "10100 - 9700 from delta");
   assert.equal(u.cacheReadTokens, 9700);
   assert.equal(u.outputTokens, 11);
   assert.equal(u.totalTokens, 10111);
+});
+
+test("cache: Kimi Code stream — start no cache + delta has cache (mergeUsage bug scenario)", () => {
+  // Real Kimi behavior: message_start reports no cache, message_delta adds cache
+  // Old bug: mergeUsage(start{input=8,cache=0}, delta{input=0,cache=8}) → input=max(8,0)=8 + cache=8 = double!
+  // Fix: use delta (cumulative) instead of take-max
+  const tail = [
+    'data: {"type":"message_start","message":{"usage":{"input_tokens":8,"cache_read_input_tokens":0,"prompt_tokens":8,"cached_tokens":0}}}',
+    'data: {"type":"message_delta","usage":{"input_tokens":8,"cache_read_input_tokens":8,"output_tokens":5,"prompt_tokens":8,"cached_tokens":8,"completion_tokens":5,"total_tokens":13}}',
+  ].join("\n");
+  const u = kimiCodingAnthropicHooks.extractUsageFromStream!(tail)!;
+  assert.equal(u.inputTokens, 0, "delta: 8-8=0 (NOT max(8,0) from start)");
+  assert.equal(u.cacheReadTokens, 8);
+  assert.equal(u.outputTokens, 5);
+  assert.equal(u.totalTokens, 13);
+});
+
+test("cache: Kimi Code stream — only message_start (no delta)", () => {
+  const tail = 'data: {"type":"message_start","message":{"usage":{"input_tokens":100,"cache_read_input_tokens":0,"prompt_tokens":100}}}';
+  const u = kimiCodingAnthropicHooks.extractUsageFromStream!(tail)!;
+  assert.equal(u.inputTokens, 100, "fallback to start when no delta");
+  assert.equal(u.cacheReadTokens, 0);
 });
 
 test("cache: Kimi Code — standard Anthropic data (input < cache) not affected", () => {
