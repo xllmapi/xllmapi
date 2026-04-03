@@ -1824,6 +1824,12 @@ node dist/main.js start \\
                     <span className="ml-1 text-text-primary font-mono">{formatTokens(o.fixedPricePer1kOutput ?? 0)}</span>
                     <span className="mx-1.5 text-text-tertiary/30">&middot;</span>
                     <span className="text-text-tertiary font-mono">{formatContextLength(o.contextLength ?? getContextLimit(o.logicalModel))} {t("common.contextShort")}</span>
+                    {(o.cacheReadDiscount ?? 100) < 100 && (
+                      <>
+                        <span className="mx-1.5 text-text-tertiary/30">&middot;</span>
+                        <span className="text-green-500">cache {o.cacheReadDiscount}%</span>
+                      </>
+                    )}
                   </div>
                   {(o.dailyTokenLimit ?? 0) > 0 && (
                     <div>
