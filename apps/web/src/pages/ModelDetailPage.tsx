@@ -78,6 +78,7 @@ interface SupplierOffering {
   executionMode?: string;
   fixedPricePer1kInput: number;
   fixedPricePer1kOutput: number;
+  cacheReadDiscount?: number;
   createdAt?: string;
 }
 
@@ -364,6 +365,9 @@ export function ModelDetailPage() {
                   <span className="text-text-tertiary/40">&middot;</span>
                   <span className="font-mono text-text-secondary shrink-0">
                     {formatTokens(s.fixedPricePer1kInput)}/{formatTokens(s.fixedPricePer1kOutput)}
+                    {s.cacheReadDiscount != null && s.cacheReadDiscount < 100 && (
+                      <span className="text-green-500 text-[10px] ml-1">cache {s.cacheReadDiscount}%</span>
+                    )}
                   </span>
                   <span className="text-text-tertiary/40">&middot;</span>
                   <span className="text-text-tertiary shrink-0">
