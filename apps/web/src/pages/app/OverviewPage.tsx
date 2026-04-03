@@ -242,7 +242,7 @@ export function OverviewPage() {
             <span className={isCredit ? "text-emerald-400 font-medium" : "text-amber-300 font-medium"}>
               {isCredit ? "+" : "−"}{formatTokens(amt)}
             </span>
-            {saved > 0 && <span className="text-green-500 text-[10px]">{t("overview.cacheSaved")}{formatTokens(saved)}</span>}
+            {saved > 0 && <span className="text-green-500 text-[10px] cursor-help" title={t("overview.cacheSavedTip")}>{t("overview.cacheSaved")}{formatTokens(saved)}</span>}
           </span>
         );
       },
@@ -258,17 +258,7 @@ export function OverviewPage() {
       header: "Input",
       align: "right",
       className: "hidden md:table-cell",
-      render: (r) => {
-        const cr = r.cacheReadTokens ?? 0;
-        if (r.inputTokens != null && cr > 0) {
-          return (
-            <span className="text-text-tertiary" title={`${r.inputTokens} fresh + ${cr} cached`}>
-              {formatTokens(r.inputTokens)}+{formatTokens(cr)}c
-            </span>
-          );
-        }
-        return <span className="text-text-tertiary">{r.inputTokens != null ? formatTokens(r.inputTokens) : "—"}</span>;
-      },
+      render: (r) => <span className="text-text-tertiary">{r.inputTokens != null ? formatTokens(r.inputTokens) : "—"}</span>,
     },
     {
       key: "outputTokens",
