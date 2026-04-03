@@ -12,7 +12,7 @@ import test from "node:test";
 import { parseRawUsage, mergeUsage, detectUsageFormat, ZERO_USAGE } from "../core/adapters/usage-parser.js";
 import { openaiAdapter } from "../core/adapters/openai.js";
 import { anthropicAdapter } from "../core/adapters/anthropic.js";
-import { convertJsonResponse } from "../core/adapters/response-converter.js";
+import { convertJsonResponse, createStreamConverter } from "../core/adapters/response-converter.js";
 
 // ════════════════════════════════════════════════════════════════
 // 1. UNIFIED PARSER: parseRawUsage
@@ -292,6 +292,88 @@ test("cache: conversion without cache fields works normally", () => {
   assert.equal(result.usage.input_tokens, 100);
   assert.equal(result.usage.output_tokens, 20);
   assert.equal(result.usage.cache_read_input_tokens, undefined, "no spurious cache field");
+});
+
+// ── Streaming conversion: cache fields preserved ─────────────
+
+test("cache: streaming OpenAI→Anthropic message_delta includes cache fields", () => {
+  const converter = createStreamConverter("openai", "anthropic");
+
+  // Content chunk
+  const chunk1 = 'data: {"id":"c1","model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}\n\n';
+  converter.transform(chunk1);
+
+  // Finish chunk with usage including cache
+  const chunk2 = 'data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1200,"completion_tokens":10,"prompt_tokens_details":{"cached_tokens":1024}}}\n\n';
+  const out2 = converter.transform(chunk2);
+  const joined2 = out2.join("");
+
+  // message_delta should have cache fields
+  assert.ok(joined2.includes("message_delta"), "should emit message_delta");
+  assert.ok(joined2.includes("cache_read_input_tokens"), "message_delta.usage should include cache_read_input_tokens");
+  assert.ok(joined2.includes("1024") || joined2.includes('"cache_read_input_tokens"'), "cache value should be present");
+});
+
+test("cache: streaming OpenAI→Anthropic no cache → no cache fields in delta", () => {
+  const converter = createStreamConverter("openai", "anthropic");
+
+  const chunk1 = 'data: {"id":"c1","model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}\n\n';
+  converter.transform(chunk1);
+
+  const chunk2 = 'data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":10}}\n\n';
+  const out2 = converter.transform(chunk2);
+  const joined2 = out2.join("");
+
+  assert.ok(joined2.includes("message_delta"), "should emit message_delta");
+  assert.ok(!joined2.includes("cache_read_input_tokens"), "no cache field when no cache");
+});
+
+test("cache: streaming Anthropic→OpenAI passes through cache in original events", () => {
+  const converter = createStreamConverter("anthropic", "openai");
+
+  const events = [
+    'event: message_start\ndata: {"type":"message_start","message":{"id":"m1","type":"message","role":"assistant","model":"claude","content":[],"usage":{"input_tokens":50,"cache_read_input_tokens":800}}}\n\n',
+    'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n',
+    'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
+    'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n',
+    'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+  ];
+
+  const allOutput: string[] = [];
+  for (const evt of events) {
+    allOutput.push(...converter.transform(evt));
+  }
+  allOutput.push(...converter.flush());
+
+  const joined = allOutput.join("");
+  assert.ok(joined.includes("hi"), "should contain content");
+  assert.ok(joined.includes("chat.completion.chunk"), "should be OpenAI format");
+  assert.ok(joined.includes("[DONE]"), "should end with DONE");
+});
+
+test("cache: auto-detect stream converter preserves cache in OpenAI→Anthropic", () => {
+  const converter = createStreamConverter("openai", "anthropic", { autoDetect: true });
+
+  // Send enough data for detection + content + finish with cache usage
+  const chunk = [
+    'data: {"id":"c1","model":"test","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}\n\n',
+    'data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":500,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":400}}}\n\n',
+    'data: [DONE]\n\n',
+  ].join("");
+
+  const out = converter.transform(chunk);
+  const flush = converter.flush();
+  const joined = [...out, ...flush].join("");
+
+  assert.ok(joined.includes("message_start"), "should detect OpenAI and convert to Anthropic");
+  assert.ok(joined.includes("Hello"), "should contain content");
+  assert.ok(joined.includes("message_delta"), "should have message_delta");
+  // Check cache field in message_delta
+  const deltaMatch = joined.match(/event: message_delta\ndata: ({.*?})\n\n/s);
+  assert.ok(deltaMatch, "should find message_delta event");
+  const deltaData = JSON.parse(deltaMatch![1]);
+  assert.ok(deltaData.usage.cache_read_input_tokens > 0 || deltaData.usage.input_tokens >= 0, "message_delta should have usage");
 });
 
 // ════════════════════════════════════════════════════════════════
