@@ -182,8 +182,8 @@ function PresetsTab() {
       }
       setMessage({ type: "success", text: t("admin.settings.saved") });
       invalidateFetchCache("/v1/admin/provider-presets");
-      closeForm();
       await refetchPresets();
+      closeForm();
     } catch {
       setMessage({ type: "error", text: t("common.error") });
     } finally {
