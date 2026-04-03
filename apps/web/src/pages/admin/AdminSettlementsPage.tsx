@@ -93,7 +93,7 @@ export function AdminSettlementsPage() {
     },
     {
       key: "consumerCost",
-      header: t("admin.settlements.cost"),
+      header: t("admin.settlements.cost") + " (缓存节省)",
       align: "right",
       render: (r) => {
         const cr = r.cacheReadTokens ?? 0;
