@@ -3397,8 +3397,16 @@ export const postgresPlatformRepository: PlatformRepository = {
           sr.supplier_reward AS "supplierReward",
           sr.platform_margin AS "platformMargin",
           sr.supplier_reward_rate AS "supplierRewardRate",
-          sr.created_at AS "createdAt"
+          sr.created_at AS "createdAt",
+          ar.cache_read_tokens AS "cacheReadTokens",
+          ar.input_tokens AS "inputTokens",
+          ar.output_tokens AS "outputTokens",
+          o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
+          o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+          o.cache_read_discount AS "cacheReadDiscount"
         FROM settlement_records sr
+        LEFT JOIN api_requests ar ON ar.id = sr.request_id
+        LEFT JOIN offerings o ON o.id = ar.chosen_offering_id
         LEFT JOIN users cu ON cu.id = sr.consumer_user_id
         LEFT JOIN user_identities ci ON ci.user_id = sr.consumer_user_id
         LEFT JOIN users su ON su.id = sr.supplier_user_id
@@ -3412,8 +3420,10 @@ export const postgresPlatformRepository: PlatformRepository = {
           COALESCE(SUM(sr.consumer_cost), 0)::text AS "totalConsumerCost",
           COALESCE(SUM(sr.supplier_reward), 0)::text AS "totalSupplierReward",
           COALESCE(SUM(sr.platform_margin), 0)::text AS "totalPlatformMargin",
-          COUNT(*)::text AS "count"
+          COUNT(*)::text AS "count",
+          COALESCE(SUM(ar.cache_read_tokens), 0)::text AS "totalCacheReadTokens"
         FROM settlement_records sr
+        LEFT JOIN api_requests ar ON ar.id = sr.request_id
         ${whereClause}
       `)
     ]);
@@ -3424,7 +3434,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         totalConsumerCost: Number(summaryResult.rows[0]?.totalConsumerCost ?? 0),
         totalSupplierReward: Number(summaryResult.rows[0]?.totalSupplierReward ?? 0),
         totalPlatformMargin: Number(summaryResult.rows[0]?.totalPlatformMargin ?? 0),
-        count: Number(summaryResult.rows[0]?.count ?? 0)
+        count: Number(summaryResult.rows[0]?.count ?? 0),
+        totalCacheReadTokens: Number(summaryResult.rows[0]?.totalCacheReadTokens ?? 0)
       }
     };
   },

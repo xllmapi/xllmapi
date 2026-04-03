@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
-import { formatNumber } from "@/lib/utils";
+import { formatNumber, formatTokens } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { StatCard } from "@/components/ui/StatCard";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -18,6 +18,12 @@ interface SettlementRow {
   platformMargin: number;
   supplierRewardRate: number | null;
   createdAt: string;
+  cacheReadTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  fixedPricePer1kInput?: number;
+  fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number;
 }
 
 interface Summary {
@@ -25,6 +31,7 @@ interface Summary {
   totalSupplierReward: number;
   totalPlatformMargin: number;
   count: number;
+  totalCacheReadTokens: number;
 }
 
 type TimeRange = 7 | 30 | 0;
@@ -42,7 +49,7 @@ export function AdminSettlementsPage() {
 
   const { data: raw, loading } = useCachedFetch<{ data: SettlementRow[]; summary: Summary }>(`/v1/admin/settlements?${params}`);
   const data = raw?.data ?? [];
-  const summary = raw?.summary ?? { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0 };
+  const summary = raw?.summary ?? { totalConsumerCost: 0, totalSupplierReward: 0, totalPlatformMargin: 0, count: 0, totalCacheReadTokens: 0 };
   const total = raw?.summary?.count ?? 0;
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -87,7 +94,24 @@ export function AdminSettlementsPage() {
       key: "consumerCost",
       header: t("admin.settlements.cost"),
       align: "right",
-      render: (r) => <span className="text-xs">{formatNumber(r.consumerCost)}</span>,
+      render: (r) => {
+        const cr = r.cacheReadTokens ?? 0;
+        const prIn = r.fixedPricePer1kInput ?? 0;
+        const prOut = r.fixedPricePer1kOutput ?? 0;
+        if (cr > 0 && prIn > 0) {
+          const fullCost = Math.ceil((((r.inputTokens ?? 0) + cr) * prIn) / 1000) + Math.ceil(((r.outputTokens ?? 0) * prOut) / 1000);
+          const saved = fullCost - r.consumerCost;
+          if (saved > 0) {
+            return (
+              <span className="text-xs">
+                <span>{formatNumber(r.consumerCost)}</span>
+                <span className="text-green-500 ml-1 text-[10px]">(-{formatNumber(saved)})</span>
+              </span>
+            );
+          }
+        }
+        return <span className="text-xs">{formatNumber(r.consumerCost)}</span>;
+      },
     },
     {
       key: "supplierReward",
@@ -126,6 +150,9 @@ export function AdminSettlementsPage() {
             <StatCard label={t("admin.settlements.supplierPayout")} value={formatNumber(summary.totalSupplierReward)} loading={loading} />
             <StatCard label={t("admin.settlements.platformProfit")} value={formatNumber(summary.totalPlatformMargin)} loading={loading} />
             <StatCard label={t("admin.settlements.count")} value={formatNumber(summary.count)} loading={loading} />
+            {summary.totalCacheReadTokens > 0 && (
+              <StatCard label="Cache Hit Tokens" value={formatTokens(summary.totalCacheReadTokens)} loading={loading} />
+            )}
           </div>
 
           <DataTable
