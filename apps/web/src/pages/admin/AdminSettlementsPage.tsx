@@ -19,6 +19,7 @@ interface SettlementRow {
   supplierRewardRate: number | null;
   createdAt: string;
   cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   inputTokens?: number;
   outputTokens?: number;
   fixedPricePer1kInput?: number;
@@ -98,20 +99,27 @@ export function AdminSettlementsPage() {
         const cr = r.cacheReadTokens ?? 0;
         const prIn = r.fixedPricePer1kInput ?? 0;
         const prOut = r.fixedPricePer1kOutput ?? 0;
-        if (cr > 0 && prIn > 0) {
-          const fullCost = Math.ceil((((r.inputTokens ?? 0) + cr) * prIn) / 1000) + Math.ceil(((r.outputTokens ?? 0) * prOut) / 1000);
-          const saved = fullCost - r.consumerCost;
-          if (saved > 0) {
-            return (
-              <span className="text-xs">
-                <span>{formatNumber(r.consumerCost)}</span>
-                <span className="text-green-500 ml-1 text-[10px]">(-{formatNumber(saved)})</span>
-              </span>
-            );
-          }
+        const hasSaving = cr > 0 && prIn > 0;
+        const fullCost = hasSaving
+          ? Math.ceil((((r.inputTokens ?? 0) + cr + (r.cacheCreationTokens ?? 0)) * prIn) / 1000) + Math.ceil(((r.outputTokens ?? 0) * prOut) / 1000)
+          : r.consumerCost;
+        const saved = fullCost - r.consumerCost;
+        if (hasSaving && saved > 0) {
+          return (
+            <span className="text-xs flex flex-col items-end leading-tight">
+              <span className="text-text-tertiary line-through">{formatNumber(fullCost)}</span>
+              <span className="text-green-500 text-[10px]">-{formatNumber(saved)} ({Math.round((saved / fullCost) * 100)}%)</span>
+            </span>
+          );
         }
         return <span className="text-xs">{formatNumber(r.consumerCost)}</span>;
       },
+    },
+    {
+      key: "actualCost",
+      header: "实付",
+      align: "right",
+      render: (r) => <span className="text-xs font-medium">{formatNumber(r.consumerCost)}</span>,
     },
     {
       key: "supplierReward",
