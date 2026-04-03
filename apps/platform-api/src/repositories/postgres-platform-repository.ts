@@ -2219,6 +2219,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         pricing_mode AS "pricingMode",
         fixed_price_per_1k_input AS "fixedPricePer1kInput",
         fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        cache_read_discount AS "cacheReadDiscount",
         enabled,
         review_status AS "reviewStatus",
         created_at AS "createdAt",
