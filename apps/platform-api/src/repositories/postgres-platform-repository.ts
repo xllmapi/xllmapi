@@ -3196,6 +3196,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         ar.input_tokens AS "inputTokens",
         ar.output_tokens AS "outputTokens",
         ar.total_tokens AS "totalTokens",
+        ar.cache_read_tokens AS "cacheReadTokens",
+        ar.cache_creation_tokens AS "cacheCreationTokens",
         ar.chosen_offering_id AS "chosenOfferingId",
         ar.client_ip AS "clientIp",
         ar.client_user_agent AS "clientUserAgent",

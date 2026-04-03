@@ -34,6 +34,8 @@ interface RequestDetail {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   chosenOfferingId: string;
   clientIp: string | null;
   clientUserAgent: string | null;
@@ -129,6 +131,8 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
       title: "Token",
       rows: [
         { label: t("admin.requests.inTokens"), value: `${formatTokens(detail.inputTokens)} tokens` },
+        ...((detail.cacheReadTokens ?? 0) > 0 ? [{ label: "cache read", value: `${formatTokens(detail.cacheReadTokens ?? 0)} tokens` }] : []),
+        ...((detail.cacheCreationTokens ?? 0) > 0 ? [{ label: "cache creation", value: `${formatTokens(detail.cacheCreationTokens ?? 0)} tokens` }] : []),
         { label: t("admin.requests.outTokens"), value: `${formatTokens(detail.outputTokens)} tokens` },
         { label: t("admin.requests.total"), value: `${formatTokens(detail.totalTokens)} tokens` },
       ],
