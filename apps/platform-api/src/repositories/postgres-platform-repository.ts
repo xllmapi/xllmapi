@@ -2289,7 +2289,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       params.pricingMode,
       params.fixedPricePer1kInput,
       params.fixedPricePer1kOutput,
-      params.cacheReadDiscount ?? 50,
+      params.cacheReadDiscount ?? null,
       params.maxConcurrency ?? 2,
       params.dailyTokenLimit ?? 1000000
     ]);
@@ -2330,7 +2330,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       params.pricingMode ?? current.pricingMode,
       params.fixedPricePer1kInput ?? current.fixedPricePer1kInput,
       params.fixedPricePer1kOutput ?? current.fixedPricePer1kOutput,
-      params.cacheReadDiscount ?? (current as any).cacheReadDiscount ?? 50,
+      params.cacheReadDiscount ?? (current as any).cacheReadDiscount ?? null,
       newEnabled,
       params.dailyTokenLimit ?? current.dailyTokenLimit ?? 0,
       params.maxConcurrency ?? current.maxConcurrency ?? 0,
@@ -2472,7 +2472,15 @@ export const postgresPlatformRepository: PlatformRepository = {
     const currentPool = getPool();
     const client = await currentPool.connect();
     // Differential pricing: cache hits at discounted rate
-    const cacheDiscount = Math.max(1, Math.min(100, params.cacheReadDiscount ?? 50));
+    // Priority: offering.cacheReadDiscount → platform_config.default_cache_read_discount → 100 (full price)
+    let cacheDiscount = 100;
+    if (params.cacheReadDiscount != null) {
+      cacheDiscount = params.cacheReadDiscount;
+    } else {
+      const defaultRow = await currentPool.query("SELECT value FROM platform_config WHERE key = 'default_cache_read_discount'");
+      cacheDiscount = defaultRow.rows[0]?.value ? Number(defaultRow.rows[0].value) : 100;
+    }
+    cacheDiscount = Math.max(1, Math.min(100, cacheDiscount));
     const freshInputCost = Math.ceil((params.inputTokens * params.fixedPricePer1kInput) / 1000);
     const cacheReadCost = Math.ceil(((params.cacheReadTokens ?? 0) * params.fixedPricePer1kInput * cacheDiscount / 100) / 1000);
     const cacheCreationCost = Math.ceil(((params.cacheCreationTokens ?? 0) * params.fixedPricePer1kInput) / 1000);
@@ -3899,7 +3907,7 @@ export const postgresPlatformRepository: PlatformRepository = {
     await currentPool.query(`
       INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, cache_read_discount, execution_mode, node_id, credential_id, enabled, review_status, public_node_id, created_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'node', $9, NULL, true, $10, $11, NOW())
-    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.cacheReadDiscount ?? 50, params.nodeId, reviewStatus, publicNodeId]);
+    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.cacheReadDiscount ?? null, params.nodeId, reviewStatus, publicNodeId]);
   },
 
   async listNodeOfferings(nodeId: string) {
