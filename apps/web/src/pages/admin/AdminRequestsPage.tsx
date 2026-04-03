@@ -140,18 +140,27 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
     },
     {
       title: t("admin.requests.detail.settlement"),
-      rows: detail.consumerCost != null ? [
-        { label: t("admin.requests.detail.consumerCost"), value: `${formatTokens(detail.consumerCost)} xt` },
-        ...((detail.cacheReadTokens ?? 0) > 0 && detail.fixedPricePer1kInput != null ? (() => {
-          const fullCost = Math.ceil(((detail.inputTokens + (detail.cacheReadTokens ?? 0)) * detail.fixedPricePer1kInput) / 1000) + Math.ceil((detail.outputTokens * (detail.fixedPricePer1kOutput ?? 0)) / 1000);
-          const saved = fullCost - detail.consumerCost;
-          return saved > 0 ? [{ label: "cache saved", value: `${formatTokens(saved)} xt (${Math.round((saved / fullCost) * 100)}%)` }] : [];
-        })() : []),
-        { label: t("admin.requests.detail.supplierReward"), value: `${formatTokens(detail.supplierReward ?? 0)} xt` },
-        { label: t("admin.requests.detail.platformMargin"), value: `${formatTokens(detail.platformMargin ?? 0)} xt` },
-        { label: t("admin.requests.detail.rewardRate"), value: detail.supplierRewardRate != null ? `${(Number(detail.supplierRewardRate) * 100).toFixed(1)}%` : "-" },
-        { label: t("admin.requests.detail.settledAt"), value: detail.settledAt ? new Date(detail.settledAt).toLocaleString() : "-" },
-      ] : [{ label: t("admin.requests.detail.settlement"), value: "-" }],
+      rows: detail.consumerCost != null ? (() => {
+        const cr = detail.cacheReadTokens ?? 0;
+        const prIn = detail.fixedPricePer1kInput ?? 0;
+        const prOut = detail.fixedPricePer1kOutput ?? 0;
+        const hasCacheSaving = cr > 0 && prIn > 0;
+        const fullCost = hasCacheSaving
+          ? Math.ceil(((detail.inputTokens + cr + (detail.cacheCreationTokens ?? 0)) * prIn) / 1000) + Math.ceil((detail.outputTokens * prOut) / 1000)
+          : detail.consumerCost;
+        const saved = fullCost - detail.consumerCost;
+        return [
+          ...(hasCacheSaving && saved > 0 ? [
+            { label: "原价 (无折扣)", value: `${formatTokens(fullCost)} xt` },
+            { label: "缓存命中节省", value: `-${formatTokens(saved)} xt (${Math.round((saved / fullCost) * 100)}%)` },
+          ] : []),
+          { label: t("admin.requests.detail.consumerCost"), value: `${formatTokens(detail.consumerCost)} xt` },
+          { label: t("admin.requests.detail.supplierReward"), value: `${formatTokens(detail.supplierReward ?? 0)} xt` },
+          { label: t("admin.requests.detail.platformMargin"), value: `${formatTokens(detail.platformMargin ?? 0)} xt` },
+          { label: t("admin.requests.detail.rewardRate"), value: detail.supplierRewardRate != null ? `${(Number(detail.supplierRewardRate) * 100).toFixed(1)}%` : "-" },
+          { label: t("admin.requests.detail.settledAt"), value: detail.settledAt ? new Date(detail.settledAt).toLocaleString() : "-" },
+        ];
+      })() : [{ label: t("admin.requests.detail.settlement"), value: "-" }],
     },
     {
       title: t("admin.requests.detail.supplier"),
