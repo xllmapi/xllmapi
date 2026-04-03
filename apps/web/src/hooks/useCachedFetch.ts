@@ -62,10 +62,12 @@ export function useCachedFetch<T>(
     mountedRef.current = true;
     if (!path || skip) return;
 
-    if (cached?.data) {
-      setData(cached.data);
+    // On mount: use cache if fresh, otherwise fetch
+    const entry = cache.get(path) as CacheEntry<T> | undefined;
+    if (entry?.data) {
+      setData(entry.data);
       setLoading(false);
-      if (Date.now() - cached.fetchedAt > ttl) {
+      if (Date.now() - entry.fetchedAt > ttl) {
         void fetchData(true);
       }
     } else {
@@ -77,7 +79,11 @@ export function useCachedFetch<T>(
     };
   }, [path, skip]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const refetch = useCallback(() => fetchData(false), [fetchData]);
+  const refetch = useCallback(async () => {
+    // Force invalidate cache before refetching to prevent stale reads
+    if (path) cache.delete(path);
+    await fetchData(false);
+  }, [path, fetchData]);
 
   return { data, loading, error, refetch };
 }
