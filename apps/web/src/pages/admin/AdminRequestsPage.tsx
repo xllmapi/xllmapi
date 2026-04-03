@@ -134,7 +134,7 @@ function RequestDetailPanel({ requestId, onClose }: { requestId: string; onClose
         ...((detail.cacheReadTokens ?? 0) > 0 ? [{ label: "cache read", value: `${formatTokens(detail.cacheReadTokens ?? 0)} tokens` }] : []),
         ...((detail.cacheCreationTokens ?? 0) > 0 ? [{ label: "cache creation", value: `${formatTokens(detail.cacheCreationTokens ?? 0)} tokens` }] : []),
         { label: t("admin.requests.outTokens"), value: `${formatTokens(detail.outputTokens)} tokens` },
-        { label: t("admin.requests.total"), value: `${formatTokens(Math.max(detail.totalTokens, detail.inputTokens + (detail.cacheReadTokens ?? 0) + (detail.cacheCreationTokens ?? 0) + detail.outputTokens))} tokens` },
+        { label: t("admin.requests.total"), value: `${formatTokens(detail.totalTokens)} tokens` },
       ],
     },
     {

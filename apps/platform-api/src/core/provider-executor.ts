@@ -332,8 +332,10 @@ export async function proxyApiRequest(params: {
         const nodeStream = Readable.fromWeb(resp.body as import("stream/web").ReadableStream);
         const TAIL_SIZE = 4096;
         let tailBuf = "";
-        // Capture Anthropic message_start input_tokens early (before tail buffer truncates it)
+        // Capture Anthropic message_start usage early (before tail buffer truncates it)
         let earlyInputTokens = 0;
+        let earlyCacheRead = 0;
+        let earlyCacheCreation = 0;
 
         await new Promise<void>((resolve, reject) => {
           nodeStream.on("data", (chunk: Buffer) => {
@@ -350,7 +352,9 @@ export async function proxyApiRequest(params: {
                   const parsed = JSON.parse(jsonStr);
                   if (parsed.type === "message_start" && parsed.message?.usage) {
                     const u = parsed.message.usage;
-                    earlyInputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
+                    earlyInputTokens = u.input_tokens || u.prompt_tokens || 0;
+                    earlyCacheRead = u.cache_read_input_tokens ?? 0;
+                    earlyCacheCreation = u.cache_creation_input_tokens ?? 0;
                   }
                 }
               } catch { /* ignore parse errors */ }
@@ -368,11 +372,18 @@ export async function proxyApiRequest(params: {
         });
 
         usage = adapter.extractUsageFromStream(tailBuf) ?? usage;
-        // Merge early-captured inputTokens if tail buffer lost message_start
+        // Merge early-captured usage if tail buffer lost message_start
         if (usage.inputTokens === 0 && earlyInputTokens > 0) {
           usage.inputTokens = earlyInputTokens;
-          usage.totalTokens = earlyInputTokens + usage.outputTokens;
         }
+        if (usage.cacheReadTokens === 0 && earlyCacheRead > 0) {
+          usage.cacheReadTokens = earlyCacheRead;
+        }
+        if (usage.cacheCreationTokens === 0 && earlyCacheCreation > 0) {
+          usage.cacheCreationTokens = earlyCacheCreation;
+        }
+        // Recompute totalTokens to always include cache
+        usage.totalTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheCreationTokens + usage.outputTokens;
       } else {
         const bodyText = await resp.text();
         if (needsConversion) {
