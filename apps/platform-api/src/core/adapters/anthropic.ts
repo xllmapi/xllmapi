@@ -1,5 +1,16 @@
 import type { ProviderAdapter, ProxyUsage } from "./types.js";
 
+function extractAnthropicUsage(u: Record<string, number>): ProxyUsage {
+  const cacheRead = u.cache_read_input_tokens ?? 0;
+  const cacheCreation = u.cache_creation_input_tokens ?? 0;
+  // Anthropic: input_tokens = non-cached portion (separate from cache fields)
+  const inputTokens = u.input_tokens || u.prompt_tokens || 0;
+  const outputTokens = u.output_tokens ?? u.completion_tokens ?? 0;
+  const totalTokens = u.total_tokens ?? (inputTokens + cacheRead + cacheCreation + outputTokens);
+
+  return { inputTokens, outputTokens, totalTokens, cacheReadTokens: cacheRead, cacheCreationTokens: cacheCreation };
+}
+
 export const anthropicAdapter: ProviderAdapter = {
   formatId: "anthropic",
 
@@ -25,6 +36,8 @@ export const anthropicAdapter: ProviderAdapter = {
     const lines = tail.split("\n");
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheRead = 0;
+    let cacheCreation = 0;
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
@@ -32,24 +45,33 @@ export const anthropicAdapter: ProviderAdapter = {
       const jsonStr = line.startsWith("data: ") ? line.slice(6) : line.slice(5);
       try {
         const parsed = JSON.parse(jsonStr);
-        // message_start event: { type: "message_start", message: { usage: { input_tokens } } }
         if (parsed.type === "message_start" && parsed.message?.usage) {
           const u = parsed.message.usage;
-          inputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
+          inputTokens = u.input_tokens || u.prompt_tokens || 0;
+          cacheRead = u.cache_read_input_tokens ?? 0;
+          cacheCreation = u.cache_creation_input_tokens ?? 0;
         }
-        // message_delta event: { type: "message_delta", usage: { output_tokens } }
-        // Some providers (MiMo, hanbbq) also report input_tokens in message_delta
-        // instead of message_start — take the larger value to handle both behaviors.
+        // Some providers (MiMo, hanbbq) report input_tokens in message_delta
         if (parsed.type === "message_delta" && parsed.usage) {
           outputTokens = parsed.usage.output_tokens ?? 0;
-          const deltaInput = parsed.usage.input_tokens || ((parsed.usage.cache_read_input_tokens ?? 0) + (parsed.usage.cache_creation_input_tokens ?? 0)) || 0;
+          const deltaInput = parsed.usage.input_tokens || 0;
           if (deltaInput > inputTokens) inputTokens = deltaInput;
+          const deltaCacheRead = parsed.usage.cache_read_input_tokens ?? 0;
+          if (deltaCacheRead > cacheRead) cacheRead = deltaCacheRead;
+          const deltaCacheCreation = parsed.usage.cache_creation_input_tokens ?? 0;
+          if (deltaCacheCreation > cacheCreation) cacheCreation = deltaCacheCreation;
         }
       } catch { /* skip */ }
     }
 
-    if (inputTokens > 0 || outputTokens > 0) {
-      return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens };
+    if (inputTokens > 0 || outputTokens > 0 || cacheRead > 0 || cacheCreation > 0) {
+      return {
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + cacheRead + cacheCreation + outputTokens,
+        cacheReadTokens: cacheRead,
+        cacheCreationTokens: cacheCreation,
+      };
     }
     return undefined;
   },
@@ -58,13 +80,7 @@ export const anthropicAdapter: ProviderAdapter = {
     const parsed = body as Record<string, unknown>;
     const u = parsed?.usage as Record<string, number> | undefined;
     if (u) {
-      const inputTokens = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
-      const outputTokens = u.output_tokens ?? u.completion_tokens ?? 0;
-      return {
-        inputTokens,
-        outputTokens,
-        totalTokens: u.total_tokens ?? (inputTokens + outputTokens),
-      };
+      return extractAnthropicUsage(u);
     }
     return undefined;
   },

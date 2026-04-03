@@ -10,6 +10,8 @@ export interface ProxyUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
 }
 
 export interface ProviderAdapter {

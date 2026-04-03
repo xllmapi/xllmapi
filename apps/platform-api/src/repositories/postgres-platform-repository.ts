@@ -91,6 +91,7 @@ const getOfferingById = async (ownerUserId: string, offeringId: string): Promise
       pricing_mode AS "pricingMode",
       fixed_price_per_1k_input AS "fixedPricePer1kInput",
       fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+      cache_read_discount AS "cacheReadDiscount",
       enabled,
       review_status AS "reviewStatus",
       created_at AS "createdAt",
@@ -1951,6 +1952,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.pricing_mode AS "pricingMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.review_status AS "reviewStatus",
         60 AS "qpsLimit",
         128000 AS "maxContextTokens",
@@ -1997,6 +1999,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.pricing_mode AS "pricingMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
         o.enabled,
@@ -2243,6 +2246,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.pricing_mode AS "pricingMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.enabled,
         o.review_status AS "reviewStatus",
         c.provider_type AS "providerType",
@@ -2269,9 +2273,9 @@ export const postgresPlatformRepository: PlatformRepository = {
     await currentPool.query(`
       INSERT INTO offerings (
         id, owner_user_id, logical_model, credential_id, real_model, pricing_mode,
-        fixed_price_per_1k_input, fixed_price_per_1k_output, max_concurrency, daily_token_limit,
+        fixed_price_per_1k_input, fixed_price_per_1k_output, cache_read_discount, max_concurrency, daily_token_limit,
         enabled, review_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, 'approved')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE, 'approved')
     `, [
       params.id,
       params.ownerUserId,
@@ -2281,6 +2285,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       params.pricingMode,
       params.fixedPricePer1kInput,
       params.fixedPricePer1kOutput,
+      params.cacheReadDiscount ?? 50,
       params.maxConcurrency ?? 2,
       params.dailyTokenLimit ?? 1000000
     ]);
@@ -2311,15 +2316,17 @@ export const postgresPlatformRepository: PlatformRepository = {
       SET pricing_mode = $1,
           fixed_price_per_1k_input = $2,
           fixed_price_per_1k_output = $3,
-          enabled = $4,
-          daily_token_limit = $5,
-          max_concurrency = $6,
-          context_length = $7
-      WHERE owner_user_id = $8 AND id = $9
+          cache_read_discount = $4,
+          enabled = $5,
+          daily_token_limit = $6,
+          max_concurrency = $7,
+          context_length = $8
+      WHERE owner_user_id = $9 AND id = $10
     `, [
       params.pricingMode ?? current.pricingMode,
       params.fixedPricePer1kInput ?? current.fixedPricePer1kInput,
       params.fixedPricePer1kOutput ?? current.fixedPricePer1kOutput,
+      params.cacheReadDiscount ?? (current as any).cacheReadDiscount ?? 50,
       newEnabled,
       params.dailyTokenLimit ?? current.dailyTokenLimit ?? 0,
       params.maxConcurrency ?? current.maxConcurrency ?? 0,
@@ -2460,7 +2467,12 @@ export const postgresPlatformRepository: PlatformRepository = {
     await ensureDevSeed();
     const currentPool = getPool();
     const client = await currentPool.connect();
-    const inputCost = Math.ceil((params.inputTokens * params.fixedPricePer1kInput) / 1000);
+    // Differential pricing: cache hits at discounted rate
+    const cacheDiscount = Math.max(1, Math.min(100, params.cacheReadDiscount ?? 50));
+    const freshInputCost = Math.ceil((params.inputTokens * params.fixedPricePer1kInput) / 1000);
+    const cacheReadCost = Math.ceil(((params.cacheReadTokens ?? 0) * params.fixedPricePer1kInput * cacheDiscount / 100) / 1000);
+    const cacheCreationCost = Math.ceil(((params.cacheCreationTokens ?? 0) * params.fixedPricePer1kInput) / 1000);
+    const inputCost = freshInputCost + cacheReadCost + cacheCreationCost;
     const outputCost = Math.ceil((params.outputTokens * params.fixedPricePer1kOutput) / 1000);
     const consumerCost = inputCost + outputCost;
     const rateRow = await currentPool.query("SELECT value FROM platform_config WHERE key = 'supplier_reward_rate'");
@@ -2493,11 +2505,12 @@ export const postgresPlatformRepository: PlatformRepository = {
       await client.query(`
         INSERT INTO api_requests (
           id, requester_user_id, logical_model, chosen_offering_id, provider, real_model,
-          input_tokens, output_tokens, total_tokens, status, idempotency_key, response_body,
+          input_tokens, output_tokens, total_tokens, cache_read_tokens, cache_creation_tokens,
+          status, idempotency_key, response_body,
           client_ip, client_user_agent, upstream_user_agent, api_key_id, provider_label,
           client_format, upstream_format, format_converted,
           latency_total_ms, latency_ttfb_ms
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11::jsonb, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'completed', $12, $13::jsonb, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       `, [
         params.requestId,
         params.requesterUserId,
@@ -2508,6 +2521,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         params.inputTokens,
         params.outputTokens,
         params.totalTokens,
+        params.cacheReadTokens ?? 0,
+        params.cacheCreationTokens ?? 0,
         params.idempotencyKey ?? null,
         params.responseBody ? JSON.stringify(params.responseBody) : null,
         params.clientIp ?? null,
@@ -3202,7 +3217,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         sr.supplier_user_id AS "supplierUserId",
         si.email AS "supplierEmail",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
-        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput"
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount"
       FROM api_requests ar
       LEFT JOIN users u ON u.id = ar.requester_user_id
       LEFT JOIN user_identities i ON i.user_id = ar.requester_user_id
@@ -3847,7 +3863,7 @@ export const postgresPlatformRepository: PlatformRepository = {
 
   // --- Node Offerings ---
 
-  async createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; description?: string; maxConcurrency?: number }) {
+  async createNodeOffering(params: { offeringId: string; ownerUserId: string; nodeId: string; logicalModel: string; realModel: string; pricingMode: string; fixedPricePer1kInput: number; fixedPricePer1kOutput: number; cacheReadDiscount?: number; description?: string; maxConcurrency?: number }) {
     await ensureDevSeed();
     const currentPool = getPool();
 
@@ -3862,9 +3878,9 @@ export const postgresPlatformRepository: PlatformRepository = {
     const reviewStatus = autoApprove ? 'approved' : 'pending';
 
     await currentPool.query(`
-      INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, execution_mode, node_id, credential_id, enabled, review_status, public_node_id, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'node', $8, NULL, true, $9, $10, NOW())
-    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.nodeId, reviewStatus, publicNodeId]);
+      INSERT INTO offerings (id, owner_user_id, logical_model, real_model, pricing_mode, fixed_price_per_1k_input, fixed_price_per_1k_output, cache_read_discount, execution_mode, node_id, credential_id, enabled, review_status, public_node_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'node', $9, NULL, true, $10, $11, NOW())
+    `, [params.offeringId, params.ownerUserId, params.logicalModel, params.realModel, params.pricingMode, params.fixedPricePer1kInput, params.fixedPricePer1kOutput, params.cacheReadDiscount ?? 50, params.nodeId, reviewStatus, publicNodeId]);
   },
 
   async listNodeOfferings(nodeId: string) {
@@ -3899,6 +3915,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.pricing_mode AS "pricingMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
         o.context_length AS "contextLength",
@@ -3933,6 +3950,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.execution_mode AS "executionMode", o.public_node_id AS "publicNodeId",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.daily_token_limit AS "dailyTokenLimit",
         o.max_concurrency AS "maxConcurrency",
         o.context_length AS "contextLength",
@@ -4029,7 +4047,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.real_model AS "realModel",
         o.owner_user_id AS "ownerUserId",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
-        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput"
+        o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount"
       FROM offering_favorites f
       JOIN offerings o ON o.id = f.offering_id
       WHERE f.user_id = $1
@@ -4124,6 +4143,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.execution_mode AS "executionMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.enabled,
         o.review_status AS "reviewStatus",
         u.display_name AS "ownerDisplayName",
@@ -4305,6 +4325,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.pricing_mode AS "pricingMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
         o.enabled,
@@ -4367,6 +4388,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.pricing_mode AS "pricingMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.execution_mode AS "executionMode",
         o.node_id AS "nodeId",
         o.created_at AS "createdAt",
@@ -4414,6 +4436,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         o.pricing_mode AS "pricingMode",
         o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
         o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
+        o.cache_read_discount AS "cacheReadDiscount",
         o.execution_mode AS "executionMode",
         o.created_at AS "createdAt"
       FROM offerings o

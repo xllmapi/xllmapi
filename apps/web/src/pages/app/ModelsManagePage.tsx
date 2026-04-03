@@ -43,6 +43,7 @@ interface Offering {
   executionMode?: string;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number;
   dailyTokenLimit?: number;
   maxConcurrency?: number;
   nodeId?: string;
@@ -84,6 +85,7 @@ interface NodeOffering {
   reviewStatus: string;
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number;
 }
 
 interface ConnectedNode {
@@ -611,11 +613,12 @@ function ConfigModal({
 }: {
   offering: Offering;
   onClose: () => void;
-  onSave: (data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; dailyTokenLimit: number; maxConcurrency: number }) => Promise<void>;
+  onSave: (data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; cacheReadDiscount: number; dailyTokenLimit: number; maxConcurrency: number }) => Promise<void>;
   t: (key: string) => string;
 }) {
   const [inputPrice, setInputPrice] = useState(String(offering.fixedPricePer1kInput ?? 0));
   const [outputPrice, setOutputPrice] = useState(String(offering.fixedPricePer1kOutput ?? 0));
+  const [cacheDiscount, setCacheDiscount] = useState(String(offering.cacheReadDiscount ?? 50));
   const [dailyLimit, setDailyLimit] = useState(String(offering.dailyTokenLimit ?? 0));
   const [maxConc, setMaxConc] = useState(String(offering.maxConcurrency ?? 0));
   const [saving, setSaving] = useState(false);
@@ -626,6 +629,7 @@ function ConfigModal({
       await onSave({
         fixedPricePer1kInput: Number(inputPrice) || 0,
         fixedPricePer1kOutput: Number(outputPrice) || 0,
+        cacheReadDiscount: Math.max(1, Math.min(100, Number(cacheDiscount) || 50)),
         dailyTokenLimit: Number(dailyLimit) || 0,
         maxConcurrency: Number(maxConc) || 0,
       });
@@ -666,6 +670,20 @@ function ConfigModal({
               style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
             />
             <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.outputPriceHint")}</p>
+          </div>
+          <div>
+            <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.cacheDiscount")}</label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={cacheDiscount}
+              onChange={(e) => setCacheDiscount(e.target.value)}
+              placeholder="50"
+              className="w-full rounded-[var(--radius-input)] border border-line px-3 py-2 text-sm text-text-primary font-mono focus:outline-none focus:border-accent transition-colors"
+              style={{ backgroundColor: "rgba(16,21,34,0.6)" }}
+            />
+            <p className="text-[10px] text-text-tertiary mt-1">{t("nodeConfig.cacheDiscountHint")}</p>
           </div>
           <div>
             <label className="text-text-secondary text-xs block mb-1.5">{t("nodeConfig.dailyLimit")}</label>
@@ -1212,7 +1230,7 @@ function ProvidingTab() {
     }
   };
 
-  const handleConfigSave = async (offeringId: string, data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; dailyTokenLimit: number; maxConcurrency: number }) => {
+  const handleConfigSave = async (offeringId: string, data: { fixedPricePer1kInput: number; fixedPricePer1kOutput: number; cacheReadDiscount: number; dailyTokenLimit: number; maxConcurrency: number }) => {
     try {
       await apiJson(`/v1/offerings/${encodeURIComponent(offeringId)}`, {
         method: "PATCH",

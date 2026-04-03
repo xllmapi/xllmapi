@@ -87,7 +87,7 @@ export interface FailedAttempt {
 export interface ProviderResult {
   chosenOffering: CandidateOffering;
   content: string;
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number };
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cacheReadTokens: number; cacheCreationTokens: number };
   timing: { totalMs: number };
   finishReason: string;
   upstreamUserAgent?: string;
@@ -313,7 +313,7 @@ export async function proxyApiRequest(params: {
         respHeaders["retry-after"] = resp.headers.get("retry-after")!;
       }
 
-      let usage: ProxyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      let usage: ProxyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
       const needsConversion = params.clientFormat !== targetFormat;
       if (needsConversion) {
         respHeaders["x-xllmapi-format-converted"] = `${targetFormat}->${params.clientFormat}`;

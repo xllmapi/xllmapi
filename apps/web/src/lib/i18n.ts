@@ -813,6 +813,8 @@ const messages: Record<string, Record<string, string>> = {
     "nodeConfig.dailyLimitHint": "默认 1M，设为 0 则无限制",
     "nodeConfig.maxConcurrency": "最大并发数",
     "nodeConfig.maxConcurrencyHint": "默认 2，设为 0 则无限制",
+    "nodeConfig.cacheDiscount": "缓存折扣",
+    "nodeConfig.cacheDiscountHint": "缓存命中 input 按此比例计费 (1-100%)",
     "nodeConfig.save": "保存",
     "nodeConfig.cancel": "取消",
 
@@ -1752,6 +1754,8 @@ const messages: Record<string, Record<string, string>> = {
     "nodeConfig.dailyLimitHint": "Default 1M, 0 = unlimited",
     "nodeConfig.maxConcurrency": "Max Concurrency",
     "nodeConfig.maxConcurrencyHint": "Default 2, 0 = unlimited",
+    "nodeConfig.cacheDiscount": "Cache Discount",
+    "nodeConfig.cacheDiscountHint": "Cache hit input charged at this rate (1-100%)",
     "nodeConfig.save": "Save",
     "nodeConfig.cancel": "Cancel",
 

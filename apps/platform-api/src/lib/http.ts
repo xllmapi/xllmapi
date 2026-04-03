@@ -20,6 +20,7 @@ export type CreateOfferingBody = {
   pricingMode?: "free" | "fixed_price" | "market_auto";
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number;
   maxConcurrency?: number;
   dailyTokenLimit?: number;
 };
@@ -32,6 +33,7 @@ export type UpdateOfferingBody = {
   pricingMode?: "free" | "fixed_price" | "market_auto";
   fixedPricePer1kInput?: number;
   fixedPricePer1kOutput?: number;
+  cacheReadDiscount?: number;
   enabled?: boolean;
   dailyTokenLimit?: number;
   maxConcurrency?: number;

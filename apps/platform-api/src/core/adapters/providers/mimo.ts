@@ -15,6 +15,8 @@ export const mimoAnthropicHooks: ProviderHooks = {
     const lines = tail.split("\n");
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheRead = 0;
+    let cacheCreation = 0;
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
@@ -24,20 +26,30 @@ export const mimoAnthropicHooks: ProviderHooks = {
         const parsed = JSON.parse(jsonStr);
         if (parsed.type === "message_start" && parsed.message?.usage) {
           const u = parsed.message.usage;
-          const v = u.input_tokens || u.prompt_tokens || ((u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)) || 0;
-          if (v > inputTokens) inputTokens = v;
+          inputTokens = u.input_tokens || u.prompt_tokens || 0;
+          cacheRead = u.cache_read_input_tokens ?? 0;
+          cacheCreation = u.cache_creation_input_tokens ?? 0;
         }
         if (parsed.type === "message_delta" && parsed.usage) {
           outputTokens = parsed.usage.output_tokens ?? 0;
-          // MiMo-specific: message_delta also carries input_tokens
-          const deltaInput = parsed.usage.input_tokens || ((parsed.usage.cache_read_input_tokens ?? 0) + (parsed.usage.cache_creation_input_tokens ?? 0)) || 0;
+          const deltaInput = parsed.usage.input_tokens || 0;
           if (deltaInput > inputTokens) inputTokens = deltaInput;
+          const deltaCacheRead = parsed.usage.cache_read_input_tokens ?? 0;
+          if (deltaCacheRead > cacheRead) cacheRead = deltaCacheRead;
+          const deltaCacheCreation = parsed.usage.cache_creation_input_tokens ?? 0;
+          if (deltaCacheCreation > cacheCreation) cacheCreation = deltaCacheCreation;
         }
       } catch { /* skip */ }
     }
 
-    if (inputTokens > 0 || outputTokens > 0) {
-      return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens };
+    if (inputTokens > 0 || outputTokens > 0 || cacheRead > 0 || cacheCreation > 0) {
+      return {
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + cacheRead + cacheCreation + outputTokens,
+        cacheReadTokens: cacheRead,
+        cacheCreationTokens: cacheCreation,
+      };
     }
     return undefined;
   },

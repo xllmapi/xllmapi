@@ -63,7 +63,7 @@ test("openai extractUsageFromStream: extracts usage from valid data line", () =>
   ].join("\n");
 
   const usage = openaiAdapter.extractUsageFromStream(tail);
-  assert.deepEqual(usage, { inputTokens: 10, outputTokens: 20, totalTokens: 30 });
+  assert.deepEqual(usage, { inputTokens: 10, outputTokens: 20, totalTokens: 30, cacheReadTokens: 0, cacheCreationTokens: 0 });
 });
 
 test("openai extractUsageFromStream: returns undefined when no usage present", () => {
@@ -82,7 +82,7 @@ test("openai extractUsageFromJson: extracts usage from response body", () => {
   };
 
   const usage = openaiAdapter.extractUsageFromJson(body);
-  assert.deepEqual(usage, { inputTokens: 5, outputTokens: 15, totalTokens: 20 });
+  assert.deepEqual(usage, { inputTokens: 5, outputTokens: 15, totalTokens: 20, cacheReadTokens: 0, cacheCreationTokens: 0 });
 });
 
 // ── Anthropic adapter ───────────────────────────────────────────────
@@ -110,7 +110,7 @@ test("anthropic extractUsageFromStream: extracts from message_start + message_de
   ].join("\n");
 
   const usage = anthropicAdapter.extractUsageFromStream(tail);
-  assert.deepEqual(usage, { inputTokens: 42, outputTokens: 18, totalTokens: 60 });
+  assert.deepEqual(usage, { inputTokens: 42, outputTokens: 18, totalTokens: 60, cacheReadTokens: 0, cacheCreationTokens: 0 });
 });
 
 test("anthropic extractUsageFromStream: returns undefined when no usage events", () => {
@@ -129,5 +129,5 @@ test("anthropic extractUsageFromJson: extracts usage with input/output tokens", 
   };
 
   const usage = anthropicAdapter.extractUsageFromJson(body);
-  assert.deepEqual(usage, { inputTokens: 8, outputTokens: 12, totalTokens: 20 });
+  assert.deepEqual(usage, { inputTokens: 8, outputTokens: 12, totalTokens: 20, cacheReadTokens: 0, cacheCreationTokens: 0 });
 });

@@ -445,6 +445,7 @@ export async function handleProviderRoutes(
       pricingMode: body.pricingMode,
       fixedPricePer1kInput: body.fixedPricePer1kInput,
       fixedPricePer1kOutput: body.fixedPricePer1kOutput,
+      cacheReadDiscount: typeof body.cacheReadDiscount === "number" ? Math.max(1, Math.min(100, body.cacheReadDiscount)) : undefined,
       enabled: body.enabled,
       dailyTokenLimit: body.dailyTokenLimit,
       maxConcurrency: body.maxConcurrency
@@ -641,6 +642,7 @@ export async function handleProviderRoutes(
       pricingMode: body.pricingMode ?? "fixed_price",
       fixedPricePer1kInput,
       fixedPricePer1kOutput,
+      cacheReadDiscount: typeof body.cacheReadDiscount === "number" ? Math.max(1, Math.min(100, body.cacheReadDiscount)) : 50,
       maxConcurrency,
       dailyTokenLimit
     });
