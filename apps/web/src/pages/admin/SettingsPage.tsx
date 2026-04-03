@@ -35,6 +35,7 @@ const CONFIG_GROUPS: Record<string, string[]> = {
     "default_daily_token_limit",
     "default_input_price_per_1k",
     "default_output_price_per_1k",
+    "default_cache_read_discount",
   ],
   proxy: [
     "default_proxy_user_agent",

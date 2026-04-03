@@ -817,7 +817,8 @@ const messages: Record<string, Record<string, string>> = {
     "nodeConfig.maxConcurrency": "最大并发数",
     "nodeConfig.maxConcurrencyHint": "默认 2，设为 0 则无限制",
     "nodeConfig.cacheDiscount": "缓存折扣",
-    "nodeConfig.cacheDiscountHint": "缓存命中 input 按此比例计费 (1-100%)",
+    "nodeConfig.cacheDiscountHint": "缓存命中 input 按此比例计费 (1-100%，留空使用全局默认)",
+    "nodeConfig.cacheDiscountDefault": "使用全局默认",
     "nodeConfig.save": "保存",
     "nodeConfig.cancel": "取消",
 
@@ -1761,7 +1762,8 @@ const messages: Record<string, Record<string, string>> = {
     "nodeConfig.maxConcurrency": "Max Concurrency",
     "nodeConfig.maxConcurrencyHint": "Default 2, 0 = unlimited",
     "nodeConfig.cacheDiscount": "Cache Discount",
-    "nodeConfig.cacheDiscountHint": "Cache hit input charged at this rate (1-100%)",
+    "nodeConfig.cacheDiscountHint": "Cache hit input charged at this rate (1-100%, empty = global default)",
+    "nodeConfig.cacheDiscountDefault": "Use global default",
     "nodeConfig.save": "Save",
     "nodeConfig.cancel": "Cancel",
 
