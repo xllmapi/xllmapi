@@ -258,7 +258,7 @@ export function OverviewPage() {
       header: "Input",
       align: "right",
       className: "hidden md:table-cell",
-      render: (r) => <span className="text-text-tertiary">{r.inputTokens != null ? formatTokens(r.inputTokens) : "—"}</span>,
+      render: (r) => <span className="text-text-tertiary">{r.inputTokens != null ? formatTokens(r.inputTokens + (r.cacheReadTokens ?? 0)) : "—"}</span>,
     },
     {
       key: "outputTokens",
