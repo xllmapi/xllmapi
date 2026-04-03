@@ -93,7 +93,7 @@ export function AdminSettlementsPage() {
     },
     {
       key: "consumerCost",
-      header: "原价(省)",
+      header: "消费(缓存节省)",
       align: "right",
       render: (r) => {
         const cr = r.cacheReadTokens ?? 0;
