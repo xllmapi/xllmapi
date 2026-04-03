@@ -2918,6 +2918,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       presetId: row.presetId === '__unknown__' ? undefined : row.presetId,
       totalRequests: Number(row.totalRequests),
       totalTokens: Number(row.totalTokens),
+      totalXtokens: Number(row.totalXtokens ?? 0),
       totalInputTokens: Number(row.totalInputTokens),
       totalOutputTokens: Number(row.totalOutputTokens),
       uniqueUsers: Number(row.uniqueUsers),
