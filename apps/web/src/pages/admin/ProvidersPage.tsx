@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useState } from "react";
 import { apiJson } from "@/lib/api";
-import { useCachedFetch } from "@/hooks/useCachedFetch";
+import { useCachedFetch, invalidateFetchCache } from "@/hooks/useCachedFetch";
 import { formatNumber, formatProviderType } from "@/lib/utils";
 import { useLocale } from "@/hooks/useLocale";
 import { DataTable, type Column } from "@/components/ui/DataTable";
@@ -181,6 +181,7 @@ function PresetsTab() {
         });
       }
       setMessage({ type: "success", text: t("admin.settings.saved") });
+      invalidateFetchCache("/v1/admin/provider-presets");
       closeForm();
       await refetchPresets();
     } catch {
