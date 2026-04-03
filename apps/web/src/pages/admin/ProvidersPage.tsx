@@ -407,17 +407,6 @@ function PresetsTab() {
                   })}
                 </div>
               </div>
-              <div>
-                <label className="text-text-secondary text-xs block mb-1.5">协议兼容模式</label>
-                <select
-                  value={editing.compatMode ?? "standard"}
-                  onChange={(e) => setEditing({ ...editing, compatMode: e.target.value })}
-                  className="w-full rounded-[var(--radius-input)] border border-line bg-[rgba(16,21,34,0.6)] px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
-                >
-                  <option value="standard">标准 (Standard)</option>
-                  <option value="input_includes_cached">input 含 cached (Kimi Code 等)</option>
-                </select>
-              </div>
               <div className="md:col-span-2 mt-2">
                 <label className="text-text-secondary text-xs block mb-1.5">{t("admin.providers.thirdPartyNotice")}</label>
                 <textarea
@@ -458,6 +447,20 @@ function PresetsTab() {
             className="w-full rounded-[var(--radius-input)] border border-line bg-[rgba(16,21,34,0.6)] px-4 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent transition-colors font-mono"
           />
           <p className="text-text-tertiary text-[10px] mt-1">mode: &quot;force&quot; | &quot;fallback&quot;. Placeholder: $CLIENT_USER_AGENT</p>
+        </div>
+
+        {/* Compat mode — always visible, not inside thirdParty block */}
+        <div className="mb-4">
+          <label className="text-text-secondary text-xs block mb-1.5">协议兼容模式</label>
+          <select
+            value={editing.compatMode ?? "standard"}
+            onChange={(e) => setEditing({ ...editing, compatMode: e.target.value })}
+            className="w-full rounded-[var(--radius-input)] border border-line bg-[rgba(16,21,34,0.6)] px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
+          >
+            <option value="standard">标准 (Standard)</option>
+            <option value="input_includes_cached">input 含 cached (Kimi Code 等)</option>
+          </select>
+          <p className="text-text-tertiary text-[10px] mt-1">非标准供应商的 API 协议兼容配置，通常保持"标准"即可</p>
         </div>
 
         <div className="flex gap-3">
