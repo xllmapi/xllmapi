@@ -234,6 +234,7 @@ export function OverviewPage() {
               {isCredit ? "+" : "−"}{formatTokens(amt)}
             </span>
             {!isCredit && saved > 0 && <span className="text-green-500 text-[10px] cursor-help" title={t("overview.cacheSavedTip")}>{t("overview.cacheSaved")}{formatTokens(saved)}</span>}
+            {isCredit && (r.cacheReadTokens ?? 0) > 0 && <span className="text-blue-400 text-[10px]">{t("overview.cacheHit")}</span>}
           </span>
         );
       },
