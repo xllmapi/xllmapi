@@ -1974,6 +1974,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       , o.node_id AS "nodeId"
       , COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders"
       , COALESCE(p.label, c.provider_label) AS "providerLabel"
+      , COALESCE(p.compat_mode, 'standard') AS "compatMode"
       , COALESCE(p.third_party, false) AS "thirdParty"
       , p.third_party_label AS "thirdPartyLabel"
       , COALESCE(p.trust_level, 'high') AS "trustLevel"
@@ -2019,6 +2020,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         COALESCE(p.anthropic_base_url, c.anthropic_base_url) AS "anthropicBaseUrl",
         COALESCE(p.custom_headers, c.custom_headers) AS "customHeaders",
         COALESCE(p.label, c.provider_label) AS "providerLabel",
+        COALESCE(p.compat_mode, 'standard') AS "compatMode",
         COALESCE(p.third_party, false) AS "thirdParty",
         p.third_party_label AS "thirdPartyLabel",
         COALESCE(p.trust_level, 'high') AS "trustLevel"
@@ -4491,7 +4493,8 @@ export const postgresPlatformRepository: PlatformRepository = {
         COALESCE(third_party, false) AS "thirdParty",
         third_party_label AS "thirdPartyLabel",
         COALESCE(trust_level, 'high') AS "trustLevel",
-        third_party_notice AS "thirdPartyNotice"
+        third_party_notice AS "thirdPartyNotice",
+        COALESCE(compat_mode, 'standard') AS "compatMode"
       FROM provider_presets
       ORDER BY sort_order ASC, id ASC
     `);
@@ -4509,11 +4512,12 @@ export const postgresPlatformRepository: PlatformRepository = {
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
     sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
     thirdParty?: boolean; thirdPartyLabel?: string | null; trustLevel?: string; thirdPartyNotice?: string | null;
+    compatMode?: string;
   }): Promise<void> {
     const pool = getPool();
     await pool.query(`
-      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by, custom_headers, third_party, third_party_label, trust_level, third_party_notice)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11, $12, $13, $14)
+      INSERT INTO provider_presets (id, label, provider_type, base_url, anthropic_base_url, models, enabled, sort_order, updated_at, updated_by, custom_headers, third_party, third_party_label, trust_level, third_party_notice, compat_mode)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9, $10, $11, $12, $13, $14, $15)
       ON CONFLICT (id) DO UPDATE SET
         label = EXCLUDED.label,
         provider_type = EXCLUDED.provider_type,
@@ -4528,13 +4532,14 @@ export const postgresPlatformRepository: PlatformRepository = {
         third_party = EXCLUDED.third_party,
         third_party_label = EXCLUDED.third_party_label,
         trust_level = EXCLUDED.trust_level,
-        third_party_notice = EXCLUDED.third_party_notice
+        third_party_notice = EXCLUDED.third_party_notice,
+        compat_mode = EXCLUDED.compat_mode
     `, [params.id, params.label, params.providerType, params.baseUrl,
         params.anthropicBaseUrl ?? null, JSON.stringify(params.models),
         params.enabled ?? true, params.sortOrder ?? 0, params.updatedBy ?? null,
         params.customHeaders ? JSON.stringify(params.customHeaders) : null,
         params.thirdParty ?? false, params.thirdPartyLabel ?? null, params.trustLevel ?? 'high',
-        params.thirdPartyNotice ?? null]);
+        params.thirdPartyNotice ?? null, params.compatMode ?? 'standard']);
   },
 
   async deleteProviderPreset(id: string): Promise<boolean> {

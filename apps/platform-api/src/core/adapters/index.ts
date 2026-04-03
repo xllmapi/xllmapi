@@ -29,8 +29,9 @@ export function registerAdapter(adapter: ProviderAdapter): void {
 // ── Provider Hooks: per-provider overrides on top of format adapters ──
 
 const providerHooksRegistry = new Map<string, { openai?: ProviderHooks; anthropic?: ProviderHooks }>();
+const compatModeRegistry = new Map<string, { openai?: ProviderHooks; anthropic?: ProviderHooks }>();
 
-/** Register provider-specific hooks that override base adapter behavior */
+/** Register provider-specific hooks by label (legacy, still supported) */
 export function registerProviderHooks(
   providerLabel: string,
   hooks: { openai?: ProviderHooks; anthropic?: ProviderHooks },
@@ -38,12 +39,26 @@ export function registerProviderHooks(
   providerHooksRegistry.set(providerLabel.toLowerCase(), hooks);
 }
 
-/** Get adapter with provider-specific hooks applied. Falls back to base adapter if no hooks. */
-export function getAdapterForProvider(formatId: ApiFormatId, providerLabel?: string): ProviderAdapter {
-  const base = getAdapter(formatId);
-  if (!providerLabel) return base;
+/** Register hooks by compat_mode value (preferred — config-driven, not name-dependent) */
+export function registerCompatModeHooks(
+  semantics: string,
+  hooks: { openai?: ProviderHooks; anthropic?: ProviderHooks },
+): void {
+  compatModeRegistry.set(semantics, hooks);
+}
 
-  const hooks = providerHooksRegistry.get(providerLabel.toLowerCase())?.[formatId];
+/**
+ * Get adapter with provider-specific hooks applied.
+ * Priority: compatMode hooks → providerLabel hooks → base adapter
+ */
+export function getAdapterForProvider(formatId: ApiFormatId, providerLabel?: string, compatMode?: string): ProviderAdapter {
+  const base = getAdapter(formatId);
+
+  // Priority 1: compat_mode from DB config (stable, not name-dependent)
+  const semHooks = compatMode ? compatModeRegistry.get(compatMode)?.[formatId] : undefined;
+  // Priority 2: provider label matching (legacy fallback)
+  const labelHooks = providerLabel ? providerHooksRegistry.get(providerLabel.toLowerCase())?.[formatId] : undefined;
+  const hooks = semHooks ?? labelHooks;
   if (!hooks) return base;
 
   return {

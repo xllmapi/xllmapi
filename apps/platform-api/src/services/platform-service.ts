@@ -330,6 +330,7 @@ export const platformService = {
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
     sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
     thirdParty?: boolean; thirdPartyLabel?: string | null; trustLevel?: string; thirdPartyNotice?: string | null;
+    compatMode?: string;
   }) {
     return platformRepository.upsertProviderPreset(params);
   },

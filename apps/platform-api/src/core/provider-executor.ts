@@ -268,7 +268,7 @@ export async function proxyApiRequest(params: {
 
       // Determine target format and base URL
       const { targetFormat, baseUrl } = resolveEndpoint(offering, params.clientFormat);
-      const adapter = getAdapterForProvider(targetFormat, offering.providerLabel);
+      const adapter = getAdapterForProvider(targetFormat, offering.providerLabel, offering.compatMode);
 
       // Build request
       const url = adapter.buildUrl(baseUrl);
@@ -344,6 +344,7 @@ export async function proxyApiRequest(params: {
             const lines = converter.transform(str);
             for (const line of lines) params.res.write(line);
             // Capture usage from Anthropic message_start before tail buffer overflow
+            // Uses adapter.extractUsageFromJson to apply provider hooks (e.g. Kimi Code fix)
             if (earlyUsage.totalTokens === 0 && str.includes('"message_start"')) {
               try {
                 for (const rawLine of str.split("\n")) {
@@ -352,7 +353,7 @@ export async function proxyApiRequest(params: {
                   const jsonStr = trimmed.startsWith("data: ") ? trimmed.slice(6) : trimmed.slice(5);
                   const parsed = JSON.parse(jsonStr);
                   if (parsed.type === "message_start" && parsed.message?.usage) {
-                    earlyUsage = parseRawUsage(parsed.message.usage as Record<string, unknown>);
+                    earlyUsage = adapter.extractUsageFromJson({ usage: parsed.message.usage }) ?? earlyUsage;
                   }
                 }
               } catch { /* ignore parse errors */ }

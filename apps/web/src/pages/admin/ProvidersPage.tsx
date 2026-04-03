@@ -36,6 +36,7 @@ interface ProviderPreset {
   thirdPartyLabel: string | null;
   trustLevel: string;
   thirdPartyNotice: string | null;
+  compatMode: string;
 }
 
 type Tab = "presets" | "status";
@@ -56,6 +57,7 @@ const EMPTY_PRESET: ProviderPreset = {
   thirdPartyLabel: null,
   trustLevel: "high",
   thirdPartyNotice: null,
+  compatMode: "standard",
 };
 
 function CheckItem({ ok, label, error, warn }: { ok: boolean; label: string; error?: string; warn?: string }) {
@@ -404,6 +406,17 @@ function PresetsTab() {
                     );
                   })}
                 </div>
+              </div>
+              <div>
+                <label className="text-text-secondary text-xs block mb-1.5">协议兼容模式</label>
+                <select
+                  value={editing.compatMode ?? "standard"}
+                  onChange={(e) => setEditing({ ...editing, compatMode: e.target.value })}
+                  className="w-full rounded-[var(--radius-input)] border border-line bg-[rgba(16,21,34,0.6)] px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
+                >
+                  <option value="standard">标准 (Standard)</option>
+                  <option value="input_includes_cached">input 含 cached (Kimi Code 等)</option>
+                </select>
               </div>
               <div className="md:col-span-2 mt-2">
                 <label className="text-text-secondary text-xs block mb-1.5">{t("admin.providers.thirdPartyNotice")}</label>

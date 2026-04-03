@@ -467,6 +467,8 @@ export type PlatformRepository = {
     id: string; label: string; providerType: string; baseUrl: string;
     anthropicBaseUrl?: string | null; models: unknown[]; enabled?: boolean;
     sortOrder?: number; updatedBy?: string; customHeaders?: unknown | null;
+    thirdParty?: boolean; thirdPartyLabel?: string | null; trustLevel?: string; thirdPartyNotice?: string | null;
+    compatMode?: string;
   }): MaybePromise<void>;
   deleteProviderPreset(id: string): MaybePromise<boolean>;
 
