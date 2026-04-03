@@ -206,14 +206,15 @@ export const ledgerService = {
           ar.logical_model AS "logicalModel",
           ar.provider,
           ar.provider_label AS "providerLabel",
-          ar.input_tokens AS "inputTokens",
+          (ar.input_tokens + COALESCE(ar.cache_read_tokens, 0)) AS "inputTokens",
           ar.output_tokens AS "outputTokens",
           ar.total_tokens AS "totalTokens",
           ar.cache_read_tokens AS "cacheReadTokens",
           ar.real_model AS "realModel",
-          o.fixed_price_per_1k_input AS "fixedPricePer1kInput",
-          o.fixed_price_per_1k_output AS "fixedPricePer1kOutput",
-          o.cache_read_discount AS "cacheReadDiscount"
+          CASE WHEN ar.cache_read_tokens > 0 AND o.fixed_price_per_1k_input > 0 THEN
+            CEIL(((ar.input_tokens + COALESCE(ar.cache_read_tokens, 0) + COALESCE(ar.cache_creation_tokens, 0)) * o.fixed_price_per_1k_input)::numeric / 1000)
+            + CEIL((ar.output_tokens * o.fixed_price_per_1k_output)::numeric / 1000)
+          ELSE NULL END AS "fullCostWithoutCache"
         FROM ledger_entries le
         LEFT JOIN api_requests ar ON ar.id = le.request_id
         LEFT JOIN offerings o ON o.id = ar.chosen_offering_id
