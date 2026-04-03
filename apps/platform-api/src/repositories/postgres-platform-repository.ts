@@ -1367,6 +1367,7 @@ export const postgresPlatformRepository: PlatformRepository = {
       owners: string[] | null;
       minInputPricePer1k: number | null;
       minOutputPricePer1k: number | null;
+      avgCacheReadDiscount: number | null;
       providers: string[] | null;
       pricingModes: string[] | null;
       maxContextLength: number | null;
@@ -1386,6 +1387,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         ARRAY_AGG(DISTINCT o.owner_user_id) AS owners,
         MIN(o.fixed_price_per_1k_input) AS "minInputPricePer1k",
         MIN(o.fixed_price_per_1k_output) AS "minOutputPricePer1k",
+        ROUND(AVG(o.cache_read_discount))::int AS "avgCacheReadDiscount",
         ARRAY_AGG(DISTINCT c.provider_type) AS providers,
         ARRAY_AGG(DISTINCT o.pricing_mode) AS "pricingModes",
         MAX(COALESCE(
@@ -1480,6 +1482,7 @@ export const postgresPlatformRepository: PlatformRepository = {
         thirdPartyLabel: row.thirdPartyLabel ?? undefined,
         trustLevel: row.trustLevel ?? "high",
         thirdPartyNotice: row.thirdPartyNotice ?? undefined,
+        avgCacheReadDiscount: row.avgCacheReadDiscount ?? undefined,
       });
     }
 

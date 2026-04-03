@@ -14,6 +14,7 @@ interface NetworkModel {
   providers?: string[];
   minInputPrice?: number | null;
   minOutputPrice?: number | null;
+  avgCacheReadDiscount?: number;
   contextLength?: number;
   featuredSuppliers?: { handle: string; displayName: string }[];
   thirdParty?: boolean;
@@ -480,6 +481,9 @@ export function ModelsPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-text-tertiary">{t("models.avgPrice7d")}</span>
                         <span className="text-accent font-medium">{formatTokens(m.minInputPrice)}<span className="text-text-tertiary/40 mx-0.5">/</span>{formatTokens(m.minOutputPrice ?? 0)}</span>
+                        {m.avgCacheReadDiscount != null && m.avgCacheReadDiscount < 100 && (
+                          <span className="text-green-500 text-[10px]" title={t("models.cacheDiscount")}>cache {m.avgCacheReadDiscount}%</span>
+                        )}
                       </div>
                     ) : (
                       <span className="text-text-tertiary">{t("models.noPrice")}</span>
