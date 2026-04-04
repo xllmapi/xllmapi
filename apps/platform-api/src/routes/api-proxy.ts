@@ -186,6 +186,7 @@ async function handleProxyRequest(
   } catch (err) {
     metricsService.increment("coreErrors");
     const errorMsg = err instanceof Error ? err.message : "provider execution failed";
+    console.error(`[api-proxy] request=${requestId} model=${model} error: ${errorMsg}`);
     // Record failed request for admin visibility
     try {
       await platformService.recordFailedRequest({

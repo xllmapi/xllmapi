@@ -61,6 +61,7 @@ interface SupplyUsageItem {
   outputTokens: number;
   totalTokens: number;
   supplierReward: number;
+  todayTokens: number;
 }
 
 interface NodeToken {
@@ -1831,12 +1832,27 @@ node dist/main.js start \\
                       </>
                     )}
                   </div>
-                  {(o.dailyTokenLimit ?? 0) > 0 && (
-                    <div>
-                      <span className="text-text-tertiary">{t("nodeConfig.dailyLimit")}</span>
-                      <span className="ml-1.5 text-text-primary font-mono">{formatTokens(o.dailyTokenLimit!)}</span>
-                    </div>
-                  )}
+                  {(o.dailyTokenLimit ?? 0) > 0 && (() => {
+                    const limit = o.dailyTokenLimit!;
+                    const used = Number(usage?.todayTokens ?? 0);
+                    const pct = Math.min(Math.round((used / limit) * 100), 100);
+                    return (
+                      <div>
+                        <span className="text-text-tertiary">{t("nodeConfig.dailyLimit")}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex-1 h-1.5 bg-[rgba(255,255,255,0.08)] rounded-full overflow-hidden max-w-[120px]">
+                            <div
+                              className={`h-full rounded-full ${pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-text-primary">{formatTokens(used)}</span>
+                          <span className="text-text-tertiary">/</span>
+                          <span className="font-mono text-text-primary">{formatTokens(limit)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {(o.maxConcurrency ?? 0) > 0 && (
                     <div>
                       <span className="text-text-tertiary">{t("nodeConfig.maxConcurrency")}</span>

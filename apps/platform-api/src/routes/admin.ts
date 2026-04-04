@@ -318,20 +318,50 @@ export async function handleAdminRoutes(
     const breakers = getAllBreakerStates();
     // Get all active offerings from DB
     const offerings = await platformRepository.getAdminOfferingHealthList();
-    // Merge breaker state
-    const data = offerings.map((o: Record<string, unknown>) => {
+    // Merge breaker state + compute real-time availability
+    const data = await Promise.all(offerings.map(async (o: Record<string, unknown>) => {
       const bs = breakers.get(o.offeringId as string);
+      const breakerState = bs?.state ?? "closed";
+      const errorClass = bs?.errorClass ?? null;
+
+      // Compute real-time availability status
+      let availabilityStatus = "available";
+      let availabilityReason: string | null = null;
+      let dailyTokenUsed = 0;
+
+      if (breakerState === "disabled") {
+        availabilityStatus = "disabled";
+        availabilityReason = bs?.lastErrorMessage ?? "fatal error";
+      } else if (breakerState === "open") {
+        availabilityStatus = "degraded";
+        availabilityReason = `breaker open: ${errorClass ?? "unknown"}`;
+      }
+
+      const dailyTokenLimit = Number(o.dailyTokenLimit ?? 0);
+      if (dailyTokenLimit > 0) {
+        try {
+          dailyTokenUsed = await platformService.getOfferingDailyTokenUsage(o.offeringId as string);
+          if (availabilityStatus === "available" && dailyTokenUsed >= dailyTokenLimit) {
+            availabilityStatus = "quota_exhausted";
+            availabilityReason = `daily limit: ${dailyTokenUsed.toLocaleString()} / ${dailyTokenLimit.toLocaleString()}`;
+          }
+        } catch { /* ignore check failure */ }
+      }
+
       return {
         ...o,
-        breakerState: bs?.state ?? "closed",
-        errorClass: bs?.errorClass ?? null,
+        breakerState,
+        errorClass,
         failures: bs?.failures ?? 0,
         cooldownMs: bs?.cooldownMs ?? 0,
         lastFailureAt: bs?.lastFailureAt ? new Date(bs.lastFailureAt).toISOString() : null,
         lastErrorMessage: bs?.lastErrorMessage ?? null,
         autoDisabled: bs?.autoDisabled ?? false,
+        availabilityStatus,
+        availabilityReason,
+        dailyTokenUsed,
       };
-    });
+    }));
     const response = json(200, { ok: true, data, requestId });
     res.writeHead(response.statusCode, response.headers);
     res.end(response.payload);

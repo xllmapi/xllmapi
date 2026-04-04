@@ -1623,7 +1623,8 @@ export const postgresPlatformRepository: PlatformRepository = {
           COALESCE(SUM(ar.input_tokens), 0)::text AS "inputTokens",
           COALESCE(SUM(ar.output_tokens), 0)::text AS "outputTokens",
           COALESCE(SUM(ar.total_tokens), 0)::text AS "totalTokens",
-          COALESCE(SUM(sr.supplier_reward), 0)::text AS "supplierReward"
+          COALESCE(SUM(sr.supplier_reward), 0)::text AS "supplierReward",
+          COALESCE(SUM(CASE WHEN ar.created_at >= CURRENT_DATE THEN ar.total_tokens ELSE 0 END), 0)::text AS "todayTokens"
         FROM offerings o
         LEFT JOIN api_requests ar ON ar.chosen_offering_id = o.id
         LEFT JOIN settlement_records sr ON sr.request_id = ar.id
@@ -3265,25 +3266,43 @@ export const postgresPlatformRepository: PlatformRepository = {
     providerLabel?: string;
   }) {
     const currentPool = getPool();
-    await currentPool.query(`
-      INSERT INTO api_requests (
-        id, requester_user_id, logical_model, chosen_offering_id, provider, real_model,
-        input_tokens, output_tokens, total_tokens, status,
-        client_ip, client_user_agent, response_body, provider_label
-      ) VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 0, 'error', $7, $8, $9::jsonb, $10)
-      ON CONFLICT (id) DO NOTHING
-    `, [
-      params.requestId,
-      params.requesterUserId,
-      params.logicalModel,
-      params.offeringId ?? null,
-      params.provider ?? null,
-      params.realModel ?? null,
-      params.clientIp ?? null,
-      params.clientUserAgent ?? null,
-      JSON.stringify({ error: params.errorMessage }),
-      params.providerLabel ?? null,
-    ]);
+    if (params.offeringId) {
+      // Has offering context — write to api_requests (FK-safe)
+      await currentPool.query(`
+        INSERT INTO api_requests (
+          id, requester_user_id, logical_model, chosen_offering_id, provider, real_model,
+          input_tokens, output_tokens, total_tokens, status,
+          client_ip, client_user_agent, response_body, provider_label
+        ) VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 0, 'error', $7, $8, $9::jsonb, $10)
+        ON CONFLICT (id) DO NOTHING
+      `, [
+        params.requestId,
+        params.requesterUserId,
+        params.logicalModel,
+        params.offeringId,
+        params.provider ?? null,
+        params.realModel ?? null,
+        params.clientIp ?? null,
+        params.clientUserAgent ?? null,
+        JSON.stringify({ error: params.errorMessage }),
+        params.providerLabel ?? null,
+      ]);
+    } else {
+      // No offering (e.g., all offerings unavailable) — write to failed_api_requests (no FK)
+      await currentPool.query(`
+        INSERT INTO failed_api_requests (
+          id, requester_user_id, logical_model, error_message, client_ip, client_user_agent
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO NOTHING
+      `, [
+        params.requestId,
+        params.requesterUserId,
+        params.logicalModel,
+        params.errorMessage,
+        params.clientIp ?? null,
+        params.clientUserAgent ?? null,
+      ]);
+    }
   },
 
   async getAdminOfferingHealthList() {

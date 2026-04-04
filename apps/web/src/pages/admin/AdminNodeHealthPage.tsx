@@ -29,6 +29,10 @@ interface OfferingHealth {
   lastFailureAt: string | null;
   lastErrorMessage: string | null;
   autoDisabled: boolean;
+  // Availability
+  availabilityStatus: "available" | "quota_exhausted" | "degraded" | "disabled";
+  availabilityReason: string | null;
+  dailyTokenUsed: number;
   // Node status
   nodeStatus: string; // 'orphaned' | 'banned' | 'admin_stopped' | 'auto_stopped' | 'stopped' | 'active'
   disabledBy: string | null;
@@ -58,6 +62,7 @@ type TabKey = "all" | "healthy" | "stopped" | "banned" | "orphaned" | "unhealthy
 
 const NODE_STATUS_BADGE: Record<string, { variant: "success" | "danger" | "warning" | "default"; label: string; labelEn: string }> = {
   active: { variant: "success", label: "正常", labelEn: "Healthy" },
+  quota_exhausted: { variant: "warning", label: "额度耗尽", labelEn: "Quota Exhausted" },
   stopped: { variant: "default", label: "已停止", labelEn: "Stopped" },
   admin_stopped: { variant: "default", label: "管理员停止", labelEn: "Admin Stopped" },
   banned: { variant: "danger", label: "已禁用", labelEn: "Banned" },
@@ -67,7 +72,10 @@ const NODE_STATUS_BADGE: Record<string, { variant: "success" | "danger" | "warni
 };
 
 function getDisplayStatus(o: OfferingHealth): string {
-  return o.nodeStatus === "active" && o.breakerState !== "closed" ? "unhealthy" : o.nodeStatus;
+  if (o.nodeStatus !== "active") return o.nodeStatus;
+  if (o.availabilityStatus === "quota_exhausted") return "quota_exhausted";
+  if (o.breakerState !== "closed") return "unhealthy";
+  return "active";
 }
 
 function formatCooldown(ms: number): string {
@@ -273,7 +281,22 @@ function OfferingDetailPanel({
     {
       title: t("admin.nodeHealth.configTitle"),
       rows: [
-        { label: t("admin.nodeHealth.dailyLimit"), value: o.dailyTokenLimit != null ? `${o.dailyTokenLimit.toLocaleString()} tokens` : "-" },
+        { label: t("admin.nodeHealth.dailyLimit"), value: o.dailyTokenLimit != null && o.dailyTokenLimit > 0 ? (() => {
+          const limit = o.dailyTokenLimit;
+          const used = o.dailyTokenUsed ?? 0;
+          const pct = Math.min(Math.round((used / limit) * 100), 100);
+          return (
+            <div className="flex items-center gap-2 min-w-[180px]">
+              <div className="flex-1 h-2 bg-[rgba(255,255,255,0.08)] rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-mono whitespace-nowrap">{formatTokens(used)} / {formatTokens(limit)}</span>
+            </div>
+          );
+        })() : "-" },
         { label: t("admin.nodeHealth.maxConcurrency"), value: o.maxConcurrency != null ? String(o.maxConcurrency) : "-" },
       ],
     },
@@ -282,8 +305,7 @@ function OfferingDetailPanel({
   // Determine available actions based on displayStatus
   const actions: Array<{ label: string; onClick: () => void; variant: "ghost" | "primary"; danger?: boolean }> = [];
 
-  if (displayStatus === "active") {
-    // healthy
+  if (displayStatus === "active" || displayStatus === "quota_exhausted") {
     actions.push({ label: t("admin.nodeHealth.stop"), onClick: () => onStop(o.offeringId), variant: "ghost", danger: true });
     actions.push({ label: t("admin.nodeHealth.ban"), onClick: () => onBan(o.offeringId), variant: "ghost", danger: true });
   } else if (displayStatus === "unhealthy") {
@@ -448,7 +470,7 @@ export function AdminNodeHealthPage() {
     }).length;
     const banned = data.filter((o) => getDisplayStatus(o) === "banned").length;
     const orphaned = data.filter((o) => getDisplayStatus(o) === "orphaned").length;
-    const unhealthy = data.filter((o) => getDisplayStatus(o) === "unhealthy").length;
+    const unhealthy = data.filter((o) => { const s = getDisplayStatus(o); return s === "unhealthy" || s === "quota_exhausted"; }).length;
     return { all, healthy, stopped, banned, orphaned, unhealthy };
   }, [data]);
 
@@ -463,7 +485,7 @@ export function AdminNodeHealthPage() {
       });
     } else if (tab === "banned") list = list.filter((o) => getDisplayStatus(o) === "banned");
     else if (tab === "orphaned") list = list.filter((o) => getDisplayStatus(o) === "orphaned");
-    else if (tab === "unhealthy") list = list.filter((o) => getDisplayStatus(o) === "unhealthy");
+    else if (tab === "unhealthy") list = list.filter((o) => { const s = getDisplayStatus(o); return s === "unhealthy" || s === "quota_exhausted"; });
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -529,6 +551,27 @@ export function AdminNodeHealthPage() {
         const displayStatus = getDisplayStatus(o);
         const badge = NODE_STATUS_BADGE[displayStatus] ?? NODE_STATUS_BADGE.active!;
         return <Badge variant={badge.variant}>{badge.label}</Badge>;
+      },
+    },
+    {
+      key: "dailyUsage",
+      header: t("admin.nodeHealth.dailyUsage"),
+      render: (o) => {
+        const limit = Number(o.dailyTokenLimit ?? 0);
+        if (limit <= 0) return <span className="text-text-tertiary text-xs">-</span>;
+        const used = o.dailyTokenUsed ?? 0;
+        const pct = Math.min(Math.round((used / limit) * 100), 100);
+        return (
+          <div className="flex items-center gap-1.5 min-w-[100px]">
+            <div className="flex-1 h-1.5 bg-[rgba(255,255,255,0.08)] rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="text-[10px] font-mono text-text-secondary whitespace-nowrap">{pct}%</span>
+          </div>
+        );
       },
     },
     {
