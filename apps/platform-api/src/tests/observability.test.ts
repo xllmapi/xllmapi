@@ -38,6 +38,7 @@ test("logger child() inherits parent context via _parentContext", () => {
   const lines: string[] = [];
   const child = createLogger({
     module: "test-parent",
+    level: "trace",
     pretty: false,
     _parentContext: { requestId: "req_123", userId: "user_abc", module: "test-parent" },
     _writer: (line) => lines.push(line),
@@ -58,7 +59,7 @@ test("logger child() inherits parent context via _parentContext", () => {
 
 test("logger parent.child() merges context and inherits _writer", () => {
   const lines: string[] = [];
-  const parent = createLogger({ module: "parent-mod", pretty: false, _writer: (line) => lines.push(line) });
+  const parent = createLogger({ module: "parent-mod", level: "trace", pretty: false, _writer: (line) => lines.push(line) });
   const child = parent.child({ module: "child-mod", nodeId: "node_1" });
 
   child.warn("warning msg");
@@ -86,7 +87,7 @@ test("logger respects log level filtering", () => {
 
 test("logger JSON output includes timestamp and level", () => {
   const lines: string[] = [];
-  const logger = createLogger({ module: "ts-test", pretty: false, _writer: (line) => lines.push(line) });
+  const logger = createLogger({ module: "ts-test", level: "trace", pretty: false, _writer: (line) => lines.push(line) });
 
   logger.info("hello");
 
