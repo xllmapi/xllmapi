@@ -30,6 +30,8 @@ export interface LoggerOptions {
   pretty?: boolean; // human-readable vs JSON
   /** Internal: inherited context from parent logger */
   _parentContext?: LogContext;
+  /** Internal: custom output function for testing */
+  _writer?: (line: string) => void;
 }
 
 export function createLogger(options?: LoggerOptions): Logger {
@@ -37,6 +39,7 @@ export function createLogger(options?: LoggerOptions): Logger {
   const baseContext: LogContext = { ...options?._parentContext };
   if (options?.module) baseContext.module = options.module;
   const pretty = options?.pretty ?? process.env.NODE_ENV === 'development';
+  const writer = options?._writer ?? ((line: string) => console.log(line));
   const timers = new Map<string, number>();
 
   function log(level: LogLevel, message: string, context?: Record<string, unknown>) {
@@ -54,9 +57,9 @@ export function createLogger(options?: LoggerOptions): Logger {
       const prefix = `[${entry.module ?? 'app'}]`;
       const lvl = level.toUpperCase().padEnd(5);
       const ctx = context ? ' ' + JSON.stringify(context) : '';
-      console.log(`${prefix} ${lvl} ${message}${ctx}`);
+      writer(`${prefix} ${lvl} ${message}${ctx}`);
     } else {
-      console.log(JSON.stringify(entry));
+      writer(JSON.stringify(entry));
     }
   }
 
@@ -73,6 +76,7 @@ export function createLogger(options?: LoggerOptions): Logger {
         module: childCtx.module ?? baseContext.module,
         pretty,
         _parentContext: { ...baseContext, ...childCtx },
+        _writer: options?._writer,
       });
     },
     time(label: string) { timers.set(label, Date.now()); },
