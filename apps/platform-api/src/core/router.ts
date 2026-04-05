@@ -68,7 +68,7 @@ async function filterAvailable(offerings: CandidateOffering[]): Promise<Candidat
       try {
         const used = await platformService.getOfferingDailyTokenUsage(o.offeringId);
         if (used >= Number(o.dailyTokenLimit)) continue;
-      } catch { /* allow on check failure */ }
+      } catch (err) { console.warn(`[router] daily limit check failed for ${o.offeringId}: ${err instanceof Error ? err.message : err}`); }
     }
 
     const queue = getOrCreateQueue(o.offeringId, o.maxConcurrency ?? 10);
@@ -157,12 +157,18 @@ export async function routeRequest(params: {
 }> {
   const candidates = await resolveOfferings(params.logicalModel, params.userId);
   if (candidates.length === 0) {
+    console.warn(`[router] no candidates for model=${params.logicalModel} requestId=${params.requestId}`);
     throw new Error(`no offering available for ${params.logicalModel}`);
   }
 
   const available = await filterAvailable(candidates);
   if (available.length === 0) {
+    console.warn(`[router] all ${candidates.length} offerings filtered out for model=${params.logicalModel} requestId=${params.requestId}`);
     throw new Error(`no offering available for ${params.logicalModel} (all in cooldown)`);
+  }
+
+  if (available.length < candidates.length) {
+    console.log(`[router] filtered ${candidates.length} → ${available.length} offerings for model=${params.logicalModel}`);
   }
 
   const { offering, affinityLevel } = selectOffering({
@@ -172,6 +178,8 @@ export async function routeRequest(params: {
     logicalModel: params.logicalModel,
     messageCount: params.messageCount,
   });
+
+  console.log(`[router] selected offering=${offering.offeringId} affinity=${affinityLevel} model=${params.logicalModel} requestId=${params.requestId}`);
 
   const queue = getOrCreateQueue(offering.offeringId, offering.maxConcurrency ?? 10);
   const thresholdMs = affinityLevel === "conv"

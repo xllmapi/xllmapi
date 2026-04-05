@@ -95,7 +95,7 @@ async function validateApiRequest(
         clientIp: get_request_ip_(req),
         clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
       });
-    } catch { /* best-effort */ }
+    } catch (err) { console.warn(`[api-proxy] recordFailedRequest error: ${err instanceof Error ? err.message : err}`); }
     const errBody = formatApiError(clientFormat, 404, `no offering available for ${model}`, { requestId });
     const response = json(404, errBody);
     res.writeHead(response.statusCode, response.headers);
@@ -179,12 +179,13 @@ async function handleProxyRequest(
           errorMessage: settlementErr instanceof Error ? settlementErr.message : String(settlementErr)
         });
       } catch (failureRecordErr) {
-        console.error(`[api-proxy] settlement failure record error:`, failureRecordErr);
+        console.error(`[api-proxy] request=${requestId} settlement failure record error: ${failureRecordErr instanceof Error ? failureRecordErr.message : failureRecordErr}`);
       }
-      console.error(`[api-proxy] settlement error:`, settlementErr);
+      console.error(`[api-proxy] request=${requestId} settlement error: ${settlementErr instanceof Error ? settlementErr.message : settlementErr}`);
     }
   } catch (err) {
     metricsService.increment("coreErrors");
+    metricsService.increment("failedApiRequests");
     const errorMsg = err instanceof Error ? err.message : "provider execution failed";
     console.error(`[api-proxy] request=${requestId} model=${model} error: ${errorMsg}`);
     // Record failed request for admin visibility
@@ -197,7 +198,7 @@ async function handleProxyRequest(
         clientIp: get_request_ip_(req),
         clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
       });
-    } catch { /* best-effort */ }
+    } catch (err) { console.warn(`[api-proxy] recordFailedRequest error: ${err instanceof Error ? err.message : err}`); }
     if (!res.headersSent) {
       const errBody = formatApiError(clientFormat, 502, errorMsg, { requestId });
       const response = json(502, errBody);

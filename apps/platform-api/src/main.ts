@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, resolve } from "node:path";
 
+import { createLogger } from "@xllmapi/logger";
 import { DEV_ADMIN_API_KEY, DEV_USER_API_KEY } from "./constants.js";
 import { cacheService } from "./cache.js";
 import { config } from "./config.js";
-import { json } from "./lib/http.js";
+import { json, get_request_ip_ } from "./lib/http.js";
 import { AppError } from "./lib/errors.js";
 import { applySecurityHeaders } from "./middleware/security.js";
 import { metricsService } from "./metrics.js";
@@ -28,13 +29,15 @@ import {
 import { nodeConnectionManager } from "./core/node-connection-manager.js";
 import { registerAllProviderHooks } from "./core/adapters/providers/index.js";
 
+export const logger = createLogger({ module: "platform-api" });
+
 process.on("uncaughtException", (err) => {
-  console.error("[fatal] uncaught exception:", err);
+  logger.fatal("uncaught exception", { error: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
   process.exit(1);
 });
 
 process.on("unhandledRejection", (reason) => {
-  console.error("[fatal] unhandled rejection:", reason);
+  logger.error("unhandled rejection", { error: reason instanceof Error ? reason.message : String(reason) });
   // Don't exit — log and continue
 });
 
@@ -224,8 +227,27 @@ registerAllProviderHooks();
 
 const server = createServer(async (req, res) => {
   const requestId = randomUUID();
+  const startTime = Date.now();
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   metricsService.increment("totalRequests");
+
+  // Access log on response finish
+  res.on("finish", () => {
+    const durationMs = Date.now() - startTime;
+    const status = res.statusCode;
+    // Skip health/metrics/static for noise reduction
+    const path = url.pathname;
+    if (path === "/healthz" || path === "/readyz" || path === "/metrics") return;
+    const level = status >= 500 ? "error" : status >= 400 ? "warn" : "info";
+    logger[level]("http", {
+      requestId,
+      method: req.method,
+      path,
+      status,
+      durationMs,
+      ip: get_request_ip_(req),
+    });
+  });
 
   // Security middleware
   applySecurityHeaders(req, res);
@@ -371,7 +393,7 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    console.error("[server] request failed", error);
+    logger.error("request failed", { requestId, error: error instanceof Error ? error.message : String(error) });
     send_json_(res, 500, {
       error: {
         code: "internal_error",
@@ -396,7 +418,7 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`platform-api listening on http://${host}:${port}`);
+  logger.info(`listening on http://${host}:${port}`);
   // PM2 cluster ready signal — new worker is ready to accept traffic
   if (typeof process.send === "function") {
     process.send("ready");
@@ -407,11 +429,11 @@ server.listen(port, host, () => {
 async function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[shutdown] received ${signal}, shutting down gracefully...`);
+  logger.info("shutdown initiated", { signal });
 
   // Safety timeout: exit before PM2's kill_timeout (35s)
   const forceExitTimer = setTimeout(() => {
-    console.log("[shutdown] timeout reached, forcing exit");
+    logger.error("shutdown timeout reached, forcing exit");
     process.exit(1);
   }, 25_000);
   forceExitTimer.unref();
@@ -419,7 +441,7 @@ async function gracefulShutdown(signal: string) {
   // 1. Stop accepting new connections and wait for in-flight requests to drain
   await new Promise<void>((resolve) => {
     server.close(() => {
-      console.log("[shutdown] HTTP server closed");
+      logger.info("HTTP server closed");
       resolve();
     });
   });
@@ -427,7 +449,7 @@ async function gracefulShutdown(signal: string) {
   // 2. Close WebSocket server
   try {
     nodeConnectionManager.shutdown();
-  } catch { /* ignore */ }
+  } catch (err) { logger.warn("ws shutdown error", { error: String(err) }); }
 
   // 3. Close database pool and Redis in parallel
   const results = await Promise.allSettled([
@@ -435,11 +457,11 @@ async function gracefulShutdown(signal: string) {
     cacheService.close()
   ]);
 
-  if (results[0].status === "fulfilled") console.log("[shutdown] database pool closed");
-  if (results[1].status === "fulfilled") console.log("[shutdown] cache closed");
+  if (results[0].status === "fulfilled") logger.info("database pool closed");
+  if (results[1].status === "fulfilled") logger.info("cache closed");
 
   clearTimeout(forceExitTimer);
-  console.log("[shutdown] done");
+  logger.info("shutdown complete");
   process.exit(0);
 }
 

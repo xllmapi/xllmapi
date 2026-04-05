@@ -12,6 +12,9 @@ type MetricsState = {
   emailSends: number;
   emailSendFailures: number;
   securityEvents: number;
+  failedApiRequests: number;
+  dailyLimitExhausted: number;
+  providerErrors: number;
 };
 
 const metrics: MetricsState = {
@@ -27,7 +30,10 @@ const metrics: MetricsState = {
   settlementFailures: 0,
   emailSends: 0,
   emailSendFailures: 0,
-  securityEvents: 0
+  securityEvents: 0,
+  failedApiRequests: 0,
+  dailyLimitExhausted: 0,
+  providerErrors: 0
 };
 
 export const metricsService = {
@@ -86,7 +92,16 @@ export const metricsService = {
       `xllmapi_email_send_failures${labelSuffix} ${metrics.emailSendFailures}`,
       "# HELP xllmapi_security_events Total security events recorded.",
       "# TYPE xllmapi_security_events counter",
-      `xllmapi_security_events${labelSuffix} ${metrics.securityEvents}`
+      `xllmapi_security_events${labelSuffix} ${metrics.securityEvents}`,
+      "# HELP xllmapi_failed_api_requests Total API requests that failed before reaching a provider.",
+      "# TYPE xllmapi_failed_api_requests counter",
+      `xllmapi_failed_api_requests${labelSuffix} ${metrics.failedApiRequests}`,
+      "# HELP xllmapi_daily_limit_exhausted Total offerings skipped due to daily token limit exhaustion.",
+      "# TYPE xllmapi_daily_limit_exhausted counter",
+      `xllmapi_daily_limit_exhausted${labelSuffix} ${metrics.dailyLimitExhausted}`,
+      "# HELP xllmapi_provider_errors Total upstream provider errors.",
+      "# TYPE xllmapi_provider_errors counter",
+      `xllmapi_provider_errors${labelSuffix} ${metrics.providerErrors}`
     ].join("\n");
   }
 };

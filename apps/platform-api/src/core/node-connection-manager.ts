@@ -271,8 +271,8 @@ class NodeConnectionManager {
     if (conn) {
       try {
         conn.ws.close(1000, 'Disconnected by server');
-      } catch {
-        // WS may already be closed
+      } catch (err) {
+        this.logger.warn('node-ws: close error (may already be closed)', { nodeId, error: String(err) });
       }
     }
     this.cleanupNode(nodeId);
@@ -285,14 +285,14 @@ class NodeConnectionManager {
     try {
       const statusResult = platformRepository.updateNodeStatus({ nodeId, status: 'offline' });
       if (statusResult && typeof (statusResult as any).catch === 'function') {
-        (statusResult as Promise<void>).catch(() => {});
+        (statusResult as Promise<void>).catch((err: unknown) => { this.logger.warn('node cleanup: updateNodeStatus failed', { nodeId, error: String(err) }); });
       }
       const availResult = platformRepository.setNodeOfferingsAvailability({ nodeId, available: false });
       if (availResult && typeof (availResult as any).catch === 'function') {
-        (availResult as Promise<void>).catch(() => {});
+        (availResult as Promise<void>).catch((err: unknown) => { this.logger.warn('node cleanup: setNodeOfferingsAvailability failed', { nodeId, error: String(err) }); });
       }
-    } catch {
-      // Ignore cleanup errors
+    } catch (err) {
+      this.logger.warn('node cleanup error', { nodeId, error: String(err) });
     }
 
     // Reject all pending requests for this node

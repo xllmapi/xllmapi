@@ -306,7 +306,8 @@ export async function handleChatRoutes(
         requestId,
         messageCount
       });
-    } catch {
+    } catch (routeErr) {
+      console.error(`[chat-stream] route failed: ${routeErr instanceof Error ? routeErr.message : routeErr}`);
       try {
         await platformService.recordFailedRequest({
           requestId,
@@ -316,7 +317,7 @@ export async function handleChatRoutes(
           clientIp: get_request_ip_(req),
           clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
         });
-      } catch { /* best-effort */ }
+      } catch (err) { console.warn(`[chat-stream] recordFailedRequest error: ${err instanceof Error ? err.message : err}`); }
       const response = json(404, formatApiError("openai", 404, `no offering available for ${logicalModel}`, { requestId }));
       res.writeHead(response.statusCode, response.headers);
       res.end(response.payload);
@@ -403,9 +404,9 @@ export async function handleChatRoutes(
             errorMessage: err instanceof Error ? err.message : String(err)
           });
         } catch (failureRecordErr) {
-          console.error(`[chat-stream] settlement failure record error:`, failureRecordErr);
+          console.error(`[chat-stream] request=${requestId} settlement failure record error: ${failureRecordErr instanceof Error ? failureRecordErr.message : failureRecordErr}`);
         }
-        console.error(`[chat-stream] settlement FAILED:`, err);
+        console.error(`[chat-stream] request=${requestId} settlement error: ${err instanceof Error ? err.message : err}`);
       }
 
       await platformService.appendChatMessage({
@@ -426,7 +427,8 @@ export async function handleChatRoutes(
         latencyMs: 0
       });
       const errorMsg = err instanceof Error ? err.message : "provider execution failed";
-      console.error(`[chat-stream] provider execution failed:`, errorMsg);
+      metricsService.increment("coreErrors");
+      console.error(`[chat-stream] request=${requestId} provider execution failed: ${errorMsg}`);
       // Record failed request for admin visibility
       try {
         await platformService.recordFailedRequest({
@@ -441,7 +443,7 @@ export async function handleChatRoutes(
           clientUserAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
           providerLabel: route.offering.providerLabel,
         });
-      } catch { /* best-effort */ }
+      } catch (err) { console.warn(`[chat-stream] recordFailedRequest error: ${err instanceof Error ? err.message : err}`); }
       // Emit OpenAI-compatible error chunk so clients can parse it
       const errBody = formatApiError("openai", 502, errorMsg, { requestId });
       res.write(`data: ${JSON.stringify(errBody)}\n\n`);

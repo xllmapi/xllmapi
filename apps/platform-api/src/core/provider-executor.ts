@@ -1,6 +1,7 @@
 import type { CandidateOffering, ChatMessage, CustomHeadersConfig } from "@xllmapi/shared-types";
 import { decryptSecret } from "../crypto-utils.js";
 import { formatApiError } from "../lib/errors.js";
+import { metricsService } from "../metrics.js";
 import {
   isAvailable,
   recordSuccess,
@@ -298,6 +299,7 @@ export async function proxyApiRequest(params: {
         const errText = await resp.text().catch(() => "");
         const errClass = classifyError(resp.status, errText);
         recordFailure(offering.offeringId, errClass, errText);
+        metricsService.increment("providerErrors");
         checkAutoDisable(offering.offeringId);
         failedAttempts.push({ offeringId: offering.offeringId, error: `${resp.status}: ${errText.slice(0, 200)}`, errorClass: errClass });
         lastError = new Error(`provider returned ${resp.status}: ${errText}`);
@@ -412,6 +414,7 @@ export async function proxyApiRequest(params: {
       return { chosenOffering: offering, usage, upstreamUserAgent: headers["user-agent"], failedAttempts: failedAttempts.length > 0 ? failedAttempts : undefined, targetFormat, timing: { totalMs, ttfbMs } };
     } catch (err) {
       recordFailure(offering.offeringId, "transient", err instanceof Error ? err.message : "");
+      metricsService.increment("providerErrors");
       lastError = err;
       console.error(`[proxy] offering=${offering.offeringId} provider=${offering.providerType} error:`, err instanceof Error ? err.message : err);
     } finally {
@@ -466,6 +469,7 @@ export async function executeStreamingRequest(params: {
       const exceeded = await isDailyLimitExceeded(offering.offeringId, offering.dailyTokenLimit);
       if (exceeded) {
         console.log(`[provider-executor] offering=${offering.offeringId} daily token limit exceeded, skipping`);
+        metricsService.increment("dailyLimitExhausted");
         continue;
       }
     }
@@ -644,6 +648,7 @@ export async function executeStreamingRequest(params: {
       const statusMatch = errMsg.match(/returned (\d+):/);
       const errClass = statusMatch ? classifyError(Number(statusMatch[1]), errMsg) : "transient";
       recordFailure(offering.offeringId, errClass, errMsg);
+      metricsService.increment("providerErrors");
       checkAutoDisable(offering.offeringId);
       failedAttempts.push({ offeringId: offering.offeringId, error: errMsg.slice(0, 200), errorClass: errClass });
       lastError = err;
@@ -680,6 +685,7 @@ export async function executeRequest(params: {
       const exceeded = await isDailyLimitExceeded(offering.offeringId, offering.dailyTokenLimit);
       if (exceeded) {
         console.log(`[provider-executor] offering=${offering.offeringId} daily token limit exceeded, skipping`);
+        metricsService.increment("dailyLimitExhausted");
         continue;
       }
     }
@@ -767,6 +773,7 @@ export async function executeRequest(params: {
       const statusMatch = errMsg.match(/returned (\d+):/);
       const errClass = statusMatch ? classifyError(Number(statusMatch[1]), errMsg) : "transient";
       recordFailure(offering.offeringId, errClass, errMsg);
+      metricsService.increment("providerErrors");
       checkAutoDisable(offering.offeringId);
       lastError = err;
       console.error(`[provider-executor] offering=${offering.offeringId} provider=${offering.providerType} error:`, err);

@@ -248,6 +248,7 @@ export async function handleAuthRoutes(
 
     const result = await platformService.verifyLoginCode(body.email, verifyCode);
     if (!result.ok) {
+      console.warn(`[auth] login code failed: email=${body.email} code=${result.code} ip=${get_request_ip_(req)}`);
       const response = json(result.code === "invite_required" ? 403 : 400, {
         error: {
           code: result.code,
@@ -267,7 +268,7 @@ export async function handleAuthRoutes(
       ipAddress: get_request_ip_(req),
       userAgent: req.headers["user-agent"] ?? null,
       payload: { method: "code", email: body.email }
-    }).catch(() => {});
+    }).catch((err: unknown) => { console.warn(`[auth] security event log error: ${err instanceof Error ? err.message : err}`); });
 
     const response = json(200, {
       ok: true,
@@ -307,6 +308,7 @@ export async function handleAuthRoutes(
 
     const result = await platformService.loginWithPassword(body.email, body.password);
     if (!result.ok) {
+      console.warn(`[auth] password login failed: email=${body.email} code=${result.code} ip=${get_request_ip_(req)}`);
       const response = json(401, {
         error: {
           code: result.code,
@@ -326,7 +328,7 @@ export async function handleAuthRoutes(
       ipAddress: get_request_ip_(req),
       userAgent: req.headers["user-agent"] ?? null,
       payload: { method: "password", email: body.email }
-    }).catch(() => {});
+    }).catch((err: unknown) => { console.warn(`[auth] security event log error: ${err instanceof Error ? err.message : err}`); });
 
     const response = json(200, {
       ok: true,

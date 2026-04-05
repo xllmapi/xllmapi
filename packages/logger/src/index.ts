@@ -28,11 +28,13 @@ export interface LoggerOptions {
   level?: LogLevel;
   module?: string;
   pretty?: boolean; // human-readable vs JSON
+  /** Internal: inherited context from parent logger */
+  _parentContext?: LogContext;
 }
 
 export function createLogger(options?: LoggerOptions): Logger {
   const minLevel = LEVEL_ORDER[options?.level ?? (process.env.LOG_LEVEL as LogLevel) ?? 'info'];
-  const baseContext: LogContext = {};
+  const baseContext: LogContext = { ...options?._parentContext };
   if (options?.module) baseContext.module = options.module;
   const pretty = options?.pretty ?? process.env.NODE_ENV === 'development';
   const timers = new Map<string, number>();
@@ -70,6 +72,7 @@ export function createLogger(options?: LoggerOptions): Logger {
         level: Object.entries(LEVEL_ORDER).find(([, v]) => v === minLevel)?.[0] as LogLevel,
         module: childCtx.module ?? baseContext.module,
         pretty,
+        _parentContext: { ...baseContext, ...childCtx },
       });
     },
     time(label: string) { timers.set(label, Date.now()); },

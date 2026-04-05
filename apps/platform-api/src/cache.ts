@@ -124,8 +124,8 @@ export const cacheService = {
         if (value !== null) {
           return { value, source: "redis" };
         }
-      } catch {
-        // fall through to memory cache
+      } catch (err) {
+        console.warn(`[cache] redis fallback: ${err instanceof Error ? err.message : err}`);
       }
     }
 
@@ -154,8 +154,8 @@ export const cacheService = {
           EX: ttlSeconds
         });
         return;
-      } catch {
-        // fall through to memory cache
+      } catch (err) {
+        console.warn(`[cache] redis fallback: ${err instanceof Error ? err.message : err}`);
       }
     }
 
@@ -171,7 +171,7 @@ export const cacheService = {
     if (redis) {
       try {
         await redis.quit();
-      } catch { /* ignore */ }
+      } catch (err) { console.warn(`[cache] redis close error: ${err instanceof Error ? err.message : err}`); }
     }
     redisClientPromise = null;
     memoryResponseCache.clear();
